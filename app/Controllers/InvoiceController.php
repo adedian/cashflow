@@ -132,7 +132,7 @@ final class InvoiceController extends Controller
             'subtitle' => $lampu ? 'Total piutang = Σ Qty × Harga satuan; Tgl. jatuh tempo = Tgl. nota + jumlah hari' : 'Sisa dihitung otomatis: nominal − dibayar',
             'scripts' => $lampu ? ['invoice-form.js'] : []]);
         $r = $this->view('invoices/form', ['t' => $t, 'errors' => $errors, 'id' => $id, 'kind' => $kind,
-            'parties' => $lampu ? PartyService::options((string) ($t['customer'] ?? '')) : [],
+            'parties' => PartyService::options((string) ($t['customer'] ?? '')),
             'items' => $lampu ? self::itemsOf($t) : [],
             'payTxs' => $lampu ? self::payTxOptions((int) ($t['pay_tx_id'] ?? 0)) : []]);
         $r->status = $status;
@@ -246,10 +246,28 @@ final class InvoiceController extends Controller
 
         $d['paid_known'] = !empty($in['paid_known']) ? 1 : 0;
         $d['note'] = mb_substr(trim((string) ($in['note'] ?? '')), 0, 255) ?: null;
+        $this->validateCustomer($d, $e, $existing);
         if ($kind === 'lampu') {
             $this->validateLampu($in, $d, $e, $existing);
         }
         return [$d, $e];
+    }
+
+    /**
+     * Customer (Piutang Proyek & Lampu) dipilih dari master Customer; ejaan disamakan dengan master.
+     * Nama lama yang belum ada di master tetap boleh disimpan selama tidak diubah.
+     */
+    private function validateCustomer(array &$d, array &$e, ?array $existing): void
+    {
+        if ($d['customer'] === '') {
+            return;
+        }
+        $canon = PartyService::canonical($d['customer']);
+        if ($canon !== null) {
+            $d['customer'] = mb_substr($canon, 0, 160);
+        } elseif (!($existing && mb_strtolower((string) $existing['customer']) === mb_strtolower($d['customer']))) {
+            $e['customer'] = 'Pilih customer dari daftar, atau tambahkan lewat tombol “Tambah” di dropdown (atau Master Data → Customer).';
+        }
     }
 
     /**
@@ -287,7 +305,7 @@ final class InvoiceController extends Controller
     }
 
     /**
-     * Aturan khusus Piutang Lampu: customer dari master Customer, No. surat jalan unik (wajib untuk data baru),
+     * Aturan khusus Piutang Lampu: No. surat jalan unik (wajib untuk data baru),
      * rincian barang (Total = Σ Qty × Harga satuan, dihitung server), jatuh tempo dalam hari (Tgl. jatuh tempo = Tgl. nota + hari).
      * Kolom lama yang tidak ada di formulir (keterangan jatuh tempo, sales, keterangan/proyek) dipertahankan.
      */
@@ -297,14 +315,6 @@ final class InvoiceController extends Controller
             if (!array_key_exists($k, $in)) { unset($d[$k]); }
         }
         $this->validatePayTx($in, $d, $e, $existing);
-        if ($d['customer'] !== '') {
-            $canon = PartyService::canonical($d['customer']);
-            if ($canon !== null) {
-                $d['customer'] = mb_substr($canon, 0, 160);
-            } elseif (!($existing && mb_strtolower((string) $existing['customer']) === mb_strtolower($d['customer']))) {
-                $e['customer'] = 'Pilih customer dari daftar, atau tambahkan lewat tombol “Tambah” di dropdown (atau Master Data → Customer).';
-            }
-        }
         if ($d['invoice_no'] === null) {
             if ($existing === null || $existing['invoice_no'] !== null) { $e['invoice_no'] = 'No. surat jalan wajib diisi.'; }
         } elseif (Db::val("SELECT id FROM invoices WHERE kind = 'lampu' AND invoice_no = ? AND id <> ? LIMIT 1", [$d['invoice_no'], (int) ($existing['id'] ?? 0)])) {

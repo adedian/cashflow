@@ -3,18 +3,10 @@ $v = static fn(string $k, $d = '') => $t[$k] ?? $d;
 $fe = static fn(string $k) => isset($errors[$k]) ? '<div class="err">' . e($errors[$k]) . '</div>' : '';
 $lampu = $kind === 'lampu';
 $num = static fn($x): string => $x === '' || $x === null ? '' : (preg_match('/^\d+(\.\d+)?$/', (string) $x) ? money((string) $x, false) : (string) $x);
-?>
-<section class="card" style="max-width:<?= $lampu ? '980px' : '820px' ?>">
-  <?php if ($errors): ?><div class="alert alert-danger mb-2" role="alert">Periksa kembali isian yang ditandai.</div><?php endif; ?>
-  <form method="post" action="<?= e($id ? url('/invoices/' . $id) : url('/invoices')) ?>" novalidate<?= $lampu ? ' id="lampuForm"' : '' ?>>
-    <?= csrf_field() ?>
-    <input type="hidden" name="kind" value="<?= e($kind) ?>">
-    <?php if ($lampu): ?>
-    <?php $cur = trim((string) $v('customer')); $names = array_column($parties, 'name'); $legacy = $id && !$items; ?>
-    <div class="form-grid">
-      <div class="field"><label for="invoice_date">Tgl. nota <span class="req">*</span></label><input class="input" type="date" id="invoice_date" name="invoice_date" value="<?= e($v('invoice_date')) ?>" required><?= $fe('invoice_date') ?></div>
-      <div class="field"><label for="invoice_no">No. surat jalan <span class="req">*</span></label><input class="input" id="invoice_no" name="invoice_no" maxlength="80" value="<?= e($v('invoice_no')) ?>" placeholder="mis. JL00001537" autocomplete="off"<?= $id && $v('invoice_no') === '' ? '' : ' required' ?>>
-        <span class="help">Ikuti nomor dari aplikasi stok. <?= $id ? '' : 'Terisi otomatis nomor berikutnya; ubah bila berbeda. ' ?>Nomor yang sudah dipakai tidak dapat disimpan.</span><?= $fe('invoice_no') ?></div>
+// Customer dari master Customer (dropdown + "Tambah"); nama lama yang belum di master tetap tampil terpilih
+$cur = trim((string) $v('customer'));
+$names = array_column($parties, 'name');
+ob_start(); ?>
       <div class="field full"><label for="customer">Customer <span class="req">*</span></label>
         <select class="input" id="customer" name="customer" data-combo data-combo-create="/api/parties" data-combo-placeholder="Ketik untuk mencari customer…" required>
           <option value="">— pilih customer —</option>
@@ -22,6 +14,20 @@ $num = static fn($x): string => $x === '' || $x === null ? '' : (preg_match('/^\
           <?php foreach ($names as $pn): ?><option value="<?= e($pn) ?>" <?= mb_strtolower($pn) === mb_strtolower($cur) ? 'selected' : '' ?>><?= e($pn) ?></option><?php endforeach; ?>
         </select>
         <span class="help">Tidak ada di daftar? Ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=parties')) ?>">Master Data → Customer</a>.</span><?= $fe('customer') ?></div>
+<?php $customerField = ob_get_clean();
+?>
+<section class="card" style="max-width:<?= $lampu ? '980px' : '820px' ?>">
+  <?php if ($errors): ?><div class="alert alert-danger mb-2" role="alert">Periksa kembali isian yang ditandai.</div><?php endif; ?>
+  <form method="post" action="<?= e($id ? url('/invoices/' . $id) : url('/invoices')) ?>" novalidate<?= $lampu ? ' id="lampuForm"' : '' ?>>
+    <?= csrf_field() ?>
+    <input type="hidden" name="kind" value="<?= e($kind) ?>">
+    <?php if ($lampu): ?>
+    <?php $legacy = $id && !$items; ?>
+    <div class="form-grid">
+      <div class="field"><label for="invoice_date">Tgl. nota <span class="req">*</span></label><input class="input" type="date" id="invoice_date" name="invoice_date" value="<?= e($v('invoice_date')) ?>" required><?= $fe('invoice_date') ?></div>
+      <div class="field"><label for="invoice_no">No. surat jalan <span class="req">*</span></label><input class="input" id="invoice_no" name="invoice_no" maxlength="80" value="<?= e($v('invoice_no')) ?>" placeholder="mis. JL00001537" autocomplete="off"<?= $id && $v('invoice_no') === '' ? '' : ' required' ?>>
+        <span class="help">Ikuti nomor dari aplikasi stok. <?= $id ? '' : 'Terisi otomatis nomor berikutnya; ubah bila berbeda. ' ?>Nomor yang sudah dipakai tidak dapat disimpan.</span><?= $fe('invoice_no') ?></div>
+      <?= $customerField ?>
     </div>
 
     <h3 class="mt-3 mb-1" style="font-size:15px">Uraian barang</h3>
@@ -77,7 +83,7 @@ $num = static fn($x): string => $x === '' || $x === null ? '' : (preg_match('/^\
     </tr></template>
     <?php else: ?>
     <div class="form-grid">
-      <div class="field full"><label for="customer">Customer <span class="req">*</span></label><input class="input" id="customer" name="customer" maxlength="160" value="<?= e($v('customer')) ?>" required><?= $fe('customer') ?></div>
+      <?= $customerField ?>
       <div class="field"><label for="project_name">Proyek</label><input class="input" id="project_name" name="project_name" maxlength="200" value="<?= e($v('project_name')) ?>"></div>
       <div class="field"><label for="invoice_no">No. invoice</label><input class="input" id="invoice_no" name="invoice_no" maxlength="80" value="<?= e($v('invoice_no')) ?>"></div>
       <div class="field full"><label for="description">Keterangan</label><input class="input" id="description" name="description" maxlength="255" value="<?= e($v('description')) ?>"></div>
