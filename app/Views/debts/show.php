@@ -2,6 +2,7 @@
 $id = (int) $d['id'];
 $void = $d['voided_at'] !== null;
 $m = ['lunas' => ['pill-green', 'Lunas'], 'sebagian' => ['pill-yellow', 'Dibayar Sebagian'], 'belum' => ['pill-red', 'Belum Dibayar']][$d['status']];
+$loan = \App\Services\DebtService::isLoan((string) $d['category']);   // Hutang Direksi: lama pinjaman & rekening penerima
 $pct = bccomp((string) $d['amount'], '0', 2) > 0 ? (int) min(100, floor((float) bcdiv(bcmul($d['paid'], '100', 4), (string) $d['amount'], 2))) : 0;
 ?>
 <section class="card" style="max-width:900px" id="debtDetail" data-id="<?= $id ?>">
@@ -10,7 +11,8 @@ $pct = bccomp((string) $d['amount'], '0', 2) > 0 ? (int) min(100, floor((float) 
     <div>
       <?php if ($void): ?><span class="pill pill-gray">Dibatalkan</span>
       <?php else: ?><span class="pill <?= $m[0] ?>"><?= $m[1] ?></span>
-        <?php if ($d['due'] && $d['due']['status'] === 'late'): ?> <span class="pill pill-red">Terlambat</span> <span class="muted"><?= e($d['due']['rel']) ?></span>
+        <?php if ($loan): ?><?= $d['loan_days'] !== null ? ' <span class="muted">Lama pinjaman ' . (int) $d['loan_days'] . ' hari</span>' : '' ?>
+        <?php elseif ($d['due'] && $d['due']['status'] === 'late'): ?> <span class="pill pill-red">Terlambat</span> <span class="muted"><?= e($d['due']['rel']) ?></span>
         <?php elseif ($d['due'] && $d['due']['status'] === 'today'): ?> <span class="pill pill-yellow">Jatuh tempo hari ini</span>
         <?php elseif ($d['due']): ?> <span class="muted"><?= e($d['due']['rel']) ?></span><?php endif; ?>
       <?php endif; ?>
@@ -22,9 +24,16 @@ $pct = bccomp((string) $d['amount'], '0', 2) > 0 ? (int) min(100, floor((float) 
     <dt>Keterangan</dt><dd><?= $d['description'] ? e($d['description']) : '<span class="muted">-</span>' ?></dd>
     <dt>Nomor transaksi / dokumen</dt><dd><?= $d['ref_no'] ? e($d['ref_no']) : '<span class="muted">Tidak tersedia</span>' ?></dd>
     <dt>No. urut</dt><dd><?= $d['seq_no'] !== null ? (int) $d['seq_no'] : '<span class="muted">-</span>' ?> <span class="muted">(nomor urut tampilan, otomatis)</span></dd>
+    <?php if ($loan): ?>
+    <dt>Tanggal setoran</dt><dd><?= $d['debt_date'] ? e(fmt_date($d['debt_date'], 'd/m/Y')) : '<span class="muted">Belum diisi — isi lewat Ubah agar lama pinjaman terhitung</span>' ?></dd>
+    <dt>Lama pinjaman</dt><dd><?php if ($d['loan_days'] !== null): ?><b><?= (int) $d['loan_days'] ?> hari</b> <span class="muted"><?= $d['status'] === 'lunas' ? '(sampai pelunasan ' . e(fmt_date($d['last_pay'], 'd/m/Y')) . ')' : '(sampai hari ini, bertambah otomatis)' ?></span><?php else: ?><span class="muted">-</span><?php endif; ?></dd>
+    <?php if ($d['due_date']): ?><dt>Jatuh tempo</dt><dd><?= e(fmt_date($d['due_date'], 'd/m/Y')) ?></dd><?php endif; ?>
+    <dt>Rekening penerima</dt><dd><?= e($d['source_account'] ?: '-') ?></dd>
+    <?php else: ?>
     <dt>Tanggal transaksi</dt><dd><?= $d['debt_date'] ? e(fmt_date($d['debt_date'], 'd/m/Y')) : '<span class="muted">Tidak tersedia</span>' ?></dd>
     <dt>Jatuh tempo</dt><dd><?= $d['due_date'] ? e(fmt_date($d['due_date'], 'd/m/Y')) : '<span class="muted">Belum ditentukan (tidak muncul di pengingat)</span>' ?></dd>
     <dt>Rekening sumber (rencana)</dt><dd><?= e($d['source_account'] ?: '-') ?></dd>
+    <?php endif; ?>
     <dt>Nominal hutang</dt><dd class="num"><b><?= e(money($d['amount'])) ?></b></dd>
     <dt>Sudah dibayar</dt><dd class="num pos"><?= e(money($d['paid'])) ?></dd>
     <dt>Sisa hutang</dt><dd class="num"><b class="<?= bccomp($d['remaining'], '0', 2) > 0 ? 'neg' : 'pos' ?>"><?= e(money($d['remaining'])) ?></b></dd>

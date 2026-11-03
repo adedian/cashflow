@@ -616,6 +616,7 @@ final class ExportBuilder
     /**
      * Rekap satu jenis hutang (Usaha / Direksi / Lain-lain) sesuai tab & filter menu Hutang, layout A–N: No, Tgl., No. Ref, Supplier,
      * Keterangan, Rekening Sumber, Nominal, Jatuh Tempo, Tgl. Bayar, Kode Bukti, Dibayar, Sisa, Status, Catatan.
+     * Hutang Direksi: F = Rekening Penerima, H = Lama Pinjaman ("N hari" sejak tanggal setoran sampai hari ini / pelunasan).
      * Satu pembayaran = satu baris (dicatat lewat menu Transaksi); sisa & status ditulis di baris pembayaran terakhir.
      */
     private static function debts(Document $doc, Request $req): void
@@ -629,6 +630,7 @@ final class ExportBuilder
         $doc->title = $cat;
         $doc->slug = 'cashflow-' . str_replace(' ', '-', strtolower($cat));
         $who = ['usaha' => 'Supplier', 'direksi' => 'Direksi', 'lain' => 'Pihak'][$f['category']];
+        $loan = \App\Services\DebtService::isLoan($f['category']);
 
         $s = $doc->add(new Sheet($cat));
         $s->paper = 'legal';
@@ -643,7 +645,7 @@ final class ExportBuilder
         if ($f['date_from'] !== '' || $f['date_to'] !== '') { $note[] = 'tanggal hutang ' . self::period(['from' => $f['date_from'], 'to' => $f['date_to']]); }
         $s->set(2, 1, implode(' · ', $note), ['size' => 10, 'italic' => true, 'h' => 'center'])->merge(2, 1, 2, 14);
         $h = ['font' => 'Calibri', 'size' => 10, 'bold' => true, 'border' => 'lrtb', 'h' => 'center', 'v' => 'center', 'fill' => self::HDR, 'wrap' => true];
-        foreach (['No', 'Tgl.', 'No. Ref', $who, 'Keterangan', 'Rekening Sumber', 'Nominal', 'Jatuh Tempo', 'Tgl. Bayar', 'Kode Bukti', 'Dibayar', 'Sisa', 'Status', 'Catatan'] as $i => $t) {
+        foreach (['No', 'Tgl.', 'No. Ref', $who, 'Keterangan', $loan ? 'Rekening Penerima' : 'Rekening Sumber', 'Nominal', $loan ? 'Lama Pinjaman' : 'Jatuh Tempo', 'Tgl. Bayar', 'Kode Bukti', 'Dibayar', 'Sisa', 'Status', 'Catatan'] as $i => $t) {
             $s->set(4, $i + 1, $t, $h);
         }
         $s->height(4, 30);
@@ -657,7 +659,7 @@ final class ExportBuilder
         foreach ($rows as $i => $t) {
             $void = $t['voided_at'] !== null;
             $stat = $void ? 'Dibatalkan' : ['lunas' => 'Lunas', 'sebagian' => 'Sebagian', 'belum' => 'Belum dibayar'][$t['status']];
-            if (!$void && $t['due'] && $t['due']['status'] === 'late') { $stat .= ' · lewat tempo'; }
+            if (!$void && !$loan && $t['due'] && $t['due']['status'] === 'late') { $stat .= ' · lewat tempo'; }
             $pays = $payList[(int) $t['id']] ?? [];
             $last = $r + max(1, count($pays)) - 1;
 
@@ -668,7 +670,11 @@ final class ExportBuilder
             $s->set($r, 5, $t['description'] ?? '', $base + ['wrap' => true]);
             $s->set($r, 6, $t['source_account'] ?? '', $base + ['wrap' => true]);
             $s->num($r, 7, (string) $t['amount'], $base + ['fmt' => 'acc2']);
-            $s->date($r, 8, $t['due_date'], $base + ['h' => 'center']);
+            if ($loan) {
+                $s->set($r, 8, $t['loan_days'] !== null ? $t['loan_days'] . ' hari' : '', $base + ['h' => 'center']);
+            } else {
+                $s->date($r, 8, $t['due_date'], $base + ['h' => 'center']);
+            }
             foreach ($pays as $k => $p) {
                 $s->date($r + $k, 9, $p['date'], $base + ['h' => 'center']);
                 $s->set($r + $k, 10, $p['code'], $base + ['h' => 'center', 'wrap' => true]);

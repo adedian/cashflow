@@ -20,6 +20,15 @@ final class DebtService
     /** Jenis hutang (kunci disimpan di debts.category). Hutang lama/impor tanpa pilihan = 'usaha'. */
     public const CATEGORIES = ['usaha' => 'Hutang Usaha', 'direksi' => 'Hutang Direksi', 'lain' => 'Hutang Lain-lain'];
 
+    /**
+     * Hutang Direksi = pinjaman dana dari direksi: yang dipantau "Lama Pinjaman" (hari sejak tanggal setoran = debt_date), bukan jatuh tempo,
+     * dan rekeningnya = rekening perusahaan yang MENERIMA setoran (kolom source_account_id yang sama, beda arti).
+     */
+    public static function isLoan(string $category): bool
+    {
+        return $category === 'direksi';
+    }
+
     private const BASE = 'FROM debts d LEFT JOIN (' . TxLinkService::DEBT_PAID_SUB . ') p ON p.debt_id = d.id';
 
     /** @return array{where:string,params:array} */
@@ -63,17 +72,20 @@ final class DebtService
         $count = (int) Db::val('SELECT COUNT(*) ' . self::BASE . $q['where'], $q['params']);
         $pages = max(1, (int) ceil($count / self::PER_PAGE));
         $page = min(max(1, $page), $pages);
+        // Hutang Direksi: pinjaman terlama (tanggal setoran paling awal) di atas; jenis lain: jatuh tempo terdekat
+        $order = self::isLoan((string) ($f['category'] ?? '')) ? '(d.debt_date IS NULL), d.debt_date' : '(d.due_date IS NULL), d.due_date';
         $rows = Db::all(
-            'SELECT d.*, COALESCE(p.paid, 0) AS paid, d.amount - COALESCE(p.paid, 0) AS remaining ' . self::BASE . $q['where']
-            . ' ORDER BY (d.amount - COALESCE(p.paid, 0) <= ' . self::EPS . '), (d.due_date IS NULL), d.due_date, d.id LIMIT ' . self::PER_PAGE . ' OFFSET ' . (($page - 1) * self::PER_PAGE),
+            'SELECT d.*, COALESCE(p.paid, 0) AS paid, p.last_pay, d.amount - COALESCE(p.paid, 0) AS remaining ' . self::BASE . $q['where']
+            . ' ORDER BY (d.amount - COALESCE(p.paid, 0) <= ' . self::EPS . '), ' . $order . ', d.id LIMIT ' . self::PER_PAGE . ' OFFSET ' . (($page - 1) * self::PER_PAGE),
             $q['params']
         );
         $tot = Db::one(
             'SELECT COALESCE(SUM(d.amount), 0) AS a, COALESCE(SUM(COALESCE(p.paid, 0)), 0) AS p, COALESCE(SUM(GREATEST(d.amount - COALESCE(p.paid, 0), 0)), 0) AS o, '
             . 'COALESCE(SUM(CASE WHEN d.amount - COALESCE(p.paid, 0) > ' . self::EPS . ' AND d.due_date IS NOT NULL AND d.due_date < ? THEN d.amount - COALESCE(p.paid, 0) ELSE 0 END), 0) AS late_amt, '
-            . 'COALESCE(SUM(d.amount - COALESCE(p.paid, 0) > ' . self::EPS . ' AND d.due_date IS NOT NULL AND d.due_date < ?), 0) AS late_n '
+            . 'COALESCE(SUM(d.amount - COALESCE(p.paid, 0) > ' . self::EPS . ' AND d.due_date IS NOT NULL AND d.due_date < ?), 0) AS late_n, '
+            . 'MAX(CASE WHEN d.amount - COALESCE(p.paid, 0) > ' . self::EPS . ' AND d.debt_date IS NOT NULL THEN GREATEST(DATEDIFF(?, d.debt_date), 0) END) AS longest '
             . self::BASE . $q['where'],
-            array_merge([$today, $today], $q['params'])
+            array_merge([$today, $today, $today], $q['params'])
         );
         foreach ($rows as &$r) {
             $r = self::decorate($r, $today);
@@ -88,14 +100,30 @@ final class DebtService
         $today ??= ReminderService::today();
         $q = self::where($f, $today);
         $rows = Db::all(
-            'SELECT d.*, COALESCE(p.paid, 0) AS paid ' . self::BASE . $q['where']
+            'SELECT d.*, COALESCE(p.paid, 0) AS paid, p.last_pay ' . self::BASE . $q['where']
             . ' ORDER BY (d.debt_date IS NULL), d.debt_date, (d.due_date IS NULL), d.due_date, d.seq_no, d.id LIMIT ' . ($limit + 1),
             $q['params']
         );
         return array_map(static fn($r) => self::decorate($r, $today), $rows);
     }
 
-    /** Tambahkan status turunan: status (belum|sebagian|lunas), due (klasifikasi jatuh tempo bila masih ada sisa). */
+    /**
+     * Lama pinjaman (hari) dari tanggal setoran sampai hari ini; bila sudah lunas berhenti di tanggal pelunasan (pembayaran terakhir).
+     * Contoh: setoran 1 Nov, dibuka 4 Nov = 3 hari. Null bila tanggal setoran kosong, atau lunas tanpa tanggal pembayaran (data lama Excel).
+     */
+    public static function loanDays(?string $debtDate, bool $open, ?string $lastPay, string $today): ?int
+    {
+        if (empty($debtDate)) {
+            return null;
+        }
+        $end = $open ? $today : $lastPay;
+        if (empty($end)) {
+            return null;
+        }
+        return max(0, -ReminderService::daysLeft($debtDate, $end));
+    }
+
+    /** Tambahkan status turunan: status (belum|sebagian|lunas), due (klasifikasi jatuh tempo bila masih ada sisa), loan_days (lama pinjaman). */
     public static function decorate(array $r, string $today): array
     {
         $paid = (string) ($r['paid'] ?? '0');
@@ -109,12 +137,13 @@ final class DebtService
             $left = ReminderService::daysLeft((string) $r['due_date'], $today);
             $r['due'] = ReminderService::classify($left) + ['days_left' => $left];
         }
+        $r['loan_days'] = self::loanDays($r['debt_date'] ?? null, $open, $r['last_pay'] ?? null, $today);
         return $r;
     }
 
     public static function find(int $id): ?array
     {
-        $r = Db::one('SELECT d.*, COALESCE(p.paid, 0) AS paid ' . self::BASE . ' WHERE d.id = ?', [$id]);
+        $r = Db::one('SELECT d.*, COALESCE(p.paid, 0) AS paid, p.last_pay ' . self::BASE . ' WHERE d.id = ?', [$id]);
         return $r ? self::decorate($r, ReminderService::today()) : null;
     }
 
@@ -226,12 +255,17 @@ final class DebtService
         // tanpa pilihan: teks lama (data Excel) dipertahankan bila belum pernah dipetakan ke rekening
         $d['source_account'] = $acc ? mb_substr((string) $acc['name'], 0, 80) : ($existing && empty($existing['source_account_id']) ? (string) ($existing['source_account'] ?? '') : '');
         $d['note'] = mb_substr(trim((string) ($in['note'] ?? '')), 0, 255);
-        foreach (['due_date' => 'Tanggal jatuh tempo', 'debt_date' => 'Tanggal transaksi'] as $k => $label) {
+        $loan = self::isLoan($cat);
+        foreach (['due_date' => 'Tanggal jatuh tempo', 'debt_date' => $loan ? 'Tanggal setoran' : 'Tanggal transaksi'] as $k => $label) {
             $raw = trim((string) ($in[$k] ?? ''));
             $d[$k] = $raw === '' ? null : Filters::date($raw);
             if ($raw !== '' && $d[$k] === null) {
                 $e[$k] = $label . ' tidak valid.';
             }
+        }
+        // lama pinjaman direksi dihitung dari tanggal setoran, jadi wajib diisi
+        if ($loan && $d['debt_date'] === null && !isset($e['debt_date'])) {
+            $e['debt_date'] = 'Tanggal setoran wajib diisi untuk hutang direksi (dipakai menghitung lama pinjaman).';
         }
         $amt = parse_amount($in['amount'] ?? '');
         if ($amt === null || bccomp($amt, '0', 2) <= 0) {

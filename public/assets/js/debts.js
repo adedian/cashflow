@@ -5,6 +5,17 @@
   var f = document.getElementById('debtFilter');
   if (f && f.elements.status) f.elements.status.addEventListener('change', function () { f.submit(); });
 
+  /* form hutang: label Hutang Direksi (Tanggal setoran, Rekening penerima) mengikuti pilihan jenis */
+  var cat = document.querySelector('form select[name="category"]');
+  if (cat) {
+    cat.addEventListener('change', function () {
+      var loan = cat.value === 'direksi';
+      document.querySelectorAll('[data-loan]').forEach(function (el) { el.textContent = el.getAttribute(loan ? 'data-loan' : 'data-std'); });
+      document.querySelectorAll('[data-loan-only]').forEach(function (el) { el.hidden = !loan; });
+      document.querySelectorAll('[data-std-only]').forEach(function (el) { el.hidden = loan; });
+    });
+  }
+
   /* klik baris membuka detail (tautan & tombol di dalam baris tetap bekerja sendiri) */
   document.addEventListener('click', function (ev) {
     var tr = ev.target.closest && ev.target.closest('tr[data-href]');

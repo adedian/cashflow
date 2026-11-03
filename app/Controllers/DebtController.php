@@ -101,7 +101,7 @@ final class DebtController extends Controller
 
     private function form(array $t, array $errors, ?int $id, int $status = 200): Response
     {
-        Page::set(['title' => $id ? 'Ubah hutang' : 'Tambah hutang', 'subtitle' => 'Sisa hutang dihitung otomatis: nominal − pembayaran']);
+        Page::set(['title' => $id ? 'Ubah hutang' : 'Tambah hutang', 'subtitle' => 'Sisa hutang dihitung otomatis: nominal − pembayaran', 'scripts' => ['debts.js']]);
         $r = $this->view('debts/form', [
             't' => $t, 'errors' => $errors, 'id' => $id,
             'suppliers' => \App\Core\Db::all('SELECT id, name, is_active FROM suppliers WHERE is_active = 1 OR id = ? ORDER BY name', [(int) ($t['supplier_id'] ?? 0)]),

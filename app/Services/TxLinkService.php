@@ -20,7 +20,7 @@ final class TxLinkService
     private const EPS = '0.004';
 
     /** Σ pembayaran hutang yang sah per hutang (transaksi dibatalkan tidak dihitung; pembayaran lama tanpa transaksi tetap dihitung). */
-    public const DEBT_PAID_SUB = 'SELECT p.debt_id, SUM(p.amount) AS paid FROM debt_payments p LEFT JOIN transactions t ON t.id = p.transaction_id WHERE p.transaction_id IS NULL OR t.voided_at IS NULL GROUP BY p.debt_id';
+    public const DEBT_PAID_SUB = 'SELECT p.debt_id, SUM(p.amount) AS paid, MAX(p.pay_date) AS last_pay FROM debt_payments p LEFT JOIN transactions t ON t.id = p.transaction_id WHERE p.transaction_id IS NULL OR t.voided_at IS NULL GROUP BY p.debt_id';
     public const FC_REAL_SUB = 'SELECT r.forecast_id, SUM(r.amount) AS realized FROM forecast_realizations r JOIN transactions t ON t.id = r.transaction_id WHERE t.voided_at IS NULL GROUP BY r.forecast_id';
 
     private const TABLES = ['debt' => ['debt_payments', 'debt_id'], 'invoice' => ['invoice_payments', 'invoice_id'], 'forecast' => ['forecast_realizations', 'forecast_id']];
