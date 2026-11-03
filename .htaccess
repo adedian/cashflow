@@ -1,0 +1,12 @@
+# Cashflow HME — semua permintaan diarahkan ke public/. Folder privat tidak pernah dilayani langsung.
+Options -Indexes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # blokir folder & berkas privat
+    RewriteRule ^(app|config|database|storage|tests|docs|vendor)(/|$) - [F,L]
+    RewriteRule ^\.env - [F,L]
+    RewriteRule \.(sql|log|md|bak|ini|env)$ - [F,L]
+    # arahkan ke public/
+    RewriteCond %{REQUEST_URI} !^/cashflow/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

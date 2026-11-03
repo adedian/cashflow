@@ -1,0 +1,9 @@
+Options -Indexes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /cashflow/public/
+    # berkas statis (assets) dilayani langsung; selain itu ke front controller
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+    RewriteRule ^ index.php [L,QSA]
+</IfModule>

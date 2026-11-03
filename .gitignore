@@ -1,0 +1,13 @@
+.env
+.env.test
+storage/logs/*
+storage/uploads/*
+storage/backups/*
+storage/cache/*
+storage/test/
+storage/kredensial-awal.txt
+!storage/*/.gitkeep
+docs/test-results/
+docs/
+tests/
+config/import_profile.php
