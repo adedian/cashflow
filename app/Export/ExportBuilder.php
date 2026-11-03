@@ -21,6 +21,7 @@ final class ExportBuilder
         'transaksi' => 'Mutasi Bank',
         'rekening' => 'Rekening & Limit',
         'piutang' => 'Piutang',
+        'hutang' => 'Hutang',
         'proyeksi' => 'Proyeksi Cashflow',
         'laporan' => 'Laporan',
     ];
@@ -45,6 +46,7 @@ final class ExportBuilder
             'laporan' => self::report($d, $req),
             'rekening' => self::accounts($d),
             'piutang' => self::invoices($d, $req),
+            'hutang' => self::debts($d, $req),
             'proyeksi' => self::forecast($d, $req),
             default => self::dashboard($d, $req),
         };
@@ -608,6 +610,126 @@ final class ExportBuilder
         $idx = array_keys($via);
         usort($idx, static fn($a, $b) => [$via[$a]['date'] === null ? 0 : 1, (string) $via[$a]['date'], $a] <=> [$via[$b]['date'] === null ? 0 : 1, (string) $via[$b]['date'], $b]);
         return array_map(static fn($k) => $via[$k], $idx);
+    }
+
+    /* ================= HUTANG ================= */
+    /**
+     * Rekap satu jenis hutang (Usaha / Direksi / Lain-lain) sesuai tab & filter menu Hutang, layout A–N: No, Tgl., No. Ref, Supplier,
+     * Keterangan, Rekening Sumber, Nominal, Jatuh Tempo, Tgl. Bayar, Kode Bukti, Dibayar, Sisa, Status, Catatan.
+     * Satu pembayaran = satu baris (dicatat lewat menu Transaksi); sisa & status ditulis di baris pembayaran terakhir.
+     */
+    private static function debts(Document $doc, Request $req): void
+    {
+        $f = \App\Controllers\DebtController::filtersFrom($req);
+        $rows = \App\Services\DebtService::listAll($f, self::MAX_ROWS);
+        if (count($rows) > self::MAX_ROWS) {
+            throw new HttpException('Data terlalu banyak untuk dicetak sekaligus. Persempit filter.', 422);
+        }
+        $cat = \App\Services\DebtService::CATEGORIES[$f['category']];
+        $doc->title = $cat;
+        $doc->slug = 'cashflow-' . str_replace(' ', '-', strtolower($cat));
+        $who = ['usaha' => 'Supplier', 'direksi' => 'Direksi', 'lain' => 'Pihak'][$f['category']];
+
+        $s = $doc->add(new Sheet($cat));
+        $s->paper = 'legal';
+        $s->widths([4.71, 11, 14, 26, 32, 16, 16, 11, 11, 14, 16, 16, 14, 24]);
+        $s->set(1, 1, 'REKAP ' . strtoupper($cat) . ' ' . strtoupper($doc->company), ['size' => 14, 'bold' => true, 'h' => 'center'])->merge(1, 1, 1, 14)->height(1, 23.25);
+        $note = ['Per ' . self::longDate(\App\Services\ReminderService::today())];
+        if ($f['q'] !== '') { $note[] = 'pencarian "' . $f['q'] . '"'; }
+        if ($f['status'] !== '') {
+            $note[] = ['open' => 'belum lunas', 'belum' => 'belum dibayar', 'sebagian' => 'dibayar sebagian', 'lunas' => 'lunas', 'terlambat' => 'terlambat', 'batal' => 'dibatalkan'][$f['status']];
+        }
+        if ($f['due_from'] !== '' || $f['due_to'] !== '') { $note[] = 'jatuh tempo ' . self::period(['from' => $f['due_from'], 'to' => $f['due_to']]); }
+        if ($f['date_from'] !== '' || $f['date_to'] !== '') { $note[] = 'tanggal hutang ' . self::period(['from' => $f['date_from'], 'to' => $f['date_to']]); }
+        $s->set(2, 1, implode(' · ', $note), ['size' => 10, 'italic' => true, 'h' => 'center'])->merge(2, 1, 2, 14);
+        $h = ['font' => 'Calibri', 'size' => 10, 'bold' => true, 'border' => 'lrtb', 'h' => 'center', 'v' => 'center', 'fill' => self::HDR, 'wrap' => true];
+        foreach (['No', 'Tgl.', 'No. Ref', $who, 'Keterangan', 'Rekening Sumber', 'Nominal', 'Jatuh Tempo', 'Tgl. Bayar', 'Kode Bukti', 'Dibayar', 'Sisa', 'Status', 'Catatan'] as $i => $t) {
+            $s->set(4, $i + 1, $t, $h);
+        }
+        $s->height(4, 30);
+        $s->repeatRows = [4, 4];
+        $s->freezeRow = 4;
+        $r = 5;
+        $first = $r;
+        $sumA = $sumP = $sumR = '0.00';
+        $base = ['border' => 'lrtb', 'v' => 'top'];
+        $payList = self::debtPays(array_map(static fn($t) => (int) $t['id'], $rows));
+        foreach ($rows as $i => $t) {
+            $void = $t['voided_at'] !== null;
+            $stat = $void ? 'Dibatalkan' : ['lunas' => 'Lunas', 'sebagian' => 'Sebagian', 'belum' => 'Belum dibayar'][$t['status']];
+            if (!$void && $t['due'] && $t['due']['status'] === 'late') { $stat .= ' · lewat tempo'; }
+            $pays = $payList[(int) $t['id']] ?? [];
+            $last = $r + max(1, count($pays)) - 1;
+
+            $s->set($r, 1, (string) ($i + 1), $base + ['h' => 'center']);
+            $s->date($r, 2, $t['debt_date'], $base + ['h' => 'center']);
+            $s->set($r, 3, $t['ref_no'] ?? '', $base + ['wrap' => true]);
+            $s->set($r, 4, $t['supplier'], $base + ['wrap' => true]);
+            $s->set($r, 5, $t['description'] ?? '', $base + ['wrap' => true]);
+            $s->set($r, 6, $t['source_account'] ?? '', $base + ['wrap' => true]);
+            $s->num($r, 7, (string) $t['amount'], $base + ['fmt' => 'acc2']);
+            $s->date($r, 8, $t['due_date'], $base + ['h' => 'center']);
+            foreach ($pays as $k => $p) {
+                $s->date($r + $k, 9, $p['date'], $base + ['h' => 'center']);
+                $s->set($r + $k, 10, $p['code'], $base + ['h' => 'center', 'wrap' => true]);
+                $s->num($r + $k, 11, $p['amount'], $base + ['fmt' => 'acc2']);
+            }
+            if (!$pays) {
+                $s->paint($r, 9, 10, $base);
+                $s->num($r, 11, $t['paid'], $base + ['fmt' => 'acc2']);
+            }
+            // sisa & status = keadaan setelah pembayaran terakhir
+            $s->num($last, 12, $t['remaining'], $base + ['fmt' => 'acc2']);
+            $s->set($last, 13, $stat, $base + ['h' => 'center', 'wrap' => true, 'bold' => $stat !== 'Lunas', 'color' => $stat === 'Lunas' ? '000000' : 'C00000']);
+            $s->set($r, 14, $t['note'] ?? '', $base + ['wrap' => true]);
+            for ($k = $r + 1; $k <= $last; $k++) {
+                $s->paint($k, 1, 8, $base)->paint($k, 12, 14, $base);
+            }
+            for ($k = $r; $k < $last; $k++) { $s->keep($k); }
+            $sumA = bcadd($sumA, (string) $t['amount'], 2);
+            $sumP = bcadd($sumP, $t['paid'], 2);
+            $sumR = bcadd($sumR, $t['remaining'], 2);
+            $r = $last + 1;
+        }
+        if ($rows) {
+            foreach ([2 => 14, 3 => 24, 4 => 40, 5 => 46, 6 => 24, 7 => 18, 8 => 14, 9 => 14, 10 => 28, 11 => 18, 12 => 18, 13 => 32, 14 => 40] as $c => $max) {
+                $s->fit($c, $first, $r - 1, $max);
+            }
+            $tot = ['bold' => true, 'fill' => self::CYAN, 'border' => 'lrtb', 'fmt' => 'acc2', 'size' => 12];
+            $s->set($r, 1, 'TOTAL', $tot + ['h' => 'center', 'fmt' => 'text'])->paint($r, 2, 6, $tot + ['fmt' => 'text'])->merge($r, 1, $r, 6);
+            $s->num($r, 7, $sumA, $tot, 'SUM(G' . $first . ':G' . ($r - 1) . ')');
+            $s->paint($r, 8, 10, $tot + ['fmt' => 'text']);
+            $s->num($r, 11, $sumP, $tot, 'SUM(K' . $first . ':K' . ($r - 1) . ')');
+            $s->num($r, 12, $sumR, $tot, 'SUM(L' . $first . ':L' . ($r - 1) . ')');
+            $s->paint($r, 13, 14, $tot + ['fmt' => 'text']);
+            $s->height($r, 21);
+        }
+    }
+
+    /**
+     * Pembayaran per hutang, urut tanggal: baris debt_payments yang dihitung dalam "Dibayar" (transaksinya tidak dibatalkan,
+     * atau baris lama hasil impor tanpa transaksi). Kode bukti = kode voucher transaksi pembayarannya.
+     * @return array<int, list<array{date:?string,code:string,amount:string}>>
+     */
+    private static function debtPays(array $ids): array
+    {
+        if (!$ids) {
+            return [];
+        }
+        $out = [];
+        foreach (array_chunk($ids, 1000) as $chunk) {
+            $rows = Db::all(
+                'SELECT p.debt_id, p.pay_date, p.amount, t.id AS tx_id, t.voucher_code FROM debt_payments p LEFT JOIN transactions t ON t.id = p.transaction_id
+                 WHERE p.debt_id IN (' . implode(',', array_fill(0, count($chunk), '?')) . ') AND (p.transaction_id IS NULL OR t.voided_at IS NULL)
+                 ORDER BY (p.pay_date IS NULL), p.pay_date, p.id',
+                $chunk
+            );
+            foreach ($rows as $p) {
+                $code = $p['tx_id'] !== null ? ((string) $p['voucher_code'] !== '' ? (string) $p['voucher_code'] : '#' . $p['tx_id']) : '';
+                $out[(int) $p['debt_id']][] = ['date' => $p['pay_date'], 'code' => $code, 'amount' => (string) $p['amount']];
+            }
+        }
+        return $out;
     }
 
     /* ================= PROYEKSI ================= */

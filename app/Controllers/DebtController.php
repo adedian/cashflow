@@ -41,15 +41,22 @@ final class DebtController extends Controller
 
     private function filters(): array
     {
-        $status = $this->req->str('status');
+        return self::filtersFrom($this->req);
+    }
+
+    /** Filter daftar Hutang dari query; dipakai juga oleh cetak agar isi laporan = daftar yang sedang tampil. */
+    public static function filtersFrom(\App\Core\Request $req): array
+    {
+        $status = $req->str('status');
+        $c = $req->str('category');
         return [
-            'q' => mb_substr($this->req->str('q'), 0, 100),
-            'category' => $this->category(),
+            'q' => mb_substr($req->str('q'), 0, 100),
+            'category' => isset(DebtService::CATEGORIES[$c]) ? $c : 'usaha',
             'status' => in_array($status, self::STATUSES, true) ? $status : '',
-            'due_from' => Filters::date($this->req->str('due_from')) ?? '',
-            'due_to' => Filters::date($this->req->str('due_to')) ?? '',
-            'date_from' => Filters::date($this->req->str('date_from')) ?? '',
-            'date_to' => Filters::date($this->req->str('date_to')) ?? '',
+            'due_from' => Filters::date($req->str('due_from')) ?? '',
+            'due_to' => Filters::date($req->str('due_to')) ?? '',
+            'date_from' => Filters::date($req->str('date_from')) ?? '',
+            'date_to' => Filters::date($req->str('date_to')) ?? '',
         ];
     }
 
@@ -65,7 +72,8 @@ final class DebtController extends Controller
             return Response::html(\App\Core\View::partial('debts/_list', $data));
         }
         $cat = $f['category'];
-        $actions = $this->isAdmin() ? '<a class="btn btn-orange" href="' . e(url('/debts/new?category=' . $cat)) . '"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah hutang</a>' : '';
+        $actions = export_button('hutang', array_filter($f, static fn($v) => $v !== ''), 'btn btn-light')
+            . ($this->isAdmin() ? '<a class="btn btn-orange" href="' . e(url('/debts/new?category=' . $cat)) . '"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah hutang</a>' : '');
         $tabs = [];
         foreach (DebtService::CATEGORIES as $k => $label) {
             $tabs[] = ['href' => url('/debts?category=' . $k), 'label' => $label, 'active' => $k === $cat];

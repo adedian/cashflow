@@ -82,6 +82,19 @@ final class DebtService
         return ['rows' => $rows, 'total' => $count, 'tot' => $tot, 'pages' => $pages, 'page' => $page];
     }
 
+    /** Semua hutang yang cocok dengan filter (tanpa halaman) untuk cetak, urut tanggal hutang lalu jatuh tempo. */
+    public static function listAll(array $f, int $limit, ?string $today = null): array
+    {
+        $today ??= ReminderService::today();
+        $q = self::where($f, $today);
+        $rows = Db::all(
+            'SELECT d.*, COALESCE(p.paid, 0) AS paid ' . self::BASE . $q['where']
+            . ' ORDER BY (d.debt_date IS NULL), d.debt_date, (d.due_date IS NULL), d.due_date, d.seq_no, d.id LIMIT ' . ($limit + 1),
+            $q['params']
+        );
+        return array_map(static fn($r) => self::decorate($r, $today), $rows);
+    }
+
     /** Tambahkan status turunan: status (belum|sebagian|lunas), due (klasifikasi jatuh tempo bila masih ada sisa). */
     public static function decorate(array $r, string $today): array
     {
