@@ -40,6 +40,14 @@ final class PdfWriter
         return $this->cache[$k];
     }
 
+    /** Lebar teks dalam poin (Helvetica), dipakai Sheet::fit untuk menentukan lebar kolom. */
+    public static function textWidth(string $text, bool $bold, float $size): float
+    {
+        static $w = null;
+        $w ??= new self();
+        return $w->tw($text, $bold, $size);
+    }
+
     private function tw(string $text, bool $bold, float $size): float
     {
         $bytes = $this->cp($text);

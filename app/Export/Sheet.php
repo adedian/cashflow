@@ -56,6 +56,29 @@ final class Sheet
         return $this;
     }
 
+    /**
+     * Lebarkan kolom $c agar isi terpanjang di baris $r1..$r2 muat satu baris (diukur dengan metrik font PDF),
+     * paling lebar $max karakter; lebar yang sudah ada menjadi batas bawah.
+     */
+    public function fit(int $c, int $r1, int $r2, float $max): self
+    {
+        $need = 0.0;
+        for ($r = $r1; $r <= $r2; $r++) {
+            $cell = $this->rows[$r]['cells'][$c] ?? null;
+            if (!$cell) {
+                continue;
+            }
+            $st = Fmt::style($cell['s']);
+            foreach (preg_split('/\r\n|\r|\n/', Fmt::display($cell, $st)[0]) as $line) {
+                $need = max($need, PdfWriter::textWidth($line, (bool) $st['bold'], (float) $st['size']));
+            }
+        }
+        // poin = (karakter*7+5)*0.75; +12 poin untuk bantalan sel (pembungkusan memakai lebar-5) agar teks tidak mepet garis
+        $w = (($need + 12) / 0.75 - 5) / 7;
+        $this->colWidths[$c] = max($this->colWidths[$c] ?? 8.43, min($max, round($w, 2)));
+        return $this;
+    }
+
     public function cols(): int
     {
         return $this->colWidths ? max(array_keys($this->colWidths)) : 1;

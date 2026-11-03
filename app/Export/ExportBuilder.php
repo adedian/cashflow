@@ -500,7 +500,7 @@ final class ExportBuilder
         $unk = 0;
         $base = ['border' => 'lrtb', 'v' => 'top'];
         $today = date('Y-m-d');
-        $payCodes = \App\Services\TxLinkService::invoicePayCodes(array_column($rows, 'id'));
+        $payList = \App\Services\TxLinkService::invoicePayments(array_column($rows, 'id'));
         foreach ($rows as $i => $t) {
             $known = (int) $t['paid_known'] === 1;
             $rem = bcsub((string) $t['amount'], (string) $t['paid'], 2);
@@ -508,7 +508,8 @@ final class ExportBuilder
             $stat = !$known ? 'Perlu konfirmasi' : (!$open ? 'Lunas' : (bccomp((string) $t['paid'], '0', 2) > 0 ? 'Sebagian' : 'Belum dibayar'));
             if ($known && $open && $t['due_date'] && $t['due_date'] < $today) { $stat .= ' · lewat tempo'; }
             $items = \App\Controllers\InvoiceController::itemsOf($t);
-            $n = max(1, count($items));
+            $pays = self::lampuPays($t, $payList[(int) $t['id']] ?? []);
+            $n = max(1, count($items), count($pays));
             $last = $r + $n - 1;
 
             $s->set($r, 1, (string) ($i + 1), $base + ['h' => 'center']);
@@ -522,7 +523,8 @@ final class ExportBuilder
                     $s->num($r + $k, 6, $it['qty'], $base + ['fmt' => $whole ? 'int' : 'acc2', 'h' => 'center']);
                     $s->num($r + $k, 7, $it['price'], $base + ['fmt' => 'acc2']);
                 }
-                $s->num($r, 8, (string) $t['amount'], $base + ['fmt' => 'acc2'], 'SUMPRODUCT(ROUND(F' . $r . ':F' . $last . '*G' . $r . ':G' . $last . ',2))');
+                $iLast = $r + count($items) - 1;
+                $s->num($r, 8, (string) $t['amount'], $base + ['fmt' => 'acc2'], 'SUMPRODUCT(ROUND(F' . $r . ':F' . $iLast . '*G' . $r . ':G' . $iLast . ',2))');
             } else {
                 $s->set($r, 5, (string) ($t['description'] ?? ''), $base + ['wrap' => true]);
                 $s->paint($r, 6, 7, $base);
@@ -530,44 +532,80 @@ final class ExportBuilder
             }
             if ($t['due_days'] !== null) { $s->num($r, 9, (string) $t['due_days'], $base + ['fmt' => 'int', 'h' => 'center']); } else { $s->set($r, 9, (string) ($t['due_note'] ?? ''), $base + ['h' => 'center']); }
             $s->date($r, 10, $t['due_date'], $base + ['h' => 'center']);
-            // kode bukti: tautan langsung (pay_ref) + penerimaan yang dicatat lewat menu Transaksi
-            $pc = $payCodes[(int) $t['id']] ?? ['codes' => [], 'last' => null];
-            $codes = array_values(array_unique(array_filter(array_merge([(string) ($t['pay_ref'] ?? '')], $pc['codes']))));
-            $s->date($r, 11, $t['paid_date'] ?: $pc['last'], $base + ['h' => 'center']);
-            $s->set($r, 12, implode(', ', $codes), $base + ['h' => 'center', 'wrap' => true]);
+            // satu pembayaran = satu baris: tgl. bayar, kode bukti, dan nominalnya sendiri
+            foreach ($pays as $k => $p) {
+                $s->date($r + $k, 11, $p['date'], $base + ['h' => 'center']);
+                $s->set($r + $k, 12, $p['code'], $base + ['h' => 'center', 'wrap' => true]);
+                if ($known) {
+                    $s->num($r + $k, 13, $p['amount'], $base + ['fmt' => 'acc2']);
+                } else {
+                    $s->set($r + $k, 13, $k === 0 ? '?' : '', $base + ['h' => 'center']);
+                }
+            }
+            if (!$pays) {
+                $s->paint($r, 11, 12, $base);
+                $known ? $s->num($r, 13, (string) $t['paid'], $base + ['fmt' => 'acc2']) : $s->set($r, 13, '?', $base + ['h' => 'center']);
+            }
             if ($known) {
-                $s->num($r, 13, (string) $t['paid'], $base + ['fmt' => 'acc2']);
                 $s->num($r, 14, $open ? $rem : '0.00', $base + ['fmt' => 'acc2']);
                 $sumP = bcadd($sumP, (string) $t['paid'], 2);
                 $sumR = bcadd($sumR, $open ? $rem : '0.00', 2);
             } else {
-                $s->set($r, 13, '?', $base + ['h' => 'center']);
                 $s->set($r, 14, '?', $base + ['h' => 'center']);
                 $unk++;
             }
             $s->set($r, 15, $stat, $base + ['h' => 'center', 'wrap' => true, 'bold' => $stat !== 'Lunas', 'color' => $stat === 'Lunas' ? '000000' : 'C00000']);
             $s->set($r, 16, $t['note'] ?? '', $base + ['wrap' => true]);
-            // baris barang berikutnya: kolom data surat jalan dikosongkan (tetap berbingkai)
+            // baris lanjutan (barang/pembayaran berikutnya): sel yang tak terisi tetap berbingkai
             for ($k = $r + 1; $k <= $last; $k++) {
-                $s->paint($k, 1, 4, $base)->paint($k, 8, 16, $base);
+                $s->paint($k, 1, 4, $base)->paint($k, 8, 10, $base)->paint($k, 14, 16, $base);
+                if ($k - $r >= max(1, count($items))) { $s->paint($k, 5, 7, $base); }
+                if ($k - $r >= count($pays)) { $s->paint($k, 11, 13, $base); }
             }
-            if ($n > 1) { $s->keep($r); }
+            for ($k = $r; $k < $last; $k++) { $s->keep($k); }
             $sumA = bcadd($sumA, (string) $t['amount'], 2);
             $r = $last + 1;
         }
         if ($rows) {
+            // kolom tidak menyempit: lebar mengikuti isi terpanjang agar tanggal, nomor, dan kode tidak turun baris
+            foreach ([2 => 14, 3 => 24, 4 => 46, 5 => 40, 6 => 10, 7 => 18, 8 => 18, 9 => 12, 10 => 14, 11 => 14, 12 => 28, 13 => 18, 14 => 18, 15 => 24, 16 => 40] as $c => $max) {
+                $s->fit($c, $first, $r - 1, $max);
+            }
             $tot = ['bold' => true, 'fill' => self::CYAN, 'border' => 'lrtb', 'fmt' => 'acc2', 'size' => 12];
             $s->set($r, 1, 'TOTAL', $tot + ['h' => 'center', 'fmt' => 'text'])->paint($r, 2, 7, $tot + ['fmt' => 'text'])->merge($r, 1, $r, 7);
             $s->num($r, 8, $sumA, $tot, 'SUM(H' . $first . ':H' . ($r - 1) . ')');
             $s->paint($r, 9, 12, $tot + ['fmt' => 'text']);
-            $s->num($r, 13, $sumP, $tot);
-            $s->num($r, 14, $sumR, $tot);
+            $s->num($r, 13, $sumP, $tot, 'SUM(M' . $first . ':M' . ($r - 1) . ')');
+            $s->num($r, 14, $sumR, $tot, 'SUM(N' . $first . ':N' . ($r - 1) . ')');
             $s->paint($r, 15, 16, $tot + ['fmt' => 'text']);
             $s->height($r, 21);
             if ($unk > 0) {
                 $s->set($r + 2, 1, $unk . ' baris berstatus "Perlu konfirmasi" (pembayaran di Excel tidak terbaca, #REF!) tidak dihitung dalam total Dibayar dan Sisa.', ['size' => 10, 'italic' => true])->merge($r + 2, 1, $r + 2, 16);
             }
         }
+    }
+
+    /**
+     * Rincian pembayaran satu piutang lampu, urut tanggal: penerimaan lewat menu Transaksi (invoice_payments) ditambah
+     * sisa nilai "Dibayar" di luar itu (tautan langsung pay_tx_id / kode lama Excel / isian manual) dengan pay_ref & paid_date.
+     * @param list<array{date:?string,code:string,amount:string}> $via
+     * @return list<array{date:?string,code:string,amount:string}>
+     */
+    private static function lampuPays(array $t, array $via): array
+    {
+        $sumVia = '0.00';
+        foreach ($via as $p) {
+            $sumVia = bcadd($sumVia, $p['amount'], 2);
+        }
+        $other = bcsub((string) $t['paid'], $sumVia, 2);
+        $ref = trim((string) ($t['pay_ref'] ?? ''));
+        $refNew = $ref !== '' && !in_array($ref, array_column($via, 'code'), true);
+        if (bccomp($other, '0.004', 3) > 0 || $refNew) {
+            $via[] = ['date' => $t['paid_date'] ?: null, 'code' => $refNew ? $ref : '', 'amount' => bccomp($other, '0', 2) > 0 ? $other : '0.00'];
+        }
+        $idx = array_keys($via);
+        usort($idx, static fn($a, $b) => [$via[$a]['date'] === null ? 0 : 1, (string) $via[$a]['date'], $a] <=> [$via[$b]['date'] === null ? 0 : 1, (string) $via[$b]['date'], $b]);
+        return array_map(static fn($k) => $via[$k], $idx);
     }
 
     /* ================= PROYEKSI ================= */

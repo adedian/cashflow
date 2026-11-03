@@ -357,11 +357,12 @@ final class TxLinkService
     }
 
     /**
-     * Kode bukti penerimaan piutang yang dicatat lewat menu Transaksi (invoice_payments, transaksi aktif), untuk kolom "Kode Bukti"/"Tgl. Bayar".
+     * Penerimaan piutang yang dicatat lewat menu Transaksi (invoice_payments, transaksi aktif), satu entri per pembayaran,
+     * untuk kolom "Tgl. Bayar"/"Kode Bukti"/"Dibayar" di cetak piutang.
      * @param int[] $ids id invoice
-     * @return array<int,array{codes:list<string>,last:?string}>
+     * @return array<int,list<array{date:?string,code:string,amount:string}>>
      */
-    public static function invoicePayCodes(array $ids): array
+    public static function invoicePayments(array $ids): array
     {
         $ids = array_values(array_unique(array_map('intval', $ids)));
         if (!$ids) {
@@ -369,13 +370,15 @@ final class TxLinkService
         }
         $out = [];
         foreach (Db::all(
-            'SELECT p.invoice_id, p.pay_date, t.id, t.voucher_code FROM invoice_payments p JOIN transactions t ON t.id = p.transaction_id AND t.voided_at IS NULL
+            'SELECT p.invoice_id, p.pay_date, p.amount, t.id, t.voucher_code FROM invoice_payments p JOIN transactions t ON t.id = p.transaction_id AND t.voided_at IS NULL
              WHERE p.invoice_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') ORDER BY p.pay_date, p.id',
             $ids
         ) as $p) {
-            $k = (int) $p['invoice_id'];
-            $out[$k]['codes'][] = trim((string) $p['voucher_code']) !== '' ? trim((string) $p['voucher_code']) : '#' . $p['id'];
-            $out[$k]['last'] = $p['pay_date'];
+            $out[(int) $p['invoice_id']][] = [
+                'date' => $p['pay_date'],
+                'code' => trim((string) $p['voucher_code']) !== '' ? trim((string) $p['voucher_code']) : '#' . $p['id'],
+                'amount' => (string) $p['amount'],
+            ];
         }
         return $out;
     }
