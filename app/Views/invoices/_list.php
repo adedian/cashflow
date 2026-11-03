@@ -16,7 +16,7 @@ $stPill = static function (array $r) use ($today): string {
 };
 ?>
 <div class="grid g-4 mb-2">
-  <div class="card stat"><div class="k">Total tagihan</div><div class="v num"><?= e(money($tot['a'])) ?></div><div class="d"><?= number_format($total, 0, ',', '.') ?> data pada filter ini</div></div>
+  <div class="card stat"><div class="k"><?= $lampu ? 'Total piutang' : 'Total tagihan' ?></div><div class="v num"><?= e(money($tot['a'])) ?></div><div class="d"><?= number_format($total, 0, ',', '.') ?> data pada filter ini</div></div>
   <div class="card stat"><div class="k">Sudah dibayar</div><div class="v num pos"><?= e(money($tot['p'])) ?></div></div>
   <div class="card stat"><div class="k">Sisa (pasti belum dibayar)</div><div class="v num neg"><?= e(money($tot['o'])) ?></div><div class="d"><?= (int) $tot['late_n'] ?> lewat jatuh tempo (<?= e(money($tot['late_a'])) ?>)</div></div>
   <?php if ((int) $tot['un'] > 0): ?>
@@ -31,8 +31,10 @@ $stPill = static function (array $r) use ($today): string {
     <table class="tbl stack inv <?= $lampu ? 'inv-lampu' : '' ?>">
       <thead><tr>
         <th>Tanggal</th><th class="c-sj"><?= $lampu ? 'No. surat jalan' : 'No. invoice' ?></th><th><?= $lampu ? 'Customer' : 'Customer / proyek' ?></th>
+        <?php if ($lampu): ?><th class="c-items">Uraian barang</th><?php endif; ?>
+        <th class="r"><?= $lampu ? 'Total piutang' : 'Tagihan' ?></th>
         <?php if ($lampu): ?><th class="c-due">Jatuh tempo</th><?php endif; ?>
-        <th class="r">Tagihan</th><th class="r c-paid">Dibayar</th><th class="r">Sisa</th><th>Status</th><th class="c-link">Terhubung</th>
+        <th class="r c-paid">Dibayar</th><th class="r">Sisa</th><th>Status</th><th class="c-link">Terhubung</th>
       </tr></thead>
       <tbody>
       <?php foreach ($rows as $r):
@@ -44,10 +46,13 @@ $stPill = static function (array $r) use ($today): string {
         <tr data-href="<?= e($href) ?>">
           <td data-label="Tanggal" class="nowrap"><?= e(fmt_date($r['invoice_date'])) ?></td>
           <td data-label="<?= $lampu ? 'No. SJ' : 'No. invoice' ?>" class="c-sj"><a href="<?= e($href) ?>" style="color:inherit"><?= e($r['invoice_no'] ?? '') ?: '<span class="muted">-</span>' ?></a></td>
-          <td data-label="Customer" class="desc"><b><?= e($r['customer']) ?></b><div class="sub"><?= e($r['project_name'] ?? '') ?><?= $r['description'] ? ' · ' . e($r['description']) : '' ?><?= $r['salesperson'] ? ' · sales ' . e($r['salesperson']) : '' ?><span class="d-sj"><?= $r['invoice_no'] ? ' · ' . e($r['invoice_no']) : '' ?><?= $lampu && $r['due_date'] ? ' · tempo ' . e(fmt_date($r['due_date'])) : '' ?></span></div></td>
-          <?php if ($lampu): ?><td data-label="Jatuh tempo" class="nowrap c-due"><?= $r['due_date'] ? e(fmt_date($r['due_date'])) : ($r['due_note'] ? e($r['due_note']) : '<span class="muted">-</span>') ?></td><?php endif; ?>
-          <td data-label="Tagihan" class="r num"><?= e(money($r['amount'], false)) ?></td>
-          <td data-label="Dibayar" class="r num c-paid"><?= $known ? e(money($r['paid'], false)) : '<span class="muted">?</span>' ?></td>
+          <td data-label="Customer" class="desc"><b><?= e($r['customer']) ?></b><div class="sub"><?= e($r['project_name'] ?? '') ?><?= $r['description'] ? ' · ' . e($r['description']) : '' ?><?= $r['salesperson'] ? ' · sales ' . e($r['salesperson']) : '' ?><?= $lampu && $r['note'] ? ' · ' . e($r['note']) : '' ?><span class="d-sj"><?= $r['invoice_no'] ? ' · ' . e($r['invoice_no']) : '' ?><?= $lampu && $r['due_date'] ? ' · tempo ' . e(fmt_date($r['due_date'])) : '' ?></span></div></td>
+          <?php if ($lampu): $its = \App\Controllers\InvoiceController::itemsOf($r); ?>
+          <td data-label="Uraian" class="c-items"><?php if (!$its): ?><span class="muted">-</span><?php else: foreach (array_slice($its, 0, 3) as $it): ?><div class="it"><?= e($it['name']) ?> <span class="muted nowrap">· <?= e(money($it['qty'], false)) ?> × <?= e(money($it['price'], false)) ?></span></div><?php endforeach; ?><?= count($its) > 3 ? '<div class="muted">+' . (count($its) - 3) . ' barang lain</div>' : '' ?><?php endif; ?></td>
+          <?php endif; ?>
+          <td data-label="<?= $lampu ? 'Total piutang' : 'Tagihan' ?>" class="r num"><?= e(money($r['amount'], false)) ?></td>
+          <?php if ($lampu): ?><td data-label="Jatuh tempo" class="nowrap c-due"><?= $r['due_date'] ? e(fmt_date($r['due_date'])) : ($r['due_note'] ? e($r['due_note']) : '<span class="muted">-</span>') ?><?= $r['due_days'] !== null ? '<div class="sub">' . (int) $r['due_days'] . ' hari</div>' : '' ?></td><?php endif; ?>
+          <td data-label="Dibayar" class="r num c-paid"><?= $known ? e(money($r['paid'], false)) : '<span class="muted">?</span>' ?><?= $lampu && $r['paid_date'] ? '<div class="sub">' . e(fmt_date($r['paid_date'])) . '</div>' : '' ?></td>
           <td data-label="Sisa" class="r num <?= $known && bccomp($rem, '0.004', 3) > 0 ? 'neg' : '' ?>"><?= $known ? e(money(bccomp($rem, '0', 2) > 0 ? $rem : '0', false)) : '<span class="muted">?</span>' ?></td>
           <td data-label="Status" class="nowrap"><?= $stPill($r) ?></td>
           <td data-label="Terhubung" class="c-link">

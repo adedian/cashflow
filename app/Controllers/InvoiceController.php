@@ -11,6 +11,7 @@ use App\Core\Response;
 use App\Services\Audit;
 use App\Services\Filters;
 use App\Services\LinkService;
+use App\Services\PartyService;
 use App\Services\ReminderService;
 use App\Services\TxLinkService;
 use App\Services\Version;
@@ -50,8 +51,8 @@ final class InvoiceController extends Controller
         $p = [$kind];
         if ($q !== '') {
             $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';
-            $w[] = '(customer LIKE ? OR project_name LIKE ? OR invoice_no LIKE ? OR description LIKE ? OR note LIKE ? OR pay_ref LIKE ?)';
-            array_push($p, $like, $like, $like, $like, $like, $like);
+            $w[] = '(customer LIKE ? OR project_name LIKE ? OR invoice_no LIKE ? OR description LIKE ? OR note LIKE ? OR pay_ref LIKE ? OR items LIKE ?)';
+            array_push($p, $like, $like, $like, $like, $like, $like, $like);
         }
         switch ($status) {
             case 'open': $w[] = 'paid_known = 1 AND amount - paid > 0.004'; break;
@@ -126,17 +127,54 @@ final class InvoiceController extends Controller
 
     private function form(array $t, array $errors, ?int $id, string $kind, int $status = 200): Response
     {
-        Page::set(['title' => $id ? 'Ubah piutang' : 'Tambah ' . ($kind === 'lampu' ? 'piutang lampu' : 'invoice'), 'subtitle' => 'Sisa dihitung otomatis: nominal − dibayar']);
-        $r = $this->view('invoices/form', ['t' => $t, 'errors' => $errors, 'id' => $id, 'kind' => $kind]);
+        $lampu = $kind === 'lampu';
+        Page::set(['title' => $id ? 'Ubah piutang' : 'Tambah ' . ($lampu ? 'piutang lampu' : 'invoice'),
+            'subtitle' => $lampu ? 'Total piutang = Σ Qty × Harga satuan; Tgl. jatuh tempo = Tgl. nota + jumlah hari' : 'Sisa dihitung otomatis: nominal − dibayar',
+            'scripts' => $lampu ? ['invoice-form.js'] : []]);
+        $r = $this->view('invoices/form', ['t' => $t, 'errors' => $errors, 'id' => $id, 'kind' => $kind,
+            'parties' => $lampu ? PartyService::options((string) ($t['customer'] ?? '')) : [],
+            'items' => $lampu ? self::itemsOf($t) : []]);
         $r->status = $status;
         return $r;
+    }
+
+    /**
+     * Rincian barang Piutang Lampu dari baris tersimpan (kolom JSON `items`) atau dari isian formulir (item_name[]/item_qty[]/item_price[]).
+     * @return list<array{name:string,qty:string,price:string,subtotal:string}>
+     */
+    public static function itemsOf(array $t): array
+    {
+        if (isset($t['item_name']) && is_array($t['item_name'])) {
+            $out = [];
+            foreach ($t['item_name'] as $i => $n) {
+                $out[] = ['name' => (string) $n, 'qty' => (string) ($t['item_qty'][$i] ?? ''), 'price' => (string) ($t['item_price'][$i] ?? ''), 'subtotal' => ''];
+            }
+            return $out;
+        }
+        $j = json_decode((string) ($t['items'] ?? ''), true);
+        return is_array($j) ? array_values(array_filter($j, 'is_array')) : [];
+    }
+
+    /** Usulan No. surat jalan berikutnya: awalan + angka (dengan nol di depan) dari nomor terbaru, mis. JL00001536 -> JL00001537. */
+    private static function nextSj(): string
+    {
+        $last = Db::val("SELECT invoice_no FROM invoices WHERE kind = 'lampu' AND invoice_no REGEXP '^[A-Za-z]+[0-9]+$' ORDER BY (invoice_date IS NULL), invoice_date DESC, id DESC LIMIT 1");
+        if (!$last || !preg_match('/^([A-Za-z]+)(\d+)$/', (string) $last, $m)) {
+            return '';
+        }
+        $max = (string) Db::val("SELECT MAX(CAST(SUBSTRING(invoice_no, ?) AS UNSIGNED)) FROM invoices WHERE kind = 'lampu' AND invoice_no REGEXP ?", [strlen($m[1]) + 1, '^' . $m[1] . '[0-9]+$']);
+        return $m[1] . str_pad(bcadd($max !== '' ? $max : $m[2], '1', 0), strlen($m[2]), '0', STR_PAD_LEFT);
     }
 
     public function create(): Response
     {
         $this->requireAdmin();
         $kind = $this->kind();
-        return $this->form(['invoice_date' => date('Y-m-d'), 'paid_known' => 1], [], null, $kind);
+        $t = ['invoice_date' => date('Y-m-d'), 'paid_known' => 1];
+        if ($kind === 'lampu') {
+            $t += ['invoice_no' => self::nextSj(), 'due_days' => 30];
+        }
+        return $this->form($t, [], null, $kind);
     }
 
     public function edit(string $id): Response
@@ -188,7 +226,83 @@ final class InvoiceController extends Controller
 
         $d['paid_known'] = !empty($in['paid_known']) ? 1 : 0;
         $d['note'] = mb_substr(trim((string) ($in['note'] ?? '')), 0, 255) ?: null;
+        if ($kind === 'lampu') {
+            $this->validateLampu($in, $d, $e, $existing);
+        }
         return [$d, $e];
+    }
+
+    /**
+     * Aturan khusus Piutang Lampu: customer dari master Customer, No. surat jalan unik (wajib untuk data baru),
+     * rincian barang (Total = Σ Qty × Harga satuan, dihitung server), jatuh tempo dalam hari (Tgl. jatuh tempo = Tgl. nota + hari).
+     * Kolom lama yang tidak ada di formulir (keterangan jatuh tempo, sales, keterangan/proyek) dipertahankan.
+     */
+    private function validateLampu(array $in, array &$d, array &$e, ?array $existing): void
+    {
+        foreach (['project_name', 'description', 'due_note', 'salesperson'] as $k) {
+            if (!array_key_exists($k, $in)) { unset($d[$k]); }
+        }
+        if ($d['customer'] !== '') {
+            $canon = PartyService::canonical($d['customer']);
+            if ($canon !== null) {
+                $d['customer'] = mb_substr($canon, 0, 160);
+            } elseif (!($existing && mb_strtolower((string) $existing['customer']) === mb_strtolower($d['customer']))) {
+                $e['customer'] = 'Pilih customer dari daftar, atau tambahkan lewat tombol “Tambah” di dropdown (atau Master Data → Customer).';
+            }
+        }
+        if ($d['invoice_no'] === null) {
+            if ($existing === null || $existing['invoice_no'] !== null) { $e['invoice_no'] = 'No. surat jalan wajib diisi.'; }
+        } elseif (Db::val("SELECT id FROM invoices WHERE kind = 'lampu' AND invoice_no = ? AND id <> ? LIMIT 1", [$d['invoice_no'], (int) ($existing['id'] ?? 0)])) {
+            $e['invoice_no'] = 'No. surat jalan ' . $d['invoice_no'] . ' sudah dipakai piutang lain. Nomor tidak boleh dobel.';
+        }
+
+        // rincian barang; baris kosong diabaikan
+        $items = [];
+        $sum = '0.00';
+        $names = (array) ($in['item_name'] ?? []);
+        foreach ($names as $i => $n) {
+            $n = mb_substr(trim((string) preg_replace('/\s+/', ' ', (string) $n)), 0, 160);
+            $qRaw = trim((string) ($in['item_qty'][$i] ?? ''));
+            $pRaw = trim((string) ($in['item_price'][$i] ?? ''));
+            if ($n === '' && $qRaw === '' && $pRaw === '') { continue; }
+            $qty = parse_amount($qRaw);
+            $price = parse_amount($pRaw);
+            if ($n === '' || $qty === null || bccomp($qty, '0', 2) <= 0 || $price === null) {
+                $e['items'] = 'Baris barang ke-' . ($i + 1) . ' belum lengkap: isi nama barang, Qty (> 0), dan harga satuan.';
+                continue;
+            }
+            $sub = bcadd(bcmul($qty, $price, 4), '0.005', 2);   // pembulatan ke sen terdekat
+            $items[] = ['name' => $n, 'qty' => $qty, 'price' => $price, 'subtotal' => $sub];
+            $sum = bcadd($sum, $sub, 2);
+        }
+        if (count($items) > 100) { $e['items'] = 'Maksimal 100 baris barang per surat jalan.'; }
+        if ($items) {
+            $d['items'] = json_encode($items, JSON_UNESCAPED_UNICODE);
+            $d['amount'] = $sum;
+            unset($e['amount']);
+            if (!isset($e['paid']) && $existing === null && bccomp($d['paid'], $sum, 2) > 0) {
+                $e['paid'] = 'Sudah dibayar tidak boleh melebihi total piutang (' . money($sum) . ').';
+            }
+        } elseif ($existing === null || !empty(self::itemsOf($existing))) {
+            $e['items'] ??= 'Isi minimal satu barang (nama barang, Qty, harga satuan).';
+        } else {
+            $d['items'] = null;   // data lama tanpa rincian: nominal tetap dari isian “Total piutang”
+        }
+
+        // jatuh tempo dalam hari
+        $raw = trim((string) ($in['due_days'] ?? ''));
+        if ($raw === '') {
+            $d['due_days'] = null;
+            // data lama yang hanya punya tanggal jatuh tempo (tanpa jumlah hari) dibiarkan
+            $d['due_date'] = ($existing && $existing['due_days'] === null) ? $existing['due_date'] : null;
+        } elseif (!ctype_digit($raw) || (int) $raw > 3650) {
+            $e['due_days'] = 'Jatuh tempo diisi jumlah hari (0–3650).';
+        } elseif ($d['invoice_date'] === null) {
+            $e['invoice_date'] = 'Tanggal nota wajib diisi untuk menghitung tanggal jatuh tempo.';
+        } else {
+            $d['due_days'] = (int) $raw;
+            $d['due_date'] = date('Y-m-d', strtotime($d['invoice_date'] . ' +' . (int) $raw . ' days'));
+        }
     }
 
     public function store(): Response

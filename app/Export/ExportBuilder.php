@@ -382,8 +382,8 @@ final class ExportBuilder
         $p = [$kind];
         if ($q !== '') {
             $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';
-            $w[] = '(customer LIKE ? OR project_name LIKE ? OR invoice_no LIKE ? OR description LIKE ? OR note LIKE ? OR pay_ref LIKE ?)';
-            array_push($p, $like, $like, $like, $like, $like, $like);
+            $w[] = '(customer LIKE ? OR project_name LIKE ? OR invoice_no LIKE ? OR description LIKE ? OR note LIKE ? OR pay_ref LIKE ? OR items LIKE ?)';
+            array_push($p, $like, $like, $like, $like, $like, $like, $like);
         }
         if ($status === 'open') { $w[] = 'paid_known = 1 AND amount - paid > 0.004'; }
         if ($status === 'paid') { $w[] = 'paid_known = 1 AND amount - paid <= 0.004'; }
@@ -458,29 +458,47 @@ final class ExportBuilder
         }
     }
 
-    /** Rekap piutang penjualan lampu. Baris yang pembayarannya tak terbaca (paid_known = 0) tidak dihitung dalam total dibayar/sisa. */
+    /**
+     * Rekap piutang penjualan lampu, layout A–P: No, Tgl., No. Surat Jalan, Customer, Uraian (Nama Barang | Qty | Harga Satuan),
+     * Total Piutang (= Σ Qty × Harga), Jatuh Tempo (hari), Tgl. Jatuh Tempo, Tgl. Bayar, Kode Bukti, Dibayar, Sisa, Status, Keterangan.
+     * Satu surat jalan dengan beberapa barang = beberapa baris; data surat jalan hanya di baris pertamanya.
+     * Baris yang pembayarannya tak terbaca (paid_known = 0) tidak dihitung dalam total dibayar/sisa.
+     */
     private static function lampuSheet(Document $doc, array $rows, string $q, string $status): void
     {
         $s = $doc->add(new Sheet('Piutang Lampu'));
         $s->paper = 'legal';
-        $s->widths([4.71, 12, 18, 38, 14, 18, 18, 18, 13, 12, 18, 40]);
-        $s->set(1, 1, 'REKAP PIUTANG PENJUALAN LAMPU ' . strtoupper($doc->company), ['size' => 14, 'bold' => true, 'h' => 'center'])->merge(1, 1, 1, 12)->height(1, 23.25);
+        $s->widths([4.71, 11, 15, 32, 26, 7, 14, 16, 9, 11, 11, 11, 16, 16, 15, 30]);
+        $s->set(1, 1, 'REKAP PIUTANG PENJUALAN LAMPU ' . strtoupper($doc->company), ['size' => 14, 'bold' => true, 'h' => 'center'])->merge(1, 1, 1, 16)->height(1, 23.25);
         $note = ['Per ' . self::longDate(date('Y-m-d'))];
         if ($q !== '') { $note[] = 'pencarian "' . $q . '"'; }
         if ($status !== '') { $note[] = ['open' => 'masih ada sisa', 'paid' => 'lunas', 'unknown' => 'perlu konfirmasi', 'late' => 'lewat jatuh tempo'][$status] ?? ''; }
-        $s->set(2, 1, implode(' · ', $note), ['size' => 10, 'italic' => true, 'h' => 'center'])->merge(2, 1, 2, 12);
-        $h = ['font' => 'Calibri', 'size' => 10, 'bold' => true, 'border' => 'lrtb', 'h' => 'center', 'fill' => self::HDR, 'wrap' => true];
-        foreach (['No', 'Tgl.', 'No. Surat Jalan', 'Customer', 'Jatuh Tempo', 'Piutang', 'Dibayar', 'Sisa', 'Tgl. Bayar', 'Kode Bukti', 'Status', 'Keterangan'] as $i => $t) {
-            $s->set(4, $i + 1, $t, $h);
+        $s->set(2, 1, implode(' · ', $note), ['size' => 10, 'italic' => true, 'h' => 'center'])->merge(2, 1, 2, 16);
+        $h = ['font' => 'Calibri', 'size' => 10, 'bold' => true, 'border' => 'lrtb', 'h' => 'center', 'v' => 'center', 'fill' => self::HDR, 'wrap' => true];
+        // header dua tingkat: "Uraian" membawahi Nama Barang / Qty / Harga Satuan
+        $top = [1 => 'No', 2 => 'Tgl.', 3 => 'No. Surat Jalan', 4 => 'Customer', 5 => 'Uraian', 8 => 'Total Piutang', 9 => 'Jatuh Tempo (hari)', 10 => 'Tgl. Jatuh Tempo',
+            11 => 'Tgl. Bayar', 12 => 'Kode Bukti', 13 => 'Dibayar', 14 => 'Sisa', 15 => 'Status', 16 => 'Keterangan'];
+        foreach ($top as $c => $t) {
+            $s->set(4, $c, $t, $h);
         }
-        $s->height(4, 24);
-        $s->repeatRows = [4];
-        $s->freezeRow = 4;
-        $r = 5;
+        $s->paint(4, 6, 7, $h)->merge(4, 5, 4, 7);
+        foreach ([5 => 'Nama Barang', 6 => 'Qty', 7 => 'Harga Satuan'] as $c => $t) {
+            $s->set(5, $c, $t, $h);
+        }
+        foreach (array_keys($top) as $c) {
+            if ($c !== 5) {
+                $s->paint(5, $c, $c, $h);
+                $s->merge(4, $c, 5, $c);
+            }
+        }
+        $s->height(4, 15)->height(5, 15);
+        $s->repeatRows = [4, 5];
+        $s->freezeRow = 5;
+        $r = 6;
         $first = $r;
         $sumA = $sumP = $sumR = '0.00';
         $unk = 0;
-        $base = ['border' => 'lrtb'];
+        $base = ['border' => 'lrtb', 'v' => 'top'];
         $today = date('Y-m-d');
         foreach ($rows as $i => $t) {
             $known = (int) $t['paid_known'] === 1;
@@ -488,39 +506,62 @@ final class ExportBuilder
             $open = bccomp($rem, '0.004', 3) > 0;
             $stat = !$known ? 'Perlu konfirmasi' : (!$open ? 'Lunas' : (bccomp((string) $t['paid'], '0', 2) > 0 ? 'Sebagian' : 'Belum dibayar'));
             if ($known && $open && $t['due_date'] && $t['due_date'] < $today) { $stat .= ' · lewat tempo'; }
+            $items = \App\Controllers\InvoiceController::itemsOf($t);
+            $n = max(1, count($items));
+            $last = $r + $n - 1;
+
             $s->set($r, 1, (string) ($i + 1), $base + ['h' => 'center']);
             $s->date($r, 2, $t['invoice_date'], $base + ['h' => 'center']);
             $s->set($r, 3, $t['invoice_no'] ?? '', $base + ['wrap' => true]);
             $s->set($r, 4, $t['customer'], $base + ['wrap' => true]);
-            if ($t['due_date']) { $s->date($r, 5, $t['due_date'], $base + ['h' => 'center']); } else { $s->set($r, 5, (string) ($t['due_note'] ?? ''), $base + ['h' => 'center']); }
-            $s->num($r, 6, (string) $t['amount'], $base + ['fmt' => 'acc2']);
+            if ($items) {
+                foreach ($items as $k => $it) {
+                    $whole = bccomp((string) $it['qty'], bcadd((string) $it['qty'], '0', 0), 2) === 0;
+                    $s->set($r + $k, 5, $it['name'], $base + ['wrap' => true]);
+                    $s->num($r + $k, 6, $it['qty'], $base + ['fmt' => $whole ? 'int' : 'acc2', 'h' => 'center']);
+                    $s->num($r + $k, 7, $it['price'], $base + ['fmt' => 'acc2']);
+                }
+                $s->num($r, 8, (string) $t['amount'], $base + ['fmt' => 'acc2'], 'SUMPRODUCT(ROUND(F' . $r . ':F' . $last . '*G' . $r . ':G' . $last . ',2))');
+            } else {
+                $s->set($r, 5, (string) ($t['description'] ?? ''), $base + ['wrap' => true]);
+                $s->paint($r, 6, 7, $base);
+                $s->num($r, 8, (string) $t['amount'], $base + ['fmt' => 'acc2']);
+            }
+            if ($t['due_days'] !== null) { $s->num($r, 9, (string) $t['due_days'], $base + ['fmt' => 'int', 'h' => 'center']); } else { $s->set($r, 9, (string) ($t['due_note'] ?? ''), $base + ['h' => 'center']); }
+            $s->date($r, 10, $t['due_date'], $base + ['h' => 'center']);
+            $s->date($r, 11, $t['paid_date'], $base + ['h' => 'center']);
+            $s->set($r, 12, $t['pay_ref'] ?? '', $base + ['h' => 'center']);
             if ($known) {
-                $s->num($r, 7, (string) $t['paid'], $base + ['fmt' => 'acc2']);
-                $s->num($r, 8, $open ? $rem : '0.00', $base + ['fmt' => 'acc2']);
+                $s->num($r, 13, (string) $t['paid'], $base + ['fmt' => 'acc2']);
+                $s->num($r, 14, $open ? $rem : '0.00', $base + ['fmt' => 'acc2']);
                 $sumP = bcadd($sumP, (string) $t['paid'], 2);
                 $sumR = bcadd($sumR, $open ? $rem : '0.00', 2);
             } else {
-                $s->set($r, 7, '?', $base + ['h' => 'center']);
-                $s->set($r, 8, '?', $base + ['h' => 'center']);
+                $s->set($r, 13, '?', $base + ['h' => 'center']);
+                $s->set($r, 14, '?', $base + ['h' => 'center']);
                 $unk++;
             }
-            $s->date($r, 9, $t['paid_date'], $base + ['h' => 'center']);
-            $s->set($r, 10, $t['pay_ref'] ?? '', $base + ['h' => 'center']);
-            $s->set($r, 11, $stat, $base + ['h' => 'center', 'bold' => $stat !== 'Lunas', 'color' => $stat === 'Lunas' ? '000000' : 'C00000']);
-            $s->set($r, 12, $t['note'] ?? '', $base + ['wrap' => true]);
+            $s->set($r, 15, $stat, $base + ['h' => 'center', 'wrap' => true, 'bold' => $stat !== 'Lunas', 'color' => $stat === 'Lunas' ? '000000' : 'C00000']);
+            $s->set($r, 16, $t['note'] ?? '', $base + ['wrap' => true]);
+            // baris barang berikutnya: kolom data surat jalan dikosongkan (tetap berbingkai)
+            for ($k = $r + 1; $k <= $last; $k++) {
+                $s->paint($k, 1, 4, $base)->paint($k, 8, 16, $base);
+            }
+            if ($n > 1) { $s->keep($r); }
             $sumA = bcadd($sumA, (string) $t['amount'], 2);
-            $r++;
+            $r = $last + 1;
         }
         if ($rows) {
             $tot = ['bold' => true, 'fill' => self::CYAN, 'border' => 'lrtb', 'fmt' => 'acc2', 'size' => 12];
-            $s->set($r, 1, 'TOTAL', $tot + ['h' => 'center', 'fmt' => 'text'])->paint($r, 2, 5, $tot + ['fmt' => 'text'])->merge($r, 1, $r, 5);
-            $s->num($r, 6, $sumA, $tot, 'SUM(F' . $first . ':F' . ($r - 1) . ')');
-            $s->num($r, 7, $sumP, $tot);
-            $s->num($r, 8, $sumR, $tot);
+            $s->set($r, 1, 'TOTAL', $tot + ['h' => 'center', 'fmt' => 'text'])->paint($r, 2, 7, $tot + ['fmt' => 'text'])->merge($r, 1, $r, 7);
+            $s->num($r, 8, $sumA, $tot, 'SUM(H' . $first . ':H' . ($r - 1) . ')');
             $s->paint($r, 9, 12, $tot + ['fmt' => 'text']);
+            $s->num($r, 13, $sumP, $tot);
+            $s->num($r, 14, $sumR, $tot);
+            $s->paint($r, 15, 16, $tot + ['fmt' => 'text']);
             $s->height($r, 21);
             if ($unk > 0) {
-                $s->set($r + 2, 1, $unk . ' baris berstatus "Perlu konfirmasi" (pembayaran di Excel tidak terbaca, #REF!) tidak dihitung dalam total Dibayar dan Sisa.', ['size' => 10, 'italic' => true])->merge($r + 2, 1, $r + 2, 12);
+                $s->set($r + 2, 1, $unk . ' baris berstatus "Perlu konfirmasi" (pembayaran di Excel tidak terbaca, #REF!) tidak dihitung dalam total Dibayar dan Sisa.', ['size' => 10, 'italic' => true])->merge($r + 2, 1, $r + 2, 16);
             }
         }
     }

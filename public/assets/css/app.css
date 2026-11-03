@@ -729,6 +729,14 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
   .tbl.inv .c-sj, .tbl.inv .c-due, .tbl.inv .c-paid { display: none; }
   .tbl.inv .d-sj { display: inline; }
 }
+.tbl.inv .c-items { font-size: 12.5px; min-width: 190px; }
+.tbl.inv .c-items .it + .it { margin-top: 2px; }
+/* formulir Piutang Lampu: baris barang */
+.tbl.inv-items td { padding: 6px 8px; vertical-align: middle; }
+.tbl.inv-items .ln { color: var(--muted, #6b7280); text-align: center; }
+.tbl.inv-items input.r { text-align: right; }
+.tbl.inv-items input[name="item_name[]"] { min-width: 220px; }
+.tbl.inv-items tfoot td { border-top: 2px solid #e5e8f0; padding: 10px 8px; }
 
 /* ---- dropdown dengan pencarian (combo.js) ---- */
 .combo { position: relative; }

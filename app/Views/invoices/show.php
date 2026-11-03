@@ -22,16 +22,28 @@ if (!$known) {
     <dt>Jenis</dt><dd><?= $lampu ? 'Piutang Lampu' : 'Piutang Proyek' ?></dd>
     <dt><?= $lampu ? 'No. surat jalan' : 'No. invoice' ?></dt><dd><?= $r['invoice_no'] ? e($r['invoice_no']) : '<span class="muted">Tidak tersedia</span>' ?></dd>
     <dt>Tanggal</dt><dd><?= $r['invoice_date'] ? e(fmt_date($r['invoice_date'], 'd/m/Y')) : '<span class="muted">Tidak tersedia</span>' ?></dd>
-    <?php if ($lampu): ?><dt>Jatuh tempo</dt><dd><?= $r['due_date'] ? e(fmt_date($r['due_date'], 'd/m/Y')) : ($r['due_note'] ? e($r['due_note']) : '<span class="muted">-</span>') ?></dd>
-    <dt>Sales</dt><dd><?= e($r['salesperson'] ?: '-') ?></dd><?php endif; ?>
+    <?php if ($lampu): ?><dt>Jatuh tempo</dt><dd><?= $r['due_date'] ? e(fmt_date($r['due_date'], 'd/m/Y')) : ($r['due_note'] ? e($r['due_note']) : '<span class="muted">-</span>') ?><?= $r['due_days'] !== null ? ' <span class="muted">(' . (int) $r['due_days'] . ' hari dari tgl. nota)</span>' : '' ?></dd>
+    <?php if ($r['salesperson']): ?><dt>Sales</dt><dd><?= e($r['salesperson']) ?></dd><?php endif; ?><?php endif; ?>
     <?php if ($r['project_name']): ?><dt>Proyek</dt><dd><?= e($r['project_name']) ?></dd><?php endif; ?>
     <?php if ($r['description']): ?><dt>Keterangan</dt><dd><?= e($r['description']) ?></dd><?php endif; ?>
-    <dt>Tagihan</dt><dd class="num"><b><?= e(money($r['amount'])) ?></b></dd>
+    <dt><?= $lampu ? 'Total piutang' : 'Tagihan' ?></dt><dd class="num"><b><?= e(money($r['amount'])) ?></b></dd>
     <dt>Sudah dibayar</dt><dd class="num pos"><?= $known ? e(money($r['paid'])) : '<span class="muted">tidak diketahui</span>' ?><?= $r['paid_date'] ? ' <span class="muted">· ' . e(fmt_date($r['paid_date'], 'd/m/Y')) . '</span>' : '' ?></dd>
     <dt>Sisa</dt><dd class="num"><?= $known ? '<b class="' . ($open ? 'neg' : 'pos') . '">' . e(money($open ? $rem : '0')) . '</b>' : '<span class="muted">tidak diketahui</span>' ?></dd>
-    <?php if ($r['note']): ?><dt>Catatan</dt><dd><?= e($r['note']) ?></dd><?php endif; ?>
+    <?php if ($r['note']): ?><dt><?= $lampu ? 'Keterangan' : 'Catatan' ?></dt><dd><?= e($r['note']) ?></dd><?php endif; ?>
     <?php if ($r['source_row']): ?><dt>Asal data</dt><dd>Excel baris <?= (int) $r['source_row'] ?><?= $r['import_batch_id'] ? ' · impor batch #' . (int) $r['import_batch_id'] : '' ?></dd><?php endif; ?>
   </dl>
+  <?php $its = $lampu ? \App\Controllers\InvoiceController::itemsOf($r) : []; if ($its): ?>
+  <h3 class="mt-3 mb-1" style="font-size:15px">Uraian barang</h3>
+  <div class="table-wrap"><table class="tbl stack">
+    <thead><tr><th>No</th><th>Nama barang</th><th class="r">Qty</th><th class="r">Harga satuan</th><th class="r">Jumlah</th></tr></thead>
+    <tbody>
+    <?php foreach ($its as $i => $it): ?>
+      <tr><td data-label="No"><?= $i + 1 ?></td><td data-label="Nama barang"><?= e($it['name']) ?></td><td data-label="Qty" class="r num"><?= e(money($it['qty'], false)) ?></td><td data-label="Harga satuan" class="r num"><?= e(money($it['price'], false)) ?></td><td data-label="Jumlah" class="r num"><?= e(money($it['subtotal'], false)) ?></td></tr>
+    <?php endforeach; ?>
+    </tbody>
+    <tfoot><tr><td colspan="4" class="r"><b>Total piutang</b></td><td class="r num"><b><?= e(money($r['amount'], false)) ?></b></td></tr></tfoot>
+  </table></div>
+  <?php elseif ($lampu): ?><p class="help mt-2 mb-0">Data lama tanpa rincian barang. <?= $isAdmin ? 'Rincian dapat diisi lewat “Ubah”.' : '' ?></p><?php endif; ?>
 </section>
 
 <section class="card card-flush mt-2" style="max-width:900px" id="invPays">
