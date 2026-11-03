@@ -209,27 +209,27 @@ $accKind = static fn(array $r): string => $r['balance_mode'] === 'liability' ? '
 
 <?php elseif ($tab === 'parties'): ?>
 <section class="card">
-  <div class="card-head"><h2>Tambah pihak</h2></div>
+  <div class="card-head"><h2>Tambah customer</h2></div>
   <form method="post" action="<?= e(url('/master/parties')) ?>" class="filters">
     <?= csrf_field() ?>
-    <div class="field grow"><label for="npt">Nama pihak (penerima / pembayar)</label><input class="input" id="npt" name="name" maxlength="255" required placeholder="mis. PT. Contoh Abadi" autocomplete="off"></div>
+    <div class="field grow"><label for="npt">Nama customer (penerima / pembayar)</label><input class="input" id="npt" name="name" maxlength="255" required placeholder="mis. PT. Contoh Abadi" autocomplete="off"></div>
     <div class="field" style="flex:0 0 auto"><button class="btn" type="submit">Tambah</button></div>
   </form>
-  <p class="help mt-1 mb-0">Daftar ini menjadi pilihan <b>Pihak (penerima/pembayar)</b> di formulir Transaksi. Pihak juga dapat ditambah langsung dari dropdown di formulir itu. Mengubah nama di sini ikut memperbarui transaksi yang memakainya. Pihak yang dinonaktifkan tidak muncul lagi di dropdown, tetapi transaksi lama tetap utuh.</p>
+  <p class="help mt-1 mb-0">Daftar ini menjadi pilihan <b>Pihak (penerima/pembayar)</b> di formulir Transaksi. Customer juga dapat ditambah langsung dari dropdown di formulir itu. Mengubah nama di sini ikut memperbarui transaksi yang memakainya. Customer yang dinonaktifkan tidak muncul lagi di dropdown, tetapi transaksi lama tetap utuh.</p>
 </section>
 <section class="card card-flush">
   <div class="table-wrap"><table class="tbl">
-    <thead><tr><th>Nama pihak</th><th class="r">Transaksi</th><th>Aktif</th><th></th></tr></thead>
+    <thead><tr><th>Nama customer</th><th class="r">Transaksi</th><th>Aktif</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($rows as $r): $fid = 'mp' . (int) $r['id']; ?>
       <tr>
-        <td><?= $rowForm($fid, url('/master/parties/' . (int) $r['id'])) ?><input form="<?= $fid ?>" class="input" name="name" value="<?= e($r['name']) ?>" maxlength="255" required aria-label="Nama pihak"></td>
+        <td><?= $rowForm($fid, url('/master/parties/' . (int) $r['id'])) ?><input form="<?= $fid ?>" class="input" name="name" value="<?= e($r['name']) ?>" maxlength="255" required aria-label="Nama customer"></td>
         <td class="r num"><?= number_format((int) $r['n'], 0, ',', '.') ?></td>
         <td><label class="check"><input form="<?= $fid ?>" type="checkbox" name="is_active" value="1" <?= $r['is_active'] ? 'checked' : '' ?>></label></td>
         <td><button form="<?= $fid ?>" class="btn btn-ghost btn-sm" type="submit" data-no-lock>Simpan</button></td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$rows): ?><tr><td colspan="4" class="muted">Belum ada pihak.</td></tr><?php endif; ?>
+    <?php if (!$rows): ?><tr><td colspan="4" class="muted">Belum ada customer.</td></tr><?php endif; ?>
     </tbody></table></div>
 </section>
 

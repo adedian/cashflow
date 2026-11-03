@@ -23,7 +23,7 @@ final class MasterController extends Controller
     {
         $tab = in_array($this->req->str('tab'), ['categories', 'projects', 'accounts', 'counterparties', 'suppliers', 'parties', 'opening', 'mapping'], true) ? $this->req->str('tab') : 'categories';
         $tabs = [];
-        foreach (['categories' => 'Kategori', 'projects' => 'Proyek', 'accounts' => 'Rekening', 'counterparties' => 'Rekening Lawan', 'suppliers' => 'Supplier', 'parties' => 'Pihak', 'opening' => 'Saldo Awal', 'mapping' => 'Pemetaan Excel'] as $k => $l) {
+        foreach (['categories' => 'Kategori', 'projects' => 'Proyek', 'accounts' => 'Rekening', 'counterparties' => 'Rekening Lawan', 'suppliers' => 'Supplier', 'parties' => 'Customer', 'opening' => 'Saldo Awal', 'mapping' => 'Pemetaan Excel'] as $k => $l) {
             $tabs[] = ['href' => url('/master?tab=' . $k), 'label' => $l, 'active' => $k === $tab];
         }
         Page::set(['title' => 'Master Data', 'subtitle' => 'Kategori, proyek, rekening, saldo awal, dan pemetaan kategori dari Excel', 'tabs' => $tabs]);
@@ -238,38 +238,38 @@ final class MasterController extends Controller
         return $this->back('accounts');
     }
 
-    /* ---------- pihak penerima/pembayar (dropdown Pihak di formulir Transaksi) ---------- */
+    /* ---------- customer / pihak penerima-pembayar (dropdown Pihak di formulir Transaksi) ---------- */
     public function saveParty(string $id = ''): Response
     {
         $name = PartyService::clean($this->req->str('name'));
         if ($name === '') {
-            $this->flash('error', 'Nama pihak wajib diisi.');
+            $this->flash('error', 'Nama customer wajib diisi.');
             return $this->back('parties');
         }
         if (Db::val('SELECT id FROM parties WHERE name = ? AND id <> ?', [$name, (int) $id])) {
-            $this->flash('error', 'Pihak tersebut sudah ada.');
+            $this->flash('error', 'Customer tersebut sudah ada.');
             return $this->back('parties');
         }
         $renamed = 0;
         Db::tx(function () use ($id, $name, &$renamed) {
             if ($id === '') {
                 $new = Db::insert('parties', ['name' => $name]);
-                Audit::log('party_create', 'party', (string) $new, "Tambah pihak $name", null, ['name' => $name]);
+                Audit::log('party_create', 'party', (string) $new, "Tambah customer $name", null, ['name' => $name]);
             } else {
                 $old = Db::one('SELECT * FROM parties WHERE id = ?', [(int) $id]);
-                if (!$old) { throw new \App\Core\HttpException('Pihak tidak ditemukan.', 404); }
+                if (!$old) { throw new \App\Core\HttpException('Customer tidak ditemukan.', 404); }
                 $active = $this->req->bool('is_active') ? 1 : 0;
                 Db::update('parties', (int) $id, ['name' => $name, 'is_active' => $active]);
                 if ($old['name'] !== $name) {
                     // transaksi menyimpan salinan nama; ikut diperbarui agar konsisten dengan master
                     $renamed = Db::q('UPDATE transactions SET counterparty = ? WHERE counterparty = ?', [$name, $old['name']])->rowCount();
                 }
-                Audit::log('party_update', 'party', $id, "Ubah pihak $name" . ($renamed ? " ($renamed transaksi diperbarui)" : ''), ['name' => $old['name'], 'is_active' => $old['is_active']], ['name' => $name, 'is_active' => $active]);
+                Audit::log('party_update', 'party', $id, "Ubah customer $name" . ($renamed ? " ($renamed transaksi diperbarui)" : ''), ['name' => $old['name'], 'is_active' => $old['is_active']], ['name' => $name, 'is_active' => $active]);
             }
             Version::bump('master');
             if ($renamed) { Version::bump('transactions'); }
         });
-        $this->flash('success', 'Pihak tersimpan.' . ($renamed ? " $renamed transaksi diperbarui." : ''));
+        $this->flash('success', 'Customer tersimpan.' . ($renamed ? " $renamed transaksi diperbarui." : ''));
         return $this->back('parties');
     }
 
@@ -278,7 +278,7 @@ final class MasterController extends Controller
     {
         $name = PartyService::clean($this->req->str('name'));
         if ($name === '' || mb_strlen($name) > 255) {
-            return $this->fail('Nama pihak wajib diisi (maks. 255 karakter).');
+            return $this->fail('Nama customer wajib diisi (maks. 255 karakter).');
         }
         $existing = PartyService::canonical($name);
         if ($existing !== null) {
@@ -286,7 +286,7 @@ final class MasterController extends Controller
         }
         Db::tx(function () use ($name) {
             $id = Db::insert('parties', ['name' => $name]);
-            Audit::log('party_create', 'party', (string) $id, "Tambah pihak $name (dari formulir Transaksi)", null, ['name' => $name]);
+            Audit::log('party_create', 'party', (string) $id, "Tambah customer $name (dari formulir Transaksi)", null, ['name' => $name]);
             Version::bump('master');
         });
         return $this->ok(['name' => $name, 'created' => true]);

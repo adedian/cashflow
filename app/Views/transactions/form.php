@@ -51,7 +51,7 @@ $auto = (!$id && $v('source_ref') && !$errors) ? ' data-auto="1"' : '';   // isi
           <?php if ($curParty !== '' && !in_array(mb_strtolower($curParty), array_map('mb_strtolower', $partyNames), true)): ?><option value="<?= e($curParty) ?>" selected><?= e($curParty) ?> (belum di master)</option><?php endif; ?>
           <?php foreach ($partyNames as $pn): ?><option value="<?= e($pn) ?>" <?= mb_strtolower($pn) === mb_strtolower($curParty) ? 'selected' : '' ?>><?= e($pn) ?></option><?php endforeach; ?>
         </select><?= $fe('counterparty') ?>
-        <span class="help">Tidak ada di daftar? Ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=parties')) ?>">Master Data → Pihak</a>.</span>
+        <span class="help">Tidak ada di daftar? Ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=parties')) ?>">Master Data → Customer</a>.</span>
       </div>
       <div class="field">
         <label for="category_id">Kategori</label>

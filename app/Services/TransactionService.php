@@ -99,7 +99,7 @@ final class TransactionService
                 $d['counterparty'] = $canon;
             } elseif (!(($existing['counterparty'] ?? null) !== null && mb_strtolower((string) $existing['counterparty']) === mb_strtolower($d['counterparty']))
                 && !(isset($src) && $src && isset($src['party']) && mb_strtolower((string) $src['party']) === mb_strtolower($d['counterparty']))) {
-                $err['counterparty'] = 'Pilih pihak dari daftar, atau tambahkan lewat tombol “Tambah” di dropdown (atau Master Data → Pihak).';
+                $err['counterparty'] = 'Pilih pihak dari daftar, atau tambahkan lewat tombol “Tambah” di dropdown (atau Master Data → Customer).';
             }
         }
         if ($existing === null || ($in['counterparty_detail'] ?? null) !== null) {
