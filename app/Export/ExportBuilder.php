@@ -500,6 +500,7 @@ final class ExportBuilder
         $unk = 0;
         $base = ['border' => 'lrtb', 'v' => 'top'];
         $today = date('Y-m-d');
+        $payCodes = \App\Services\TxLinkService::invoicePayCodes(array_column($rows, 'id'));
         foreach ($rows as $i => $t) {
             $known = (int) $t['paid_known'] === 1;
             $rem = bcsub((string) $t['amount'], (string) $t['paid'], 2);
@@ -529,8 +530,11 @@ final class ExportBuilder
             }
             if ($t['due_days'] !== null) { $s->num($r, 9, (string) $t['due_days'], $base + ['fmt' => 'int', 'h' => 'center']); } else { $s->set($r, 9, (string) ($t['due_note'] ?? ''), $base + ['h' => 'center']); }
             $s->date($r, 10, $t['due_date'], $base + ['h' => 'center']);
-            $s->date($r, 11, $t['paid_date'], $base + ['h' => 'center']);
-            $s->set($r, 12, $t['pay_ref'] ?? '', $base + ['h' => 'center']);
+            // kode bukti: tautan langsung (pay_ref) + penerimaan yang dicatat lewat menu Transaksi
+            $pc = $payCodes[(int) $t['id']] ?? ['codes' => [], 'last' => null];
+            $codes = array_values(array_unique(array_filter(array_merge([(string) ($t['pay_ref'] ?? '')], $pc['codes']))));
+            $s->date($r, 11, $t['paid_date'] ?: $pc['last'], $base + ['h' => 'center']);
+            $s->set($r, 12, implode(', ', $codes), $base + ['h' => 'center', 'wrap' => true]);
             if ($known) {
                 $s->num($r, 13, (string) $t['paid'], $base + ['fmt' => 'acc2']);
                 $s->num($r, 14, $open ? $rem : '0.00', $base + ['fmt' => 'acc2']);

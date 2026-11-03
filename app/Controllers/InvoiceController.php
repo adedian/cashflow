@@ -85,7 +85,7 @@ final class InvoiceController extends Controller
             array_merge([$today, $today], $p)
         );
         $fids = array_filter(array_map(static fn($r) => $r['forecast_item_id'], $rows));
-        $proofs = $kind === 'proyek' ? TxLinkService::bankProofs($rows) : [];
+        $proofs = TxLinkService::bankProofs($rows);
         $data = ['proofs' => $proofs, 'rows' => $rows, 'tot' => $tot, 'q' => $q, 'status' => $status, 'kind' => $kind, 'isAdmin' => $this->isAdmin(), 'today' => $today,
             'page' => $page, 'pages' => $pages, 'total' => $total, 'links' => LinkService::info($fids)];
         if ($this->req->str('partial') === '1') {

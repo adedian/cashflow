@@ -59,7 +59,7 @@ $stPill = static function (array $r) use ($today): string {
             <?php if ($lk): ?><a class="pill pill-blue" href="<?= e(url('/forecast/' . (int) $r['forecast_item_id'])) ?>" title="Item Proyeksi #<?= (int) $r['forecast_item_id'] ?>">Proyeksi</a><?php endif; ?>
             <?php if ($r['pay_tx_id']): ?><a class="pill pill-green" href="<?= e(url('/transactions/' . (int) $r['pay_tx_id'])) ?>" title="Transaksi Mutasi Masuk #<?= (int) $r['pay_tx_id'] ?>"><?= e($r['pay_ref'] ?: 'Transaksi') ?></a>
             <?php elseif ($r['pay_ref']): ?><span class="pill pill-gray" title="Kode bukti di Excel; belum cocok dengan transaksi di sistem"><?= e($r['pay_ref']) ?></span><?php endif; ?>
-            <?= bank_pills($proofs[(int) $r['id']] ?? null, $href . '#invBank', 'Mutasi Masuk') ?>
+            <?= bank_pills($proofs[(int) $r['id']] ?? null, $href . ($lampu ? '#invPays' : '#invBank'), 'Mutasi Masuk') ?>
             <?php if (!empty($isAdmin) && $known && bccomp($rem, '0.004', 3) > 0): ?><a class="btn btn-sm no-print" href="<?= e(url('/transactions/new?ref=invoice:' . (int) $r['id'])) ?>" title="Catat penerimaan lewat menu Transaksi (Mutasi Masuk)">Terima</a><?php endif; ?>
           </td>
         </tr>
