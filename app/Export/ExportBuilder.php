@@ -546,15 +546,17 @@ final class ExportBuilder
                 $s->paint($r, 11, 12, $base);
                 $known ? $s->num($r, 13, (string) $t['paid'], $base + ['fmt' => 'acc2']) : $s->set($r, 13, '?', $base + ['h' => 'center']);
             }
+            // sisa & status = keadaan setelah pembayaran terakhir, jadi ditulis di baris pembayaran terakhir
+            $rp = $r + max(0, count($pays) - 1);
             if ($known) {
-                $s->num($r, 14, $open ? $rem : '0.00', $base + ['fmt' => 'acc2']);
+                $s->num($rp, 14, $open ? $rem : '0.00', $base + ['fmt' => 'acc2']);
                 $sumP = bcadd($sumP, (string) $t['paid'], 2);
                 $sumR = bcadd($sumR, $open ? $rem : '0.00', 2);
             } else {
-                $s->set($r, 14, '?', $base + ['h' => 'center']);
+                $s->set($rp, 14, '?', $base + ['h' => 'center']);
                 $unk++;
             }
-            $s->set($r, 15, $stat, $base + ['h' => 'center', 'wrap' => true, 'bold' => $stat !== 'Lunas', 'color' => $stat === 'Lunas' ? '000000' : 'C00000']);
+            $s->set($rp, 15, $stat, $base + ['h' => 'center', 'wrap' => true, 'bold' => $stat !== 'Lunas', 'color' => $stat === 'Lunas' ? '000000' : 'C00000']);
             $s->set($r, 16, $t['note'] ?? '', $base + ['wrap' => true]);
             // baris lanjutan (barang/pembayaran berikutnya): sel yang tak terisi tetap berbingkai
             for ($k = $r + 1; $k <= $last; $k++) {
