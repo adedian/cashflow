@@ -389,7 +389,7 @@ final class ExportBuilder
         if ($status === 'paid') { $w[] = 'paid_known = 1 AND amount - paid <= 0.004'; }
         if ($status === 'unknown') { $w[] = 'paid_known = 0'; }
         if ($status === 'late') { $w[] = 'paid_known = 1 AND amount - paid > 0.004 AND due_date IS NOT NULL AND due_date < ?'; $p[] = date('Y-m-d'); }
-        $rows = Db::all('SELECT * FROM invoices' . ($w ? ' WHERE ' . implode(' AND ', $w) : '') . ' ORDER BY customer, (invoice_date IS NULL), invoice_date, id', $p);
+        $rows = Db::all('SELECT * FROM invoices' . ($w ? ' WHERE ' . implode(' AND ', $w) : '') . ($kind === 'lampu' ? ' ORDER BY (invoice_date IS NULL), invoice_date, id' : ' ORDER BY customer, (invoice_date IS NULL), invoice_date, id'), $p);   // Piutang Lampu: urut tanggal nota
 
         if ($kind === 'lampu') {
             self::lampuSheet($doc, $rows, $q, $status);
@@ -468,7 +468,7 @@ final class ExportBuilder
     {
         $s = $doc->add(new Sheet('Piutang Lampu'));
         $s->paper = 'legal';
-        $s->widths([4.71, 11, 15, 32, 26, 7, 14, 16, 9, 11, 11, 11, 16, 16, 15, 30]);
+        $s->widths([4.71, 11, 15, 32, 26, 7, 14, 16, 12, 11, 11, 11, 16, 16, 15, 28]);
         $s->set(1, 1, 'REKAP PIUTANG PENJUALAN LAMPU ' . strtoupper($doc->company), ['size' => 14, 'bold' => true, 'h' => 'center'])->merge(1, 1, 1, 16)->height(1, 23.25);
         $note = ['Per ' . self::longDate(date('Y-m-d'))];
         if ($q !== '') { $note[] = 'pencarian "' . $q . '"'; }

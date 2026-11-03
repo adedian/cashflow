@@ -70,7 +70,18 @@
   form.addEventListener('input', function (ev) {
     if (ev.target.id === 'invoice_date' || ev.target.id === 'due_days') due(); else recalc();
   });
-  form.addEventListener('change', function (ev) { if (ev.target.id === 'invoice_date') due(); });
+  form.addEventListener('change', function (ev) {
+    if (ev.target.id === 'invoice_date') due();
+    if (ev.target.id === 'pay_tx_id') {
+      // kode bukti dipilih: tgl. bayar & dibayar diambil dari transaksinya
+      var o = ev.target.selectedOptions[0];
+      if (o && o.value) {
+        document.getElementById('paid_date').value = o.getAttribute('data-date');
+        document.getElementById('paid').value = o.getAttribute('data-amount');
+        recalc();
+      }
+    }
+  });
   recalc();
   due();
 })();

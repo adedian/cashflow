@@ -133,7 +133,8 @@ final class InvoiceController extends Controller
             'scripts' => $lampu ? ['invoice-form.js'] : []]);
         $r = $this->view('invoices/form', ['t' => $t, 'errors' => $errors, 'id' => $id, 'kind' => $kind,
             'parties' => $lampu ? PartyService::options((string) ($t['customer'] ?? '')) : [],
-            'items' => $lampu ? self::itemsOf($t) : []]);
+            'items' => $lampu ? self::itemsOf($t) : [],
+            'payTxs' => $lampu ? self::payTxOptions((int) ($t['pay_tx_id'] ?? 0)) : []]);
         $r->status = $status;
         return $r;
     }
@@ -153,6 +154,25 @@ final class InvoiceController extends Controller
         }
         $j = json_decode((string) ($t['items'] ?? ''), true);
         return is_array($j) ? array_values(array_filter($j, 'is_array')) : [];
+    }
+
+    /**
+     * Pilihan "Kode bukti" Piutang Lampu: transaksi Mutasi Masuk aktif yang belum terhubung ke piutang/hutang/proyeksi mana pun,
+     * ditambah transaksi yang sedang tertaut ke piutang ini. Terbaru di atas.
+     */
+    private static function payTxOptions(int $current): array
+    {
+        return Db::all(
+            'SELECT t.id, t.voucher_code, t.tx_date, t.debit, t.counterparty, t.description, a.name AS account
+             FROM transactions t JOIN accounts a ON a.id = t.account_id
+             WHERE t.voided_at IS NULL AND t.debit > 0
+               AND (t.id = ? OR (t.id NOT IN (SELECT transaction_id FROM invoice_payments)
+                 AND t.id NOT IN (SELECT transaction_id FROM debt_payments WHERE transaction_id IS NOT NULL)
+                 AND t.id NOT IN (SELECT transaction_id FROM forecast_realizations)
+                 AND t.id NOT IN (SELECT pay_tx_id FROM invoices WHERE pay_tx_id IS NOT NULL)))
+             ORDER BY t.tx_date DESC, t.id DESC LIMIT 500',
+            [$current]
+        );
     }
 
     /** Usulan No. surat jalan berikutnya: awalan + angka (dengan nol di depan) dari nomor terbaru, mis. JL00001536 -> JL00001537. */
@@ -233,15 +253,50 @@ final class InvoiceController extends Controller
     }
 
     /**
+     * Kode bukti Piutang Lampu = transaksi Mutasi Masuk yang dipilih (invoices.pay_tx_id). Kode bukti, tgl. bayar, dan (bila kosong) dibayar
+     * diambil dari transaksi itu. Satu transaksi hanya boleh menjadi bukti satu piutang/hutang/proyeksi.
+     * Tanpa pilihan: tautan dilepas; kode bukti lama dari Excel yang belum pernah cocok dibiarkan.
+     */
+    private function validatePayTx(array $in, array &$d, array &$e, ?array $existing): void
+    {
+        if (!array_key_exists('pay_tx_id', $in)) {
+            return;
+        }
+        $raw = trim((string) $in['pay_tx_id']);
+        if ($raw === '') {
+            $d['pay_tx_id'] = null;
+            if ($existing && $existing['pay_tx_id'] !== null) { $d['pay_ref'] = null; }   // kode berasal dari transaksi yang dilepas
+            return;
+        }
+        $tx = ctype_digit($raw) ? Db::one('SELECT id, voucher_code, tx_date, debit, voided_at FROM transactions WHERE id = ?', [(int) $raw]) : null;
+        if (!$tx || $tx['voided_at'] !== null || bccomp((string) $tx['debit'], '0', 2) <= 0) {
+            $e['pay_tx_id'] = 'Kode bukti harus transaksi Mutasi Masuk yang aktif.';
+            return;
+        }
+        $other = TxLinkService::linkOf((int) $tx['id']);
+        if ($other && !($other['type'] === 'invoice' && $existing && $other['id'] === (int) $existing['id'])) {
+            $e['pay_tx_id'] = 'Transaksi ' . ($tx['voucher_code'] ?: '#' . $tx['id']) . ' sudah terhubung ke ' . TxLinkService::name($other['type']) . ' #' . $other['id'] . ' dan tidak dapat dipakai dua kali.';
+            return;
+        }
+        $d['pay_tx_id'] = (int) $tx['id'];
+        $d['pay_ref'] = mb_substr((string) ($tx['voucher_code'] ?: '#' . $tx['id']), 0, 40);
+        $d['paid_date'] ??= $tx['tx_date'];
+        if (!isset($e['paid']) && bccomp($d['paid'], '0', 2) === 0) {
+            $d['paid'] = bcadd((string) $tx['debit'], '0', 2);   // Dibayar kosong: diisi nominal transaksi
+        }
+    }
+
+    /**
      * Aturan khusus Piutang Lampu: customer dari master Customer, No. surat jalan unik (wajib untuk data baru),
      * rincian barang (Total = Σ Qty × Harga satuan, dihitung server), jatuh tempo dalam hari (Tgl. jatuh tempo = Tgl. nota + hari).
      * Kolom lama yang tidak ada di formulir (keterangan jatuh tempo, sales, keterangan/proyek) dipertahankan.
      */
     private function validateLampu(array $in, array &$d, array &$e, ?array $existing): void
     {
-        foreach (['project_name', 'description', 'due_note', 'salesperson'] as $k) {
+        foreach (['project_name', 'description', 'due_note', 'salesperson', 'pay_ref'] as $k) {
             if (!array_key_exists($k, $in)) { unset($d[$k]); }
         }
+        $this->validatePayTx($in, $d, $e, $existing);
         if ($d['customer'] !== '') {
             $canon = PartyService::canonical($d['customer']);
             if ($canon !== null) {
@@ -329,7 +384,7 @@ final class InvoiceController extends Controller
         $old = $this->find((int) $id);
         $hadDue = $old['due_date'] !== null;
         [$d, $e] = $this->validate($this->req->post, $old['kind'], $old);
-        if ($e) { return $this->form($this->req->post + ['id' => $id], $e, (int) $id, $old['kind'], 422); }
+        if ($e) { return $this->form($this->req->post + ['id' => $id, 'pay_ref' => $old['pay_ref'], 'due_note' => $old['due_note'], 'due_date' => $old['due_date']], $e, (int) $id, $old['kind'], 422); }
         unset($d['kind']);
         Db::tx(function () use ($id, $d, $old) {
             Db::update('invoices', (int) $id, $d);

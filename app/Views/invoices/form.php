@@ -53,8 +53,14 @@ $num = static fn($x): string => $x === '' || $x === null ? '' : (preg_match('/^\
       <div class="field"><label for="due_days">Jatuh tempo (hari)</label><input class="input num" id="due_days" name="due_days" inputmode="numeric" maxlength="4" value="<?= e((string) $v('due_days')) ?>" placeholder="mis. 30">
         <span class="help">Jumlah hari sejak tgl. nota<?= $v('due_note') ? ' · catatan lama: ' . e($v('due_note')) : '' ?>.</span><?= $fe('due_days') ?></div>
       <div class="field"><label for="due_date_view">Tgl. jatuh tempo</label><input class="input" id="due_date_view" value="<?= e($v('due_date') ? fmt_date($v('due_date')) : '') ?>" readonly tabindex="-1" data-saved="<?= e((string) $v('due_date')) ?>"><span class="help">Terisi otomatis: tgl. nota + jumlah hari.</span></div>
+      <div class="field"><label for="pay_tx_id">Kode bukti (transaksi Mutasi Masuk)</label>
+        <?php $curTx = (string) ($t['pay_tx_id'] ?? ''); ?>
+        <select class="input" id="pay_tx_id" name="pay_tx_id" data-combo-placeholder="Cari kode bukti, tanggal, nominal…">
+          <option value="">— belum ada pembayaran —</option>
+          <?php foreach ($payTxs as $x): ?><option value="<?= (int) $x['id'] ?>" data-date="<?= e($x['tx_date']) ?>" data-amount="<?= e(money($x['debit'], false)) ?>" <?= $curTx === (string) $x['id'] ? 'selected' : '' ?>><?= e(($x['voucher_code'] ?: '#' . $x['id']) . ' · ' . fmt_date($x['tx_date']) . ' · ' . money($x['debit']) . ' · ' . ($x['counterparty'] ?: $x['account'])) ?></option><?php endforeach; ?>
+        </select>
+        <span class="help">Pilih transaksi penerimaannya; tgl. bayar & dibayar terisi dari transaksi itu. <?= $v('pay_ref') !== '' && $curTx === '' ? 'Kode lama dari Excel: <b>' . e($v('pay_ref')) . '</b> (belum cocok dengan transaksi). ' : '' ?>Transaksi yang sudah dipakai piutang/hutang lain tidak muncul.</span><?= $fe('pay_tx_id') ?></div>
       <div class="field"><label for="paid_date">Tgl. bayar</label><input class="input" type="date" id="paid_date" name="paid_date" value="<?= e($v('paid_date')) ?>"><?= $fe('paid_date') ?></div>
-      <div class="field"><label for="pay_ref">Kode bukti (mis. BM 11/02)</label><input class="input" id="pay_ref" name="pay_ref" maxlength="40" value="<?= e($v('pay_ref')) ?>"></div>
       <div class="field"><label for="paid">Dibayar (Rp) <span class="help">— total, termasuk penerimaan lewat Transaksi</span></label><input class="input num" id="paid" name="paid" inputmode="decimal" value="<?= e($num($v('paid'))) ?>"><?= $fe('paid') ?></div>
       <div class="field"><label>Sisa</label><input class="input num" id="remainView" value="" readonly tabindex="-1"></div>
       <div class="field full"><label class="check"><input type="checkbox" name="paid_known" value="1" <?= !empty($t['paid_known']) ? 'checked' : '' ?>>Pembayaran sudah dipastikan</label>
