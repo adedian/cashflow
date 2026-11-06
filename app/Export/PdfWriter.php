@@ -17,6 +17,7 @@ final class PdfWriter
 
     private array $pages = [];   // tiap halaman: ['ops' => string, 'w' => float, 'h' => float, 'sheet' => string]
     private array $cache = [];
+    private bool $noScale = false;   // PDF dari fromPages(): minta penampil mencetak 100% (tanpa fit-to-page)
 
     public static function build(Document $doc): string
     {
@@ -32,6 +33,7 @@ final class PdfWriter
     {
         $w = new self();
         $w->pages = $pages;
+        $w->noScale = true;   // bukti BK/BM: ukuran halaman = ukuran kertas; jangan diperbesar/digeser saat dicetak
         return $w->assemble($doc, false);
     }
 
@@ -318,7 +320,7 @@ final class PdfWriter
         }
         $total = count($this->pages);
         $objs = [];
-        $objs[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+        $objs[1] = '<< /Type /Catalog /Pages 2 0 R' . ($this->noScale ? ' /ViewerPreferences << /PrintScaling /None >>' : '') . ' >>';
         $fontNames = ['Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique', 'Helvetica-BoldOblique'];
         foreach ($fontNames as $i => $fn) {
             $objs[3 + $i] = '<< /Type /Font /Subtype /Type1 /BaseFont /' . $fn . ' /Encoding /WinAnsiEncoding >>';

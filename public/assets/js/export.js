@@ -33,8 +33,7 @@
     });
     // pilihan kertas bukti BK/BM: disimpan di peramban, pratinjau & unduhan mengikuti
     modal.querySelector('#exPaper').addEventListener('change', function () {
-      state.paper = this.value;
-      try { window.localStorage.setItem('cf_bukti_paper', state.paper); } catch (x) { /* abaikan */ }
+      state.paper = this.value;   // hanya berlaku untuk dialog ini; dialog berikutnya kembali ke Legal
       loaded.pdf = false;
       pane('pdf').innerHTML = '';
       show('pdf');
@@ -138,7 +137,7 @@
   function hint(fmt) {
     var h = modal.querySelector('#exHint');
     if (state.doc === 'bukti') {
-      h.textContent = 'Potret, satu bukti (BK/BM) per halaman di setengah bagian atas kertas (sisanya kosong untuk dipotong). Pilih kertas, lalu unduh PDF.';
+      h.textContent = 'Potret, satu bukti per halaman di setengah bagian atas (sisanya kosong untuk dipotong). Ukuran kertas di sini harus sama dengan kertas di printer (Legal), skala cetak 100%.';
     } else if (fmt === 'pdf') {
       h.textContent = 'Tampilan sama dengan berkas PDF yang diunduh (kertas Legal, otomatis muat satu halaman lebar).';
     } else {
@@ -181,10 +180,10 @@
     var pbox = modal.querySelector('#exPaperBox');
     pbox.hidden = state.doc !== 'bukti';
     if (state.doc === 'bukti') {
-      var saved = 'legal';
-      try { saved = window.localStorage.getItem('cf_bukti_paper') || 'legal'; } catch (x) { /* abaikan */ }
-      state.paper = (saved === 'a4' || saved === 'folio') ? saved : 'legal';
-      modal.querySelector('#exPaper').value = state.paper;
+      // sengaja TIDAK diingat antar pembukaan: PDF berukuran A4 yang dicetak ke kertas Legal diperbesar & digeser
+      // ke tengah oleh pencetak (jarak atas bukan lagi 1 cm), jadi setiap dialog mulai dari Legal
+      state.paper = 'legal';
+      modal.querySelector('#exPaper').value = 'legal';
     }
     H.openModal('exportModal');
     show('pdf');
