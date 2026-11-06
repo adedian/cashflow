@@ -87,7 +87,7 @@ $accKind = static fn(array $r): string => $r['balance_mode'] === 'liability' ? '
     <div class="field"><label for="ao">Saldo awal (Rp)</label><input class="input num" id="ao" name="opening_balance" value="0"></div>
     <div class="field"><label for="ad">Tanggal saldo awal <span class="req">*</span></label><input class="input" type="date" id="ad" name="opening_date" required></div>
     <?php endif; ?>
-    <div class="field"><label for="al">Limit (opsional)</label><input class="input num" id="al" name="credit_limit" value="<?= e($isEdit && $edit['credit_limit'] !== null ? money($edit['credit_limit'], false) : '') ?>"></div>
+    <div class="field"><label for="al">Limit (opsional — kosongkan untuk rekening bank tanpa limit)</label><input class="input num" id="al" name="credit_limit" value="<?= e($isEdit && $edit['credit_limit'] !== null && bccomp((string) $edit['credit_limit'], '0', 2) > 0 ? money($edit['credit_limit'], false) : '') ?>"></div>
     <div class="field"><label for="ah">4 digit terakhir (bila nomor lengkap tidak diisi)</label><input class="input" id="ah" name="acct_hint" maxlength="4" inputmode="numeric" value="<?= e($val('acct_hint')) ?>"></div>
     <div class="field"><label for="abn">Nama bank</label><input class="input" id="abn" name="bank_name" maxlength="80" placeholder="mis. BCA" value="<?= e($val('bank_name')) ?>"></div>
     <div class="field"><label for="aho">Nama pemilik rekening</label><input class="input" id="aho" name="account_holder" maxlength="120" value="<?= e($val('account_holder')) ?>"></div>
@@ -136,7 +136,7 @@ $accKind = static fn(array $r): string => $r['balance_mode'] === 'liability' ? '
         <dt>Nama</dt><dd><?= e($r['name']) ?></dd>
         <dt>Jenis</dt><dd><?= e($accKind($r)) ?> · <?= $r['balance_mode'] === 'liability' ? 'saldo = kredit − debit' : 'saldo = debit − kredit' ?></dd>
         <dt>Saldo awal</dt><dd class="num"><?= e(money($r['opening_balance'])) ?> <span class="muted">(<?= e(fmt_date($r['opening_date'])) ?>)</span></dd>
-        <dt>Limit</dt><dd class="num"><?= $r['credit_limit'] !== null ? e(money($r['credit_limit'])) : '<span class="muted">—</span>' ?></dd>
+        <dt>Limit</dt><dd class="num"><?= $r['credit_limit'] !== null && bccomp((string) $r['credit_limit'], '0', 2) > 0 ? e(money($r['credit_limit'])) : '<span class="muted">—</span>' ?></dd>
         <dt>Nama bank</dt><dd><?= $r['bank_name'] ? e($r['bank_name']) : '<span class="muted">—</span>' ?></dd>
         <dt>Pemilik rekening</dt><dd><?= $r['account_holder'] ? e($r['account_holder']) : '<span class="muted">—</span>' ?></dd>
         <dt>Nomor rekening</dt><dd class="num"><?= $r['account_no'] ? e($r['account_no']) : '<span class="muted">—</span>' ?></dd>

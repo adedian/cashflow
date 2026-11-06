@@ -94,6 +94,10 @@ final class LedgerService
         );
         foreach ($rows as &$r) {
             $r['balance'] = bcadd((string) $r['opening_balance'], (string) $r['delta'], 2);
+            // limit kosong atau 0 = rekening tanpa limit (mis. rekening bank operasional): tidak ada sisa limit/pemakaian yang ditampilkan
+            if ($r['credit_limit'] !== null && bccomp((string) $r['credit_limit'], '0', 2) <= 0) {
+                $r['credit_limit'] = null;
+            }
             $r['limit'] = $r['credit_limit'];
             if ($r['credit_limit'] !== null) {
                 // aset: sisa = limit + saldo (saldo negatif = terpakai); liabilitas: sisa = limit − pemakaian
