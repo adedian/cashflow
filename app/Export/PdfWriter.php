@@ -74,7 +74,7 @@ final class PdfWriter
         $n = strlen($bytes);
         for ($i = 0; $i < $n; $i++) {
             $o = ord($bytes[$i]);
-            $sum += ($o >= 32 && $o <= 126) ? $tab[$o - 32] : ($o === 0xB7 ? 278 : ($bold ? 611 : 556));
+            $sum += ($o >= 32 && $o <= 126) ? $tab[$o - 32] : ($o === 0xB7 ? 278 : ($o === 0x97 ? 1000 : ($bold ? 611 : 556)));
         }
         return $sum * $size / 1000;
     }

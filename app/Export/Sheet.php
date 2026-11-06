@@ -60,10 +60,13 @@ final class Sheet
      * Lebarkan kolom $c agar isi terpanjang di baris $r1..$r2 muat satu baris (diukur dengan metrik font PDF),
      * paling lebar $max karakter; lebar yang sudah ada menjadi batas bawah.
      */
-    public function fit(int $c, int $r1, int $r2, float $max): self
+    public function fit(int $c, int $r1, int $r2, float $max, array $skipRows = []): self
     {
         $need = 0.0;
         for ($r = $r1; $r <= $r2; $r++) {
+            if (isset($skipRows[$r])) {
+                continue;
+            }
             $cell = $this->rows[$r]['cells'][$c] ?? null;
             if (!$cell) {
                 continue;

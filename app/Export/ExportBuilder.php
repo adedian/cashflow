@@ -202,6 +202,7 @@ final class ExportBuilder
         $sumC = '0.00';
         $r = 4;
         $month = null;
+        $monthRows = [];
         $lastDataRow = 3;
         $lastRun = null;
         $base = ['border' => 'lrtb'];
@@ -218,6 +219,7 @@ final class ExportBuilder
                 $s->paint($r, 2, 12, $base);
                 $s->num($r, 12, $open, $base + ['fmt' => 'bal2']);
                 $s->height($r, 22.5)->keep($r);
+                $monthRows[$r] = true;
                 $r++;
             }
             $party = (string) ($t['counterparty'] ?? '');
@@ -237,7 +239,7 @@ final class ExportBuilder
             $s->set($r, 5, $t['project_name'] ?? '', $base + ['wrap' => true, 'h' => 'left']);
             $s->set($r, 6, $cat, $base + ['wrap' => true, 'h' => 'left']);
             $s->set($r, 7, $t['description'] ?? '', $base + ['wrap' => true, 'h' => 'left']);
-            $s->set($r, 8, $t['note'] ?? '', $base + ['h' => 'left']); // seperti Excel: tidak dibungkus (teks panjang terpotong di batas sel)
+            $s->set($r, 8, $t['note'] ?? '', $base + ['wrap' => true, 'h' => 'left']);   // dibungkus agar catatan panjang tidak terpotong
             $s->set($r, 9, $t['ref_no'] ?? '', $base + ['wrap' => true, 'h' => 'center']);
             $s->num($r, 10, $debit, $base + ['fmt' => 'acc2']);
             $s->num($r, 11, $credit, $base + ['fmt' => 'acc2']);
@@ -247,6 +249,13 @@ final class ExportBuilder
             if ($t['running'] !== null) { $lastRun = (string) $t['running']; }
             $lastDataRow = $r;
             $r++;
+        }
+        // lebar kolom mengikuti isi terpanjang (tidak pernah menyempit dari lebar Excel) agar kode, nama pihak, dan angka tidak terpotong;
+        // halaman PDF otomatis diskalakan ke lebar kertas. Baris judul bulan dilewati (teksnya sengaja melebar ke kolom sebelah).
+        if ($lastDataRow > 3) {
+            foreach ([2 => 14, 3 => 24, 4 => 52, 5 => 32, 6 => 46, 7 => 80, 8 => 44, 9 => 26, 10 => 26, 11 => 26, 12 => 28] as $c => $max) {
+                $s->fit($c, 4, $lastDataRow, $max, $monthRows);
+            }
         }
         // total
         $r++;
