@@ -52,9 +52,18 @@ final class ExportBuilder
         if (!$rows) {
             throw new HttpException('Transaksi yang dipilih tidak ditemukan atau sudah dibatalkan.', 422);
         }
+        $projName = array_column(Db::all('SELECT id, name FROM projects'), 'name', 'id');
         $vouchers = [];
         foreach ($rows as $t) {
             $lines = \App\Services\TransactionService::lines($t);
+            foreach ($lines as &$l) {
+                // proyek ditulis setelah uraian: "uraian - proyek"
+                $pn = $l['project_id'] !== null ? trim((string) ($projName[$l['project_id']] ?? '')) : '';
+                if ($pn !== '') {
+                    $l['description'] = rtrim((string) $l['description']) . ' - ' . $pn;
+                }
+            }
+            unset($l);
             $net = bcsub((string) $t['debit'], (string) $t['credit'], 2);
             $total = '0.00';
             foreach ($lines as $l) {
