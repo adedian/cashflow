@@ -13,7 +13,14 @@ $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
     <h2>Hasil</h2>
     <span class="muted" style="font-size:12.5px"><?= number_format($res['total'], 0, ',', '.') ?> transaksi · debit <b class="pos"><?= e(money($res['sum_debit'])) ?></b> · kredit <b class="neg"><?= e(money($res['sum_credit'])) ?></b> · selisih <b class="num"><?= e(money($net)) ?></b></span>
   </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap" class="no-print">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center" class="no-print">
+    <?php if (can_export()): ?>
+    <span class="tx-selbar">
+      <span class="sel-count" id="txSelCount" aria-live="polite"></span>
+      <button type="button" class="sel-clear" id="txSelClear" hidden>Hapus pilihan</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="txPrintSel" data-export="bukti" data-export-title="Bukti Bank (BK/BM)" data-export-query="" disabled title="Centang transaksi pada tabel, lalu cetak bukti BK/BM-nya"><svg class="i i-sm"><use href="#i-print"/></svg>Cetak Detail</button>
+    </span>
+    <?php endif; ?>
     <?= export_button('transaksi', $base) ?>
   </div>
 </div>
@@ -25,6 +32,7 @@ $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
   <table class="tbl stack tx">
     <thead>
       <tr>
+        <?php if (can_export()): ?><th class="c-sel no-print"><input type="checkbox" id="txSelAll" aria-label="Pilih semua transaksi di halaman ini"></th><?php endif; ?>
         <th><a href="<?= e($sortLink('date_asc', 'date_desc')) ?>" style="color:inherit">Tgl <?= $sort === 'date_asc' ? '▲' : ($sort === 'date_desc' ? '▼' : '') ?></a></th>
         <th class="c-code">Nomor Bukti</th>
         <th class="c-party">Rekening Lawan</th>
@@ -46,6 +54,7 @@ $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
         $out = bccomp((string) $t['credit'], '0', 2) !== 0;
     ?>
       <tr class="<?= $void ? 'voided' : '' ?>">
+        <?php if (can_export()): ?><td class="c-sel no-print" data-label="Pilih"><input type="checkbox" class="tx-sel" value="<?= (int) $t['id'] ?>"<?= $void ? ' disabled title="Transaksi dibatalkan tidak dicetak"' : '' ?> aria-label="Pilih transaksi <?= e($t['voucher_code'] ?: '#' . (int) $t['id']) ?>"></td><?php endif; ?>
         <td data-label="Tgl" class="nowrap"><?= e(fmt_date($t['tx_date'])) ?><div class="sub" title="<?= e($t['account_name']) ?>"><?= e($t['account_code']) ?></div></td>
         <td data-label="Nomor Bukti" class="nowrap c-code"><?= e($t['voucher_code'] ?? '') ?></td>
         <td data-label="Rekening Lawan" class="c-party">

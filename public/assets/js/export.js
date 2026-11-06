@@ -127,7 +127,9 @@
 
   function hint(fmt) {
     var h = modal.querySelector('#exHint');
-    if (fmt === 'pdf') {
+    if (state.doc === 'bukti') {
+      h.textContent = 'Satu bukti (BK atau BM) per halaman. Periksa isinya, lalu unduh PDF untuk dicetak.';
+    } else if (fmt === 'pdf') {
       h.textContent = 'Tampilan sama dengan berkas PDF yang diunduh (kertas Legal, otomatis muat satu halaman lebar).';
     } else {
       h.textContent = pane('xlsx').getAttribute('data-note') || 'Tampilan seperti lembar kerja Excel; berkas .xlsx dapat diedit.';
@@ -163,7 +165,9 @@
     pane('pdf').innerHTML = '';
     pane('xlsx').innerHTML = '';
     pane('xlsx').removeAttribute('data-note');
-    modal.querySelector('#exTitle').textContent = state.doc === 'transaksi' ? 'Cetak Mutasi Bank' : 'Cetak — ' + state.title;
+    modal.querySelector('#exTitle').textContent = state.doc === 'transaksi' ? 'Cetak Mutasi Bank' : state.doc === 'bukti' ? 'Cetak Detail — Bukti Bank' : 'Cetak — ' + state.title;
+    // bukti BK/BM hanya tersedia sebagai PDF (satu bukti per halaman)
+    modal.querySelector('[data-fmt="xlsx"]').hidden = state.doc === 'bukti';
     H.openModal('exportModal');
     show('pdf');
   }

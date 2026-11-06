@@ -82,7 +82,7 @@ final class TransactionController extends Controller
             $fi = Db::one('SELECT * FROM forecast_items WHERE id = ?', [(int) $related['link']['sid']]);
             $fcDecision = $fi ? ['it' => $fi, 'sum' => \App\Services\ForecastService::summary($fi), 'isAdmin' => true] : null;
         }
-        return $this->view('transactions/show', ['t' => $t, 'hist' => $hist, 'isAdmin' => $this->isAdmin(), 'related' => $related, 'fcDecision' => $fcDecision]);
+        return $this->view('transactions/show', ['t' => $t, 'lines' => TransactionService::lines($t), 'hist' => $hist, 'isAdmin' => $this->isAdmin(), 'related' => $related, 'fcDecision' => $fcDecision]);
     }
 
     private function load(int $id): array
@@ -161,6 +161,7 @@ final class TransactionController extends Controller
         $both = bccomp((string) $t['debit'], '0', 2) !== 0 && bccomp((string) $t['credit'], '0', 2) !== 0;
         $t['direction'] = bccomp((string) $t['debit'], '0', 2) !== 0 ? 'in' : 'out';
         $t['amount'] = $t['direction'] === 'in' ? $t['debit'] : $t['credit'];
+        $t['lines'] = TransactionService::lines($t);
         $link = TxLinkService::linkOf((int) $id);
         if ($link && !$link['legacy']) {
             $t['source_ref'] = $link['type'] . ':' . $link['id'];
@@ -239,8 +240,22 @@ final class TransactionController extends Controller
     private function form(array $t, array $errors, ?int $id, int $status = 200, ?string $warn = null): Response
     {
         Page::set(['title' => $id ? 'Ubah transaksi' : 'Tambah transaksi', 'subtitle' => $id ? 'Perubahan dicatat di audit log' : 'Nominal disimpan sebagai DECIMAL; saldo dihitung otomatis', 'scripts' => ['transactions.js']]);
+        // baris uraian: kiriman formulir (saat galat) > rincian tersimpan (ubah) > satu baris dari description + amount
+        $rows = [];
+        if (is_array($t['line_desc'] ?? null)) {
+            $amts = is_array($t['line_amount'] ?? null) ? array_values($t['line_amount']) : [];
+            foreach (array_values($t['line_desc']) as $i => $ds) {
+                $rows[] = ['description' => is_scalar($ds) ? (string) $ds : '', 'amount' => is_scalar($amts[$i] ?? null) ? (string) $amts[$i] : ''];
+            }
+        } elseif (!empty($t['lines'])) {
+            foreach ($t['lines'] as $l) {
+                $rows[] = ['description' => $l['description'], 'amount' => money($l['amount'], false)];
+            }
+        } elseif (($t['description'] ?? '') !== '' || ($t['amount'] ?? '') !== '') {
+            $rows[] = ['description' => (string) ($t['description'] ?? ''), 'amount' => (string) ($t['amount'] ?? '')];
+        }
         $resp = $this->view('transactions/form', [
-            't' => $t, 'errors' => $errors, 'id' => $id, 'warn' => $warn,
+            't' => $t, 'errors' => $errors, 'id' => $id, 'warn' => $warn, 'lineRows' => $rows,
             'accounts' => Lookup::accounts(), 'categories' => Lookup::categories(), 'projects' => Lookup::projects(),
             'counterpartyAccounts' => Lookup::counterpartyAccounts(),
             'parties' => \App\Services\PartyService::options((string) ($t['counterparty'] ?? '')),

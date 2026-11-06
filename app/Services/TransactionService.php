@@ -42,14 +42,11 @@ final class TransactionService
         if (!in_array($dir, ['in', 'out'], true)) {
             $err['direction'] = 'Pilih jenis: Mutasi Masuk atau Mutasi Keluar.';
         }
-        $amount = parse_amount($in['amount'] ?? '', true);
-        if ($amount === null) {
-            $err['amount'] = 'Nominal tidak valid (contoh: 1250000 atau 1.250.000,50).';
-        } elseif (bccomp($amount, '0', 2) === 0) {
-            $err['amount'] = 'Nominal tidak boleh nol.';
-        } elseif (bccomp($amount, '9999999999999.99', 2) > 0 || bccomp($amount, '-9999999999999.99', 2) < 0) {
-            $err['amount'] = 'Nominal terlalu besar.';
-        }
+        // Uraian & nominal: satu atau banyak baris (uraian + jumlah); nominal transaksi = Σ jumlah. Bentuk lama (satu
+        // "description" + satu "amount") tetap diterima sebagai satu baris tanpa rincian tersimpan.
+        [$lines, $amount, $lineErr, $summary] = self::parseLines($in);
+        $err += $lineErr;
+        $d['items'] = $lines !== null ? json_encode($lines, JSON_UNESCAPED_UNICODE) : null;
         $d['debit'] = ($dir === 'in' && $amount !== null) ? $amount : '0.00';
         $d['credit'] = ($dir === 'out' && $amount !== null) ? $amount : '0.00';
 
@@ -67,11 +64,7 @@ final class TransactionService
         $lim = static fn(string $k, int $n) => mb_substr(trim((string) ($in[$k] ?? '')), 0, $n);
         $d['voucher_code'] = $lim('voucher_code', 30) ?: null;
         $d['counterparty'] = PartyService::clean((string) ($in['counterparty'] ?? '')) ?: null;
-        $d['description'] = $lim('description', 500);
-        if ($d['description'] === '') {
-            $err['description'] = 'Uraian wajib diisi.';
-        }
-        $d['description'] = $d['description'] ?: null;
+        $d['description'] = $summary !== '' ? $summary : null;   // ringkasan (daftar/pencarian): uraian pertama, atau semua uraian digabung
         $d['note'] = trim((string) ($in['note'] ?? '')) !== '' ? mb_substr(trim((string) $in['note']), 0, 5000) : null;
         if (array_key_exists('source_ref', $in)) {
             // No. Invoice/PO = pilihan sumber (Piutang | Hutang | Proyeksi): nomor dokumen diturunkan dari sumber, bukan diketik
@@ -112,6 +105,97 @@ final class TransactionService
             }
         }
         return [$d, $err];
+    }
+
+    public const MAX_LINES = 30;
+
+    /**
+     * Baris uraian dari formulir. Bentuk baru: line_desc[] + line_amount[] (baris kosong diabaikan, jumlah boleh negatif).
+     * Bentuk lama: description + amount.
+     * @return array{0:?array,1:?string,2:array,3:string} [baris (null = bentuk lama), total, error, ringkasan uraian]
+     */
+    private static function parseLines(array $in): array
+    {
+        $err = [];
+        $bad = static fn(?string $a) => $a === null
+            ? 'Nominal tidak valid (contoh: 1250000 atau 1.250.000,50).'
+            : (bccomp($a, '0', 2) === 0 ? 'Nominal tidak boleh nol.' : (bccomp($a, '9999999999999.99', 2) > 0 || bccomp($a, '-9999999999999.99', 2) < 0 ? 'Nominal terlalu besar.' : null));
+
+        if (!is_array($in['line_desc'] ?? null)) {
+            $amount = parse_amount($in['amount'] ?? '', true);
+            if (($m = $bad($amount)) !== null) {
+                $err['amount'] = $m;
+            }
+            $desc = mb_substr(trim((string) ($in['description'] ?? '')), 0, 500);
+            if ($desc === '') {
+                $err['description'] = 'Uraian wajib diisi.';
+            }
+            return [null, $amount, $err, $desc];
+        }
+
+        $descs = array_values($in['line_desc']);
+        $amts = is_array($in['line_amount'] ?? null) ? array_values($in['line_amount']) : [];
+        $lines = [];
+        $total = '0.00';
+        foreach ($descs as $i => $rawDesc) {
+            $desc = is_scalar($rawDesc) ? trim((string) $rawDesc) : '';
+            $rawAmt = $amts[$i] ?? '';
+            $rawAmt = is_scalar($rawAmt) ? trim((string) $rawAmt) : '';
+            if ($desc === '' && $rawAmt === '') {
+                continue;   // baris kosong diabaikan
+            }
+            $row = $i + 1;
+            if (count($lines) >= self::MAX_LINES) {
+                $err['items'] ??= 'Uraian terlalu banyak (maksimal ' . self::MAX_LINES . ' baris).';
+                break;
+            }
+            if ($desc === '') {
+                $err['items'] ??= 'Uraian baris ' . $row . ' wajib diisi.';
+            }
+            $a = $rawAmt === '' ? null : parse_amount($rawAmt, true);
+            if ($rawAmt === '') {
+                $err['items'] ??= 'Jumlah baris ' . $row . ' wajib diisi.';
+            } elseif (($m = $bad($a)) !== null) {
+                $err['items'] ??= 'Jumlah baris ' . $row . ': ' . lcfirst($m);
+            }
+            if ($a !== null) {
+                $total = bcadd($total, $a, 2);
+            }
+            $lines[] = ['description' => mb_substr($desc, 0, 500), 'amount' => $a ?? '0.00'];
+        }
+        if (!$lines) {
+            $err['items'] = 'Isi minimal satu uraian beserta jumlahnya.';
+            return [[], null, $err, ''];
+        }
+        if (!isset($err['items']) && ($m = $bad($total)) !== null) {
+            $err['items'] = 'Total ' . lcfirst($m);
+        }
+        $summary = mb_substr(implode(' · ', array_column($lines, 'description')), 0, 500);
+        return [$lines, $err ? null : $total, $err, $summary];
+    }
+
+    /**
+     * Rincian uraian suatu transaksi untuk tampilan/cetak. Transaksi lama/impor (items NULL) menjadi satu baris
+     * dari description + nominalnya.
+     * @return array<int,array{description:string,amount:string}>
+     */
+    public static function lines(array $tx): array
+    {
+        $raw = $tx['items'] ?? null;
+        if (is_string($raw) && $raw !== '') {
+            $j = json_decode($raw, true);
+            if (is_array($j) && $j) {
+                $out = [];
+                foreach ($j as $r) {
+                    $out[] = ['description' => (string) ($r['description'] ?? ''), 'amount' => bcadd((string) ($r['amount'] ?? '0'), '0', 2)];
+                }
+                return $out;
+            }
+        }
+        $net = bcsub((string) ($tx['debit'] ?? '0'), (string) ($tx['credit'] ?? '0'), 2);
+        $one = bccomp((string) ($tx['debit'] ?? '0'), '0', 2) !== 0 && bccomp((string) ($tx['credit'] ?? '0'), '0', 2) === 0 ? (string) $tx['debit']
+            : (bccomp((string) ($tx['credit'] ?? '0'), '0', 2) !== 0 && bccomp((string) ($tx['debit'] ?? '0'), '0', 2) === 0 ? (string) $tx['credit'] : ltrim($net, '-'));
+        return [['description' => (string) ($tx['description'] ?? ''), 'amount' => bcadd($one, '0', 2)]];
     }
 
     public static function create(array $d, int $userId, ?string $idemKey, ?string $ref = null, bool $confirmDup = false): int
@@ -212,7 +296,7 @@ final class TransactionService
 
     private static function pick(array $r): array
     {
-        $keys = ['account_id', 'tx_date', 'voucher_code', 'counterparty', 'category_id', 'project_id', 'description', 'note', 'ref_no', 'debit', 'credit'];
+        $keys = ['account_id', 'tx_date', 'voucher_code', 'counterparty', 'category_id', 'project_id', 'description', 'items', 'note', 'ref_no', 'debit', 'credit'];
         return array_intersect_key($r, array_flip($keys));
     }
 

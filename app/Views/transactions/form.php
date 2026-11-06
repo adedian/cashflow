@@ -1,10 +1,26 @@
 <?php
-/** @var array $t @var array $errors @var ?int $id @var ?string $warn @var array $accounts @var array $categories @var array $projects @var array $counterpartyAccounts @var string $idem */
+/** @var array $t @var array $errors @var ?int $id @var ?string $warn @var array $accounts @var array $categories @var array $projects @var array $counterpartyAccounts @var string $idem @var array $lineRows */
 $kinds = \App\Models\Lookup::KIND_LABEL;
 $v = static fn(string $k, $d = '') => $t[$k] ?? $d;
 $fe = static fn(string $k) => isset($errors[$k]) ? '<div class="err">' . e($errors[$k]) . '</div>' : '';
 $action = $id ? url('/transactions/' . $id) : url('/transactions');
 $auto = (!$id && $v('source_ref') && !$errors) ? ' data-auto="1"' : '';   // isian dari tombol Bayar/Terima/Realisasikan: ikut dikosongkan bila referensi diganti
+// baris uraian: [{description, amount}] — dari kiriman (saat galat), rincian tersimpan (ubah), atau satu baris (baru / tombol Bayar·Terima)
+$lineRows = $lineRows ?: [['description' => '', 'amount' => '']];
+$lineTotal = '0.00';
+foreach ($lineRows as $lr) {
+    $pa = parse_amount($lr['amount'] ?? '', true);
+    $lineTotal = $pa !== null ? bcadd($lineTotal, $pa, 2) : $lineTotal;
+}
+$renderLine = static function (array $r, bool $first, string $auto): string {
+    $idD = $first ? ' id="description"' : '';
+    $idA = $first ? ' id="amount"' : '';
+    return '<div class="line-row">'
+        . '<input class="input line-desc" name="line_desc[]"' . $idD . ' maxlength="500" value="' . e((string) ($r['description'] ?? '')) . '" placeholder="Uraian" aria-label="Uraian"' . ($first ? $auto : '') . '>'
+        . '<input class="input num line-amt" name="line_amount[]"' . $idA . ' type="text" inputmode="decimal" value="' . e((string) ($r['amount'] ?? '')) . '" placeholder="Jumlah (Rp)" aria-label="Jumlah (Rp)" autocomplete="off"' . ($first ? $auto : '') . '>'
+        . '<button type="button" class="btn btn-ghost btn-sm btn-icon line-del" data-line-del title="Hapus baris" aria-label="Hapus baris"><svg class="i i-sm" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>'
+        . '</div>';
+};
 ?>
 <section class="card" style="max-width:860px">
   <?php if (!empty($errors['_'])): ?><div class="alert alert-danger mb-2" role="alert"><?= e($errors['_']) ?></div><?php endif; ?>
@@ -35,9 +51,9 @@ $auto = (!$id && $v('source_ref') && !$errors) ? ' data-auto="1"' : '';   // isi
         </div><?= $fe('direction') ?>
       </div>
       <div class="field">
-        <label for="amount">Nominal (Rp) <span class="req">*</span></label>
-        <input class="input num" type="text" inputmode="decimal" id="amount" name="amount" value="<?= e($v('amount')) ?>" placeholder="1.250.000" autocomplete="off"<?= $auto ?> required>
-        <span class="help">Boleh bernilai negatif untuk koreksi/potongan (mis. PPh dipotong): awali dengan tanda −.</span><?= $fe('amount') ?>
+        <label for="txTotal">Total nominal (Rp)</label>
+        <input class="input num" type="text" id="txTotal" value="<?= e(money($lineTotal, false)) ?>" readonly tabindex="-1" aria-live="polite">
+        <span class="help">Dihitung otomatis dari jumlah semua uraian di bawah.</span><?= $fe('amount') ?>
       </div>
       <div class="field">
         <label for="voucher_code">Kode bukti</label>
@@ -71,7 +87,16 @@ $auto = (!$id && $v('source_ref') && !$errors) ? ' data-auto="1"' : '';   // isi
       </div>
       <div class="field full">
         <label for="description">Uraian <span class="req">*</span></label>
-        <input class="input" id="description" name="description" maxlength="500" value="<?= e($v('description')) ?>"<?= $auto ?> required><?= $fe('description') ?>
+        <div class="lines" id="lines" data-max="<?= (int) \App\Services\TransactionService::MAX_LINES ?>">
+          <div class="line-head" aria-hidden="true"><span>Uraian</span><span class="r">Jumlah (Rp)</span><span></span></div>
+          <div id="lineRows">
+            <?php foreach ($lineRows as $i => $lr): ?><?= $renderLine($lr, $i === 0, $auto) ?><?php endforeach; ?>
+          </div>
+          <template id="lineTpl"><?= $renderLine(['description' => '', 'amount' => ''], false, '') ?></template>
+        </div>
+        <div><button type="button" class="btn btn-ghost btn-sm" id="lineAdd"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah uraian</button></div>
+        <span class="help">Satu transaksi boleh punya beberapa uraian (mis. tagihan dan potongan PPh). Jumlah boleh bernilai negatif untuk potongan: awali dengan tanda −. Total dijumlahkan otomatis.</span>
+        <?= $fe('items') ?><?= $fe('description') ?>
       </div>
       <div class="field">
         <label for="ref_combo">No. invoice / PO</label>

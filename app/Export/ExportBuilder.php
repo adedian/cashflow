@@ -24,6 +24,7 @@ final class ExportBuilder
         'hutang' => 'Hutang',
         'proyeksi' => 'Proyeksi Cashflow',
         'laporan' => 'Laporan',
+        'bukti' => 'Bukti Bank (BK/BM)',   // cetak detail transaksi terpilih; hanya PDF, dibangun oleh buildBukti()
     ];
 
     private const MAX_ROWS = 20000;
@@ -34,9 +35,47 @@ final class ExportBuilder
     private const ORANGE = 'FFC000';  // sisa limit
     private const PINK = 'FF99FF';    // judul laporan & penerimaan proyeksi
 
+    /**
+     * Bukti Bank Keluar/Masuk untuk transaksi terpilih (ids=1,2,3): satu bukti per halaman, urut tanggal.
+     * Transaksi dibatalkan dilewati. @return array{0:Document,1:string} [dokumen, isi PDF]
+     */
+    public static function buildBukti(Request $req, array $user): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', explode(',', $req->str('ids'))), static fn(int $v) => $v > 0)));
+        if (!$ids) {
+            throw new HttpException('Pilih minimal satu transaksi untuk dicetak.', 422);
+        }
+        if (count($ids) > 200) {
+            throw new HttpException('Maksimal 200 bukti sekali cetak.', 422);
+        }
+        $rows = Db::all('SELECT * FROM transactions WHERE id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') AND voided_at IS NULL ORDER BY tx_date, seq, id', $ids);
+        if (!$rows) {
+            throw new HttpException('Transaksi yang dipilih tidak ditemukan atau sudah dibatalkan.', 422);
+        }
+        $vouchers = [];
+        foreach ($rows as $t) {
+            $lines = \App\Services\TransactionService::lines($t);
+            $net = bcsub((string) $t['debit'], (string) $t['credit'], 2);
+            $total = '0.00';
+            foreach ($lines as $l) {
+                $total = bcadd($total, $l['amount'], 2);
+            }
+            $vouchers[] = [
+                'kind' => bccomp($net, '0', 2) > 0 ? 'BM' : 'BK',
+                'number' => (string) ($t['voucher_code'] ?? ''),
+                'date' => self::longDate($t['tx_date']),
+                'party' => (string) ($t['counterparty'] ?? ''),
+                'lines' => $lines,
+                'total' => $total,
+            ];
+        }
+        $d = new Document(self::DOCS['bukti'], 'cashflow-bukti-bank', setting('company_name', 'PT Hexa Multi Energi'), (string) ($user['full_name'] ?? ''));
+        return [$d, VoucherPdf::build($vouchers, $d)];
+    }
+
     public static function build(string $doc, Request $req, array $user): Document
     {
-        if (!isset(self::DOCS[$doc])) {
+        if (!isset(self::DOCS[$doc]) || $doc === 'bukti') {
             throw new HttpException('Jenis dokumen tidak dikenal.', 404);
         }
         $d = new Document(self::DOCS[$doc], 'cashflow-' . ($doc === 'transaksi' ? 'mutasi-bank' : $doc), setting('company_name', 'PT Hexa Multi Energi'), (string) ($user['full_name'] ?? ''));

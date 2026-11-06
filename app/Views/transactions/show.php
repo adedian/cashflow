@@ -1,5 +1,5 @@
 <?php
-/** @var array $t @var array $hist @var bool $isAdmin @var array $related @var ?array $fcDecision */
+/** @var array $t @var array $lines @var array $hist @var bool $isAdmin @var array $related @var ?array $fcDecision */
 $inn = bccomp((string) $t['debit'], '0', 2) !== 0;
 $amount = $inn ? $t['debit'] : $t['credit'];
 $void = $t['voided_at'] !== null;
@@ -28,7 +28,18 @@ $void = $t['voided_at'] !== null;
       <?php if ($isAdmin): ?><dt>Detail rekening pihak</dt><dd><?= e($t['counterparty_detail'] ?: '-') ?></dd><?php endif; ?>
       <dt>Kategori</dt><dd><?= e($t['category_name'] ?: 'Belum dikategorikan') ?><?php if ($t['category_kind']): ?> <span class="pill pill-blue"><?= e($t['category_kind']) ?></span><?php endif; ?></dd>
       <dt>Proyek</dt><dd><?= e($t['project_name'] ?: '-') ?></dd>
+      <?php if (count($lines) > 1): ?>
+      <dt>Uraian</dt><dd>
+        <table class="tbl tx-lines"><tbody>
+          <?php foreach ($lines as $i => $l): $neg = bccomp($l['amount'], '0', 2) < 0; ?>
+          <tr><td><?= $i + 1 ?>.</td><td><?= e($l['description']) ?></td><td class="r num <?= $neg ? 'neg' : '' ?>"><?= e(money($l['amount'])) ?></td></tr>
+          <?php endforeach; ?>
+          <tr class="tot"><td></td><td><b>Total</b></td><td class="r num"><b><?= e(money($amount)) ?></b></td></tr>
+        </tbody></table>
+      </dd>
+      <?php else: ?>
       <dt>Uraian</dt><dd><?= e($t['description'] ?: '-') ?></dd>
+      <?php endif; ?>
       <dt>No. referensi (invoice/PO)</dt><dd><?= e($t['ref_no'] ?: '-') ?></dd>
       <dt>Catatan</dt><dd style="white-space:pre-wrap"><?= e($t['note'] ?: '-') ?></dd>
       <?php if ($isAdmin && !empty($t['flag'])): ?><dt>Perlu ditinjau</dt><dd><span class="pill pill-yellow"><?= e($t['flag']) ?></span></dd><?php endif; ?>

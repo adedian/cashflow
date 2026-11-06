@@ -791,3 +791,35 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
 }
 
 .sb-link[hidden] { display: none; }
+
+/* ---- Transaksi: rincian uraian (banyak baris) di formulir ---- */
+.lines { display: flex; flex-direction: column; gap: 8px; }
+.line-head, .line-row { display: grid; grid-template-columns: minmax(0, 1fr) 190px 40px; gap: 8px; align-items: center; }
+.line-head { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 0 2px; }
+.line-head .r { text-align: right; }
+#lineRows { display: flex; flex-direction: column; gap: 8px; }
+.line-row .line-amt { text-align: right; }
+.line-row .line-del { width: 40px; height: 40px; padding: 0; justify-content: center; }
+#txTotal { font-weight: 700; background: #f4f6fb; text-align: right; }
+#txTotal.neg { color: var(--red, #d8343c); }
+@media (max-width: 767px) {
+  .line-head { display: none; }
+  .line-row { grid-template-columns: minmax(0, 1fr) 40px; }
+  .line-row .line-desc { grid-column: 1 / -1; }
+  .line-row .line-amt { grid-column: 1; }
+}
+/* rincian pada halaman detail */
+.tx-lines { width: 100%; max-width: 560px; font-size: 13.5px; }
+.tx-lines td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); }
+.tx-lines tr.tot td { border-top: 2px solid var(--line); border-bottom: 0; }
+
+/* ---- Transaksi: kotak centang pilih transaksi + Cetak Detail ---- */
+.tbl.tx .c-sel { width: 36px; min-width: 36px; padding-right: 0; }
+.tbl.tx .c-sel input { width: 17px; height: 17px; cursor: pointer; accent-color: var(--blue, #1769ff); }
+.tx-selbar { display: inline-flex; align-items: center; gap: 8px; }
+.tx-selbar .sel-count { font-size: 12.5px; color: var(--muted); }
+.tx-selbar .sel-clear { background: 0; border: 0; padding: 0; color: var(--blue, #1769ff); cursor: pointer; font: inherit; font-size: 12.5px; text-decoration: underline; }
+@media (max-width: 767px) {
+  table.tbl.stack td.c-sel { justify-content: flex-start; }
+  table.tbl.stack td.c-sel::before { content: 'Pilih'; }
+}

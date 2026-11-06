@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   project_id          INT UNSIGNED NULL,
   category_raw        VARCHAR(190) NULL,
   description         VARCHAR(500) NULL,
+  items               TEXT NULL COMMENT 'JSON [{description,amount}] rincian uraian; debit/credit = Σ amount',
   note                TEXT NULL,
   ref_no              VARCHAR(190) NULL,
   debit               DECIMAL(18,2) NOT NULL DEFAULT 0.00,

@@ -91,6 +91,49 @@ function parse_amount($raw, bool $allowNegative = false): ?string
     return bcadd($s, '0', 2);
 }
 
+/** Terbilang bilangan bulat (>= 0) dalam bahasa Indonesia, huruf kecil: 3600000 → "tiga juta enam ratus ribu". */
+function terbilang_int(int $n): string
+{
+    static $s = ['nol', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas'];
+    if ($n < 12) {
+        return $s[$n];
+    }
+    if ($n < 20) {
+        return $s[$n - 10] . ' belas';
+    }
+    if ($n < 100) {
+        return $s[intdiv($n, 10)] . ' puluh' . ($n % 10 ? ' ' . terbilang_int($n % 10) : '');
+    }
+    if ($n < 200) {
+        return 'seratus' . ($n > 100 ? ' ' . terbilang_int($n - 100) : '');
+    }
+    if ($n < 1000) {
+        return $s[intdiv($n, 100)] . ' ratus' . ($n % 100 ? ' ' . terbilang_int($n % 100) : '');
+    }
+    if ($n < 2000) {
+        return 'seribu' . ($n > 1000 ? ' ' . terbilang_int($n - 1000) : '');
+    }
+    foreach ([[1000000000000, 'triliun'], [1000000000, 'miliar'], [1000000, 'juta'], [1000, 'ribu']] as [$unit, $name]) {
+        if ($n >= $unit) {
+            return terbilang_int(intdiv($n, $unit)) . ' ' . $name . ($n % $unit ? ' ' . terbilang_int($n % $unit) : '');
+        }
+    }
+    return (string) $n;
+}
+
+/** Terbilang nominal rupiah: "Tiga juta enam ratus ribu rupiah"; sen dibaca "… koma enam puluh empat rupiah"; negatif diawali "minus". */
+function terbilang(string $amount): string
+{
+    $v = bcadd($amount, '0', 2);
+    $neg = $v[0] === '-';
+    [$int, $dec] = explode('.', ltrim($v, '-'));
+    $w = terbilang_int((int) $int);
+    if ($dec !== '00') {
+        $w .= ' koma ' . ($dec[0] === '0' ? 'nol ' : '') . terbilang_int((int) $dec);
+    }
+    return ucfirst(($neg ? 'minus ' : '') . $w . ' rupiah');
+}
+
 function csrf_token(): string
 {
     return \App\Core\Csrf::token();

@@ -27,6 +27,22 @@ final class PdfWriter
         return $w->assemble($doc);
     }
 
+    /** Berkas PDF dari halaman yang sudah digambar pihak lain (mis. VoucherPdf): tanpa kaki halaman bawaan. */
+    public static function fromPages(array $pages, Document $doc): string
+    {
+        $w = new self();
+        $w->pages = $pages;
+        return $w->assemble($doc, false);
+    }
+
+    /** Teks siap dimasukkan ke operator Tj: dikodekan Windows-1252 dan di-escape. */
+    public static function escapeText(string $s): string
+    {
+        static $w = null;
+        $w ??= new self();
+        return $w->esc($s);
+    }
+
     /* ---------- pengukuran teks ---------- */
     private function cp(string $s): string
     {
@@ -292,7 +308,7 @@ final class PdfWriter
     }
 
     /* ---------- perakitan berkas PDF ---------- */
-    private function assemble(Document $doc): string
+    private function assemble(Document $doc, bool $withFooter = true): string
     {
         if (!$this->pages) {
             $sh = new Sheet('Kosong');
@@ -312,7 +328,7 @@ final class PdfWriter
         $id = 8;
         $stream = [];
         foreach ($this->pages as $i => $pg) {
-            $foot = $this->footer($doc, $pg, $i + 1, $total);
+            $foot = $withFooter ? $this->footer($doc, $pg, $i + 1, $total) : '';
             $data = gzcompress($pg['ops'] . $foot, 6);
             $pageId = $id++;
             $contId = $id++;

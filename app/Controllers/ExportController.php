@@ -40,6 +40,10 @@ final class ExportController extends Controller
         $this->releaseSession();
         $format = $this->format();
         try {
+            if ($doc === 'bukti') {
+                [$d, $pdf] = ExportBuilder::buildBukti($this->req, $this->user());   // hanya PDF
+                return $this->pdfInline($pdf, $d->filename('pdf'));
+            }
             $d = ExportBuilder::build($doc, $this->req, $this->user());
             if ($format === 'xlsx') {
                 $p = HtmlPreview::render($d);
@@ -56,9 +60,14 @@ final class ExportController extends Controller
             $r->headers['Content-Security-Policy'] = "frame-ancestors 'self'";
             return $r;
         }
+        return $this->pdfInline($pdf, $d->filename('pdf'));
+    }
+
+    private function pdfInline(string $pdf, string $filename): Response
+    {
         return new Response($pdf, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="' . $d->filename('pdf') . '"',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
             'Cache-Control' => 'no-store',
             'X-Content-Type-Options' => 'nosniff',
             // pratinjau ditampilkan di dalam halaman aplikasi sendiri (iframe satu asal)
@@ -71,6 +80,11 @@ final class ExportController extends Controller
     {
         $this->guard($doc);
         $format = $this->format();
+        if ($doc === 'bukti') {
+            [$d, $pdf] = ExportBuilder::buildBukti($this->req, $this->user());
+            Audit::log('export', 'document', $doc, 'Unduh PDF ' . $d->title, null, ['query' => array_diff_key($this->req->query, ['format' => 1])]);
+            return Response::download($pdf, $d->filename('pdf'), 'application/pdf');
+        }
         $d = ExportBuilder::build($doc, $this->req, $this->user());
         $bin = $format === 'xlsx' ? XlsxWriter::build($d) : PdfWriter::build($d);
         Audit::log('export', 'document', $doc, 'Unduh ' . strtoupper($format) . ' ' . $d->title, null, ['query' => array_diff_key($this->req->query, ['format' => 1])]);
