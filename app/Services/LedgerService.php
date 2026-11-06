@@ -488,9 +488,9 @@ final class LedgerService
 
     /**
      * Isi kolom 'running' (saldo setelah baris tersebut) untuk baris-baris satu akun.
-     * Urutan saldo berjalan = URUTAN CATAT (seq, id) — sama dengan urutan baris pada buku Excel — bukan urutan tanggal,
-     * sehingga saldo tiap baris identik dengan Excel meskipun beberapa bukti dicatat tidak berurutan tanggal.
-     * Void/edit transaksi historis tidak mengubah urutan baris lain; saldo akhir hari/bulan (berdasarkan tanggal) tetap benar.
+     * Urutan saldo berjalan = URUTAN TANGGAL (tx_date, seq, id), sama dengan urutan baris pada daftar/cetak, sehingga tiap baris
+     * = saldo baris sebelumnya +/- jumlahnya sendiri, saldo awal bulan = saldo akhir bulan sebelumnya, dan saldo baris terakhir
+     * = saldo rekening pada tanggal itu. Bukti yang dicatat belakangan dengan tanggal lebih awal otomatis masuk di tempat yang benar.
      */
     private static function fillRunning(array &$rows, int $accountId): void
     {
@@ -499,18 +499,18 @@ final class LedgerService
         if (!$acc || !$live) {
             return;
         }
-        $seqs = array_map('intval', array_column($live, 'seq'));
-        $min = min($seqs);
-        $max = max($seqs);
+        $dates = array_column($live, 'tx_date');
+        $min = min($dates);
+        $max = max($dates);
         $sign = $acc['balance_mode'] === 'asset' ? 'debit - credit' : 'credit - debit';
         $prefix = bcadd((string) $acc['opening_balance'], (string) Db::val(
-            "SELECT COALESCE(SUM($sign), 0) FROM transactions WHERE account_id = ? AND voided_at IS NULL AND seq < ?",
+            "SELECT COALESCE(SUM($sign), 0) FROM transactions WHERE account_id = ? AND voided_at IS NULL AND tx_date < ?",
             [$accountId, $min]
         ), 2);
         $cum = [];
         foreach (Db::all(
-            "SELECT id, SUM($sign) OVER (ORDER BY seq, id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum
-             FROM transactions WHERE account_id = ? AND voided_at IS NULL AND seq >= ? AND seq <= ?",
+            "SELECT id, SUM($sign) OVER (ORDER BY tx_date, seq, id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum
+             FROM transactions WHERE account_id = ? AND voided_at IS NULL AND tx_date >= ? AND tx_date <= ?",
             [$accountId, $min, $max]
         ) as $r) {
             $cum[(int) $r['id']] = (string) $r['cum'];
