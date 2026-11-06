@@ -184,9 +184,14 @@ final class ExportBuilder
         $s->paper = 'legal';
         $s->widths([2.71, 12.57, 11.71, 40.29, 26.0, 44.71, 44.71, 21.71, 21.71, 21.71, 21.86, 24.29]);
         $s->set(1, 2, $doc->company . ' — Mutasi Bank', ['size' => 14, 'bold' => true])->merge(1, 2, 1, 12)->height(1, 21);
+        $subset = !empty($f['party']) || !empty($f['category']) || !empty($f['project']) || !empty($f['kind']) || !empty($f['dir']) || !empty($f['q']) || !empty($f['flagged']);
         $extra = [];
+        if (!empty($f['party'])) { $extra[] = 'rekening lawan "' . $f['party'] . '"'; }
+        if (!empty($f['category'])) { $extra[] = 'kategori "' . (string) Db::val('SELECT name FROM categories WHERE id = ?', [(int) $f['category']]) . '"'; }
+        if (!empty($f['project'])) { $extra[] = 'proyek "' . (string) Db::val('SELECT name FROM projects WHERE id = ?', [(int) $f['project']]) . '"'; }
         if (!empty($f['q'])) { $extra[] = 'pencarian "' . $f['q'] . '"'; }
         if (!empty($f['dir'])) { $extra[] = $f['dir'] === 'in' ? 'hanya Mutasi Masuk' : 'hanya Mutasi Keluar'; }
+        if ($subset) { $extra[] = 'saldo dihitung dari data yang ditampilkan'; }
         $s->set(2, 2, $a['name'] . ' · Periode: ' . self::period($f) . ($extra ? ' · ' . implode(', ', $extra) : ''), ['size' => 10, 'italic' => true])->merge(2, 2, 2, 12)->height(2, 15);
 
         foreach (['TGL', 'KODE', 'Dari Rekening & Rekening Tujuan', 'Project', 'Kategori Biaya', 'Keterangan', 'Catatan', 'No. Invoice & No. PO', 'DEBIT', 'KREDIT', 'SALDO AKHIR'] as $i => $h) {
@@ -198,6 +203,16 @@ final class ExportBuilder
         $s->repeatRows = [3, 3];
 
         $liab = $a['balance_mode'] === 'liability';
+        // Disaring menurut isi (rekening lawan, kategori, proyek, jenis, pencarian, perlu ditinjau): saldo asli rekening tidak lagi
+        // bermakna, jadi Saldo Akhir dihitung hanya dari baris yang ditarik (mulai 0, urut tanggal). Rentang tanggal saja tetap memakai saldo asli.
+        if ($subset) {
+            $run = '0.00';
+            foreach ($rows as &$rw) {
+                $run = bcadd($run, $liab ? bcsub((string) $rw['credit'], (string) $rw['debit'], 2) : bcsub((string) $rw['debit'], (string) $rw['credit'], 2), 2);
+                $rw['running'] = $run;
+            }
+            unset($rw);
+        }
         $sumD = '0.00';
         $sumC = '0.00';
         $r = 4;
