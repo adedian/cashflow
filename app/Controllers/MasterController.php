@@ -26,7 +26,7 @@ final class MasterController extends Controller
         foreach (['categories' => 'Kategori', 'projects' => 'Proyek', 'accounts' => 'Rekening', 'counterparties' => 'Rekening Lawan', 'suppliers' => 'Supplier', 'parties' => 'Customer', 'opening' => 'Saldo Awal', 'mapping' => 'Pemetaan Excel'] as $k => $l) {
             $tabs[] = ['href' => url('/master?tab=' . $k), 'label' => $l, 'active' => $k === $tab];
         }
-        Page::set(['title' => 'Master Data', 'subtitle' => 'Kategori, proyek, rekening, saldo awal, dan pemetaan kategori dari Excel', 'tabs' => $tabs]);
+        Page::set(['title' => 'Master Data', 'subtitle' => 'Kategori, proyek, rekening, saldo awal, dan pemetaan kategori dari Excel', 'tabs' => $tabs, 'scripts' => ['master.js']]);
         $data = ['tab' => $tab, 'kinds' => Lookup::KIND_LABEL];
         if ($tab === 'categories') {
             $data['rows'] = Db::all('SELECT c.*, (SELECT COUNT(DISTINCT t.id) FROM transactions t LEFT JOIN transaction_items i ON i.transaction_id = t.id WHERE t.voided_at IS NULL AND (t.category_id = c.id OR i.category_id = c.id)) AS n FROM categories c ORDER BY FIELD(c.kind,\'pendapatan\',\'biaya\',\'pajak\',\'pembiayaan\',\'transfer\',\'lainnya\'), c.name');
@@ -189,6 +189,9 @@ final class MasterController extends Controller
             if ($id === '') {
                 $code = strtoupper(preg_replace('/[^A-Za-z0-9-]/', '', $this->name('code', 20)));
                 $kind = $this->req->str('kind') === 'facility' ? 'facility' : 'bank';
+                if ($kind === 'bank') {
+                    $limit = null;   // Bank HR tidak memakai limit
+                }
                 $mode = $this->req->str('balance_mode') === 'liability' ? 'liability' : 'asset';
                 $open = parse_amount($this->req->str('opening_balance') ?: '0', true);
                 $od = Filters::date($this->req->str('opening_date'));

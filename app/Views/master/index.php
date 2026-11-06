@@ -66,7 +66,9 @@ $rowForm = static fn(string $id, string $action): string => '<form id="' . e($id
 /** @var ?array $edit */
 $isEdit = $edit !== null;
 $val = static fn(string $k, string $d = ''): string => $isEdit ? (string) ($edit[$k] ?? '') : $d;
-$accKind = static fn(array $r): string => $r['balance_mode'] === 'liability' ? 'Pinjaman' : ($r['kind'] === 'facility' ? 'Fasilitas' : 'Bank');
+$accKind = static fn(array $r): string => $r['balance_mode'] === 'liability' ? 'Pinjaman' : ($r['kind'] === 'facility' ? 'Loan' : 'Bank');
+// kolom Limit: hanya untuk jenis Loan (rekening lama berjenis Bank yang sudah punya limit tetap bisa diubah limitnya); Bank HR tidak memakai limit
+$showLimit = $isEdit && ($edit['kind'] === 'facility' || $edit['credit_limit'] !== null);
 ?>
 <section class="card" id="acc-form">
   <div class="card-head"><h2><?= $isEdit ? 'Edit rekening ' . e($edit['code']) : 'Tambah rekening' ?></h2></div>
@@ -82,12 +84,12 @@ $accKind = static fn(array $r): string => $r['balance_mode'] === 'liability' ? '
     <div class="field"><label>Jenis</label><input class="input" value="<?= e($accKind($edit)) ?>" disabled></div>
     <div class="field"><label>Saldo awal</label><input class="input" value="<?= e(money($edit['opening_balance'])) ?> · <?= e(fmt_date($edit['opening_date'])) ?>" disabled></div>
     <?php else: ?>
-    <div class="field"><label for="ak">Jenis</label><select class="input" id="ak" name="kind"><option value="bank">Bank</option><option value="facility">Fasilitas</option></select></div>
+    <div class="field"><label for="ak">Jenis</label><select class="input" id="ak" name="kind"><option value="bank">Bank HR (tanpa limit)</option><option value="facility">Loan (dengan limit)</option></select></div>
     <div class="field"><label for="am">Perhitungan saldo</label><select class="input" id="am" name="balance_mode"><option value="asset">Aset (debit − kredit)</option><option value="liability">Pinjaman (kredit − debit)</option></select></div>
     <div class="field"><label for="ao">Saldo awal (Rp)</label><input class="input num" id="ao" name="opening_balance" value="0"></div>
     <div class="field"><label for="ad">Tanggal saldo awal <span class="req">*</span></label><input class="input" type="date" id="ad" name="opening_date" required></div>
     <?php endif; ?>
-    <div class="field"><label for="al">Limit (opsional)</label><input class="input num" id="al" name="credit_limit" value="<?= e($isEdit && $edit['credit_limit'] !== null ? money($edit['credit_limit'], false) : '') ?>"></div>
+    <div class="field<?= $showLimit ? '' : ' hidden' ?>" id="al-field"><label for="al">Limit</label><input class="input num" id="al" name="credit_limit" value="<?= e($isEdit && $edit['credit_limit'] !== null ? money($edit['credit_limit'], false) : '') ?>"></div>
     <div class="field"><label for="ah">4 digit terakhir (bila nomor lengkap tidak diisi)</label><input class="input" id="ah" name="acct_hint" maxlength="4" inputmode="numeric" value="<?= e($val('acct_hint')) ?>"></div>
     <div class="field"><label for="abn">Nama bank</label><input class="input" id="abn" name="bank_name" maxlength="80" placeholder="mis. BCA" value="<?= e($val('bank_name')) ?>"></div>
     <div class="field"><label for="aho">Nama pemilik rekening</label><input class="input" id="aho" name="account_holder" maxlength="120" value="<?= e($val('account_holder')) ?>"></div>
