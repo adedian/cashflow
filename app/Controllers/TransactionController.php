@@ -32,11 +32,11 @@ final class TransactionController extends Controller
         $sort = in_array($this->req->str('sort'), ['date_asc', 'date_desc', 'amount_desc', 'amount_asc'], true) ? $this->req->str('sort') : 'date_desc';
         $page = max(1, $this->req->int('page', 1));
         $includeVoid = $this->isAdmin() && $this->req->str('void') === '1';
-        $res = LedgerService::listTransactions($f, $page, self::PER_PAGE, $sort, $includeVoid, true, true);
+        $res = LedgerService::listTransactions($f, $page, self::PER_PAGE, $sort, $includeVoid, true, true, true);
         $pages = max(1, (int) ceil($res['total'] / self::PER_PAGE));
         if ($page > $pages) {
             $page = $pages;
-            $res = LedgerService::listTransactions($f, $page, self::PER_PAGE, $sort, $includeVoid, true, true);
+            $res = LedgerService::listTransactions($f, $page, self::PER_PAGE, $sort, $includeVoid, true, true, true);
         }
         $base = array_filter($f + ['sort' => $sort === 'date_desc' ? null : $sort, 'void' => $includeVoid ? '1' : null], static fn($v) => $v !== null && $v !== '' && $v !== false);
         if (!empty($f['flagged'])) {
@@ -46,6 +46,7 @@ final class TransactionController extends Controller
             'res' => $res, 'f' => $f, 'sort' => $sort, 'page' => $page, 'pages' => $pages, 'perPage' => self::PER_PAGE,
             'base' => $base, 'isAdmin' => $this->isAdmin(), 'includeVoid' => $includeVoid,
             'showBalance' => true,
+            'parties' => \App\Core\Db::all("SELECT DISTINCT counterparty AS name FROM transactions WHERE counterparty IS NOT NULL AND counterparty <> '' ORDER BY counterparty"),
             'accounts' => Lookup::accounts(true), 'categories' => Lookup::categories(true), 'projects' => Lookup::projects(true),
             'canExport' => $this->isAdmin() || setting('viewer_can_export', '1') === '1',
         ];

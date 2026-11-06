@@ -11,7 +11,7 @@ $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
 <div class="card-head" style="padding:20px 22px 0">
   <div>
     <h2>Hasil</h2>
-    <span class="muted" style="font-size:12.5px"><?= number_format($res['total'], 0, ',', '.') ?> transaksi · debit <b class="pos"><?= e(money($res['sum_debit'])) ?></b> · kredit <b class="neg"><?= e(money($res['sum_credit'])) ?></b> · selisih <b class="num"><?= e(money($net)) ?></b></span>
+    <span class="muted" style="font-size:12.5px"><?= number_format($res['total'], 0, ',', '.') ?> baris uraian · debit <b class="pos"><?= e(money($res['sum_debit'])) ?></b> · kredit <b class="neg"><?= e(money($res['sum_credit'])) ?></b> · selisih <b class="num"><?= e(money($net)) ?></b></span>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center" class="no-print">
     <?php if (can_export()): ?>
@@ -48,13 +48,15 @@ $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
       </tr>
     </thead>
     <tbody>
-    <?php foreach ($rows as $t):
+    <?php $prevId = null; foreach ($rows as $t):
+        $firstOfTx = $prevId !== (int) $t['id'];   // satu transaksi bisa tampil beberapa baris (satu per uraian); kotak centang hanya di baris pertama
+        $prevId = (int) $t['id'];
         $void = $t['voided_at'] !== null;
         $inn = bccomp((string) $t['debit'], '0', 2) !== 0;
         $out = bccomp((string) $t['credit'], '0', 2) !== 0;
     ?>
       <tr class="<?= $void ? 'voided' : '' ?>">
-        <?php if (can_export()): ?><td class="c-sel no-print" data-label="Pilih"><input type="checkbox" class="tx-sel" value="<?= (int) $t['id'] ?>"<?= $void ? ' disabled title="Transaksi dibatalkan tidak dicetak"' : '' ?> aria-label="Pilih transaksi <?= e($t['voucher_code'] ?: '#' . (int) $t['id']) ?>"></td><?php endif; ?>
+        <?php if (can_export()): ?><td class="c-sel no-print" data-label="Pilih"><?php if ($firstOfTx): ?><input type="checkbox" class="tx-sel" value="<?= (int) $t['id'] ?>"<?= $void ? ' disabled title="Transaksi dibatalkan tidak dicetak"' : '' ?> aria-label="Pilih transaksi <?= e($t['voucher_code'] ?: '#' . (int) $t['id']) ?>"><?php endif; ?></td><?php endif; ?>
         <td data-label="Tgl" class="nowrap"><?= e(fmt_date($t['tx_date'])) ?><div class="sub" title="<?= e($t['account_name']) ?>"><?= e($t['account_code']) ?></div></td>
         <td data-label="Nomor Bukti" class="nowrap c-code"><?= e($t['voucher_code'] ?? '') ?></td>
         <td data-label="Rekening Lawan" class="c-party">

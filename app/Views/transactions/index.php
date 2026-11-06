@@ -1,5 +1,5 @@
 <?php
-/** @var array $f @var array $accounts @var array $categories @var array $projects @var array $base @var bool $canExport @var bool $isAdmin @var bool $includeVoid */
+/** @var array $f @var array $accounts @var array $categories @var array $projects @var array $parties @var array $base @var bool $canExport @var bool $isAdmin @var bool $includeVoid */
 $kinds = \App\Models\Lookup::KIND_LABEL;
 ?>
 <section class="card">
@@ -15,7 +15,7 @@ $kinds = \App\Models\Lookup::KIND_LABEL;
         <?php foreach ($accounts as $a): ?><option value="<?= (int) $a['id'] ?>" <?= (int) $f['account'] === (int) $a['id'] ? 'selected' : '' ?>><?= e($a['name']) ?></option><?php endforeach; ?>
       </select>
     </div>
-    <details class="collapse-m" style="flex:1 1 100%" <?= ($f['dir'] || $f['category'] || $f['project'] || $f['from'] || $f['to'] || !empty($f['flagged']) || $includeVoid) ? 'open' : '' ?>>
+    <details class="collapse-m" style="flex:1 1 100%" <?= ($f['dir'] || $f['party'] || $f['category'] || $f['project'] || $f['from'] || $f['to'] || !empty($f['flagged']) || $includeVoid) ? 'open' : '' ?>>
     <summary class="btn btn-ghost btn-sm">Filter lanjutan</summary>
     <div class="filters" style="margin-top:12px">
     <div class="field">
@@ -24,6 +24,13 @@ $kinds = \App\Models\Lookup::KIND_LABEL;
         <option value="">Mutasi Masuk & Keluar</option>
         <option value="in" <?= $f['dir'] === 'in' ? 'selected' : '' ?>>Mutasi Masuk</option>
         <option value="out" <?= $f['dir'] === 'out' ? 'selected' : '' ?>>Mutasi Keluar</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="party">Rekening Lawan</label>
+      <select class="input" id="party" name="party">
+        <option value="">Semua</option>
+        <?php foreach ($parties as $pt): ?><option value="<?= e($pt['name']) ?>" <?= $f['party'] === $pt['name'] ? 'selected' : '' ?>><?= e($pt['name']) ?></option><?php endforeach; ?>
       </select>
     </div>
     <div class="field">

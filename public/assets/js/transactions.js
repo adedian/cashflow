@@ -72,7 +72,7 @@
   /* --- filter: kirim otomatis saat dropdown berubah --- */
   var ff = document.getElementById('txFilter');
   if (ff) {
-    ['account', 'dir', 'category', 'project'].forEach(function (n) {
+    ['account', 'dir', 'party', 'category', 'project'].forEach(function (n) {
       var el = ff.elements[n]; if (el) el.addEventListener('change', function () { ff.submit(); });
     });
   }

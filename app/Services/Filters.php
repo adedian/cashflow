@@ -53,6 +53,7 @@ final class Filters
             'account' => $r->int('account') ?: null, 'category' => $r->int('category') ?: null, 'project' => $r->int('project') ?: null,
             'dir' => in_array($dir, ['in', 'out'], true) ? $dir : '',
             'kind' => in_array($kind, ['pendapatan', 'biaya', 'pajak', 'pembiayaan', 'transfer', 'lainnya'], true) ? $kind : '',
+            'party' => mb_substr(trim($r->str('party')), 0, 190),
             'q' => $q, 'flagged' => $r->str('flagged') === '1',
         ];
     }

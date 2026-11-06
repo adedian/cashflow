@@ -165,6 +165,20 @@ final class LedgerService
         IF(i.id IS NULL, t0.credit, IF(t0.credit <> 0, i.amount, 0)) AS credit
         FROM transactions t0 LEFT JOIN transaction_items i ON i.transaction_id = t0.id)';
 
+    /**
+     * Tabel turunan untuk daftar Transaksi per baris uraian: satu baris per uraian (transaction_items), lengkap dengan data
+     * tingkat transaksi yang dipakai filter. Transaksi tanpa baris tersimpan menjadi satu baris (line_no = 0).
+     * debit/credit/category_id/project_id = milik baris; tx_debit/tx_credit = milik transaksi (arah masuk/keluar).
+     */
+    public const LINE_ROWS = '(SELECT t0.id, COALESCE(i.line_no, 0) AS line_no, t0.account_id, t0.tx_date, t0.seq, t0.voided_at,
+        t0.voucher_code, t0.counterparty, t0.ref_no, t0.category_raw, t0.note, t0.flag, t0.debit AS tx_debit, t0.credit AS tx_credit,
+        IF(i.id IS NULL, t0.description, i.description) AS line_desc,
+        IF(i.id IS NULL, t0.category_id, i.category_id) AS category_id,
+        IF(i.id IS NULL, t0.project_id, i.project_id) AS project_id,
+        IF(i.id IS NULL, t0.debit, IF(t0.debit <> 0, i.amount, 0)) AS debit,
+        IF(i.id IS NULL, t0.credit, IF(t0.credit <> 0, i.amount, 0)) AS credit
+        FROM transactions t0 LEFT JOIN transaction_items i ON i.transaction_id = t0.id)';
+
     private static function kindOf(?int $catId): string
     {
         return $catId !== null ? (self::cats()[$catId]['kind'] ?? 'lainnya') : 'lainnya';
@@ -357,17 +371,22 @@ final class LedgerService
      *     hanya pada rentang urutan-catat halaman, urut (seq, id).
      * @return array{rows:array,total:int,sum_debit:string,sum_credit:string}
      */
-    public static function listTransactions(array $f, int $page = 1, int $perPage = 50, string $sort = 'date_desc', bool $includeVoid = false, bool $withTotals = true, bool $runningAllAccounts = false): array
+    public static function listTransactions(array $f, int $page = 1, int $perPage = 50, string $sort = 'date_desc', bool $includeVoid = false, bool $withTotals = true, bool $runningAllAccounts = false, bool $perLine = false): array
     {
-        [$where, $p] = self::where($f, $includeVoid);
+        [$where, $p] = self::where($f, $includeVoid, $perLine);
         $order = match ($sort) {
             'date_asc' => 't.tx_date ASC, t.seq ASC, t.id ASC',
             'amount_desc' => 'GREATEST(ABS(t.debit), ABS(t.credit)) DESC, t.id DESC',
             'amount_asc' => 'GREATEST(ABS(t.debit), ABS(t.credit)) ASC, t.id ASC',
             default => 't.tx_date DESC, t.seq DESC, t.id DESC',
         };
+        if ($perLine) {
+            // baris uraian satu transaksi selalu berurutan (uraian 1, 2, 3 ...), apa pun urutan dasarnya
+            $order .= ', t.line_no ASC';
+        }
         // gabungan tabel hanya bila filter membutuhkannya
-        $base = 'FROM transactions t' . (!empty($f['kind']) ? ' LEFT JOIN categories c ON c.id = t.category_id' : '');
+        $from = $perLine ? self::LINE_ROWS : 'transactions';
+        $base = 'FROM ' . $from . ' t' . (!empty($f['kind']) ? ' LEFT JOIN categories c ON c.id = t.category_id' : '');
 
         $tot = ['n' => 0, 'sd' => '0', 'sc' => '0'];
         if ($withTotals) {
@@ -375,7 +394,8 @@ final class LedgerService
         }
 
         $offset = max(0, ($page - 1) * $perPage);
-        $ids = array_map('intval', array_column(Db::all("SELECT t.id $base $where ORDER BY $order LIMIT $perPage OFFSET $offset", $p), 'id'));
+        $pageRows = Db::all("SELECT t.id" . ($perLine ? ', t.line_no' : '') . " $base $where ORDER BY $order LIMIT $perPage OFFSET $offset", $p);
+        $ids = array_values(array_unique(array_map('intval', array_column($pageRows, 'id'))));
         $rows = [];
         if ($ids) {
             $in = implode(',', $ids);
@@ -407,9 +427,42 @@ final class LedgerService
                     $byId[$t]['category_kind'] = count($n['c']) === 1 ? $byId[$t]['category_kind'] : null;
                 }
             }
-            foreach ($ids as $id) {
-                if (isset($byId[$id])) {
-                    $rows[] = $byId[$id];
+            if ($perLine) {
+                // satu baris daftar per uraian: salin data transaksi, timpa dengan uraian/kategori/proyek/jumlah baris itu
+                $items = [];
+                foreach (Db::all(
+                    "SELECT i.transaction_id AS tid, i.line_no, i.description, i.amount, c.name AS cn, c.kind AS ck, p.name AS pn
+                     FROM transaction_items i LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN projects p ON p.id = i.project_id
+                     WHERE i.transaction_id IN ($in)"
+                ) as $r) {
+                    $items[(int) $r['tid']][(int) $r['line_no']] = $r;
+                }
+                foreach ($pageRows as $pr) {
+                    $id = (int) $pr['id'];
+                    $ln = (int) $pr['line_no'];
+                    if (!isset($byId[$id])) {
+                        continue;
+                    }
+                    $row = $byId[$id];
+                    $row['line_no'] = $ln;
+                    if ($ln > 0 && isset($items[$id][$ln])) {
+                        $it = $items[$id][$ln];
+                        $isIn = bccomp((string) $row['debit'], '0', 2) !== 0;
+                        $row['tx_in'] = $isIn;
+                        $row['description'] = $it['description'];
+                        $row['category_name'] = $it['cn'];
+                        $row['category_kind'] = $it['ck'];
+                        $row['project_name'] = $it['pn'];
+                        $row['debit'] = $isIn ? bcadd((string) $it['amount'], '0', 2) : '0.00';
+                        $row['credit'] = $isIn ? '0.00' : bcadd((string) $it['amount'], '0', 2);
+                    }
+                    $rows[] = $row;
+                }
+            } else {
+                foreach ($ids as $id) {
+                    if (isset($byId[$id])) {
+                        $rows[] = $byId[$id];
+                    }
                 }
             }
             if (!empty($f['account'])) {
@@ -462,15 +515,34 @@ final class LedgerService
         ) as $r) {
             $cum[(int) $r['id']] = (string) $r['cum'];
         }
+        // daftar per uraian: saldo setelah uraian ke-n = saldo setelah transaksi dikurangi pengaruh uraian sesudahnya
+        $after = [];
+        $lineIds = array_map('intval', array_unique(array_column(array_filter($live, static fn($r) => (int) ($r['line_no'] ?? 0) > 0), 'id')));
+        if ($lineIds) {
+            $acc1 = $acc['balance_mode'] === 'asset' ? 1 : -1;
+            foreach (Db::all('SELECT i.transaction_id AS tid, i.line_no, i.amount, (t.debit <> 0) AS is_in FROM transaction_items i JOIN transactions t ON t.id = i.transaction_id WHERE i.transaction_id IN (' . implode(',', $lineIds) . ')') as $r) {
+                $eff = bcmul((string) $r['amount'], (string) ($acc1 * ((int) $r['is_in'] === 1 ? 1 : -1)), 2);
+                $after[(int) $r['tid']][(int) $r['line_no']] = $eff;
+            }
+        }
         foreach ($rows as &$r) {
             if ($r['voided_at'] === null && isset($cum[(int) $r['id']])) {
-                $r['running'] = bcadd($prefix, $cum[(int) $r['id']], 2);
+                $run = bcadd($prefix, $cum[(int) $r['id']], 2);
+                $ln = (int) ($r['line_no'] ?? 0);
+                if ($ln > 0 && isset($after[(int) $r['id']])) {
+                    foreach ($after[(int) $r['id']] as $k => $eff) {
+                        if ($k > $ln) {
+                            $run = bcsub($run, $eff, 2);
+                        }
+                    }
+                }
+                $r['running'] = $run;
             }
         }
     }
 
     /** Bangun klausa WHERE dari filter (semua parameter terikat). Alias: t = transactions, c = categories. */
-    public static function where(array $f, bool $includeVoid = false): array
+    public static function where(array $f, bool $includeVoid = false, bool $perLine = false): array
     {
         $w = [];
         $p = [];
@@ -481,25 +553,32 @@ final class LedgerService
         if (!empty($f['from'])) { $w[] = 't.tx_date >= ?'; $p[] = $f['from']; }
         if (!empty($f['to'])) { $w[] = 't.tx_date <= ?'; $p[] = $f['to']; }
         // kategori/proyek ada di tiap baris uraian: transaksi cocok bila kolomnya (data lama / nilai bersama) atau salah satu barisnya cocok
-        if (!empty($f['category'])) {
+        if ($perLine) {
+            // mode per baris uraian: t = tabel turunan LINE_ROWS; kategori/proyek/jumlah sudah milik baris itu sendiri
+            if (!empty($f['category'])) { $w[] = 't.category_id = ?'; $p[] = (int) $f['category']; }
+            if (!empty($f['kind'])) { $w[] = 'c.kind = ?'; $p[] = $f['kind']; }
+            if (!empty($f['project'])) { $w[] = 't.project_id = ?'; $p[] = (int) $f['project']; }
+        } elseif (!empty($f['category'])) {
             $w[] = '(t.category_id = ? OR EXISTS (SELECT 1 FROM transaction_items ti WHERE ti.transaction_id = t.id AND ti.category_id = ?))';
             array_push($p, (int) $f['category'], (int) $f['category']);
         }
-        if (!empty($f['kind'])) {
+        if (!$perLine && !empty($f['kind'])) {
             $w[] = '(c.kind = ? OR EXISTS (SELECT 1 FROM transaction_items ti JOIN categories tc ON tc.id = ti.category_id WHERE ti.transaction_id = t.id AND tc.kind = ?))';
             array_push($p, $f['kind'], $f['kind']);
         }
-        if (!empty($f['project'])) {
+        if (!$perLine && !empty($f['project'])) {
             $w[] = '(t.project_id = ? OR EXISTS (SELECT 1 FROM transaction_items ti WHERE ti.transaction_id = t.id AND ti.project_id = ?))';
             array_push($p, (int) $f['project'], (int) $f['project']);
         }
-        if (($f['dir'] ?? '') === 'in') { $w[] = 't.debit <> 0'; }
-        if (($f['dir'] ?? '') === 'out') { $w[] = 't.credit <> 0'; }
+        $dc = $perLine ? ['t.tx_debit', 't.tx_credit'] : ['t.debit', 't.credit'];
+        if (($f['dir'] ?? '') === 'in') { $w[] = $dc[0] . ' <> 0'; }
+        if (($f['dir'] ?? '') === 'out') { $w[] = $dc[1] . ' <> 0'; }
         if (!empty($f['q'])) {
             $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string) $f['q']) . '%';
-            $w[] = '(t.description LIKE ? OR t.voucher_code LIKE ? OR t.counterparty LIKE ? OR t.ref_no LIKE ? OR t.category_raw LIKE ? OR t.note LIKE ?)';
+            $w[] = '(' . ($perLine ? 't.line_desc' : 't.description') . ' LIKE ? OR t.voucher_code LIKE ? OR t.counterparty LIKE ? OR t.ref_no LIKE ? OR t.category_raw LIKE ? OR t.note LIKE ?)';
             array_push($p, $like, $like, $like, $like, $like, $like);
         }
+        if (!empty($f['party'])) { $w[] = 't.counterparty = ?'; $p[] = (string) $f['party']; }
         if (!empty($f['flagged'])) { $w[] = 't.flag IS NOT NULL'; }
         return [$w ? 'WHERE ' . implode(' AND ', $w) : '', $p];
     }
