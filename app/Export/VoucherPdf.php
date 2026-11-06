@@ -7,11 +7,13 @@ namespace App\Export;
  * Bukti Bank Keluar (BK, merah) dan Bukti Bank Masuk (BM, hijau): satu bukti per halaman.
  *
  * Aturan cetak SAMA dengan Sistem Stok (hexastok, bank/voucher_preview.php + _voucher.php):
- *  - halaman POTRET; kertas Folio (215 x 330 mm, dasar desain stok) atau A4 (pilihan);
- *  - @page margin: atas 2 mm, kanan/kiri/bawah 10 mm; voucher berpadding atas 1 mm dan kiri 14 mm (kanan 0)
- *    => kotak voucher mulai 24 mm dari tepi kiri & 3 mm dari atas, lebar = kertas - 34 mm;
- *  - voucher mengisi SETENGAH bagian ATAS kertas (tinggi isi ±152 mm; berhenti ±1 cm sebelum garis tengah
- *    kertas Folio supaya aman dipotong), sisanya kosong;
+ *  - halaman POTRET; kertas Legal (215,9 x 355,6 mm; default, kertas yang dipakai pengguna), Folio (215 x 330 mm,
+ *    dasar desain stok) atau A4 (pilihan);
+ *  - margin kanan/kiri 10 mm; voucher berpadding kiri 14 mm (kanan 0) => kotak voucher mulai 24 mm dari tepi kiri,
+ *    lebar = kertas - 34 mm. Sisi ATAS sengaja lebih longgar dari stok (10 mm, bukan 3 mm): printer punya area
+ *    tak-tercetak ±4-6 mm di tepi atas, sehingga pada 3 mm garis atas kotak terpotong saat dicetak;
+ *  - voucher mengisi SETENGAH bagian ATAS kertas (tinggi kotak ±138 mm dari y = 10 mm; kaki ±6 mm di bawahnya;
+ *    berhenti > 1 cm sebelum garis tengah kertas Folio 165 mm supaya aman dipotong), sisanya kosong;
  *  - font isi 12 px (9 pt), judul 18 px (13,5 pt) tebal, spasi huruf judul kolom 2 px, "KEPERLUAN INTERN" 3 px;
  *  - kolom grid 10,7% (kosong) | 2,5% (KEPERLUAN INTERN) | 12,3% Perkiraan | 57,4% Uraian | 17,1% Jumlah;
  *    header 29,25% | 42% | 28,75%; bawah: CATATAN 29,25% + 4 kolom tanda tangan sama lebar;
@@ -25,9 +27,11 @@ namespace App\Export;
 final class VoucherPdf
 {
     private const MM = 2.834645669;   // titik PDF per milimeter
-    public const PAPER = ['folio' => [215.0, 330.0], 'a4' => [210.0, 297.0]];   // lebar x tinggi, mm
-    public const PAPER_LABEL = ['folio' => 'Folio (215 × 330 mm)', 'a4' => 'A4 (210 × 297 mm)'];
+    public const PAPER = ['legal' => [215.9, 355.6], 'folio' => [215.0, 330.0], 'a4' => [210.0, 297.0]];   // lebar x tinggi, mm
+    public const PAPER_LABEL = ['legal' => 'Legal (215,9 × 355,6 mm)', 'folio' => 'Folio (215 × 330 mm)', 'a4' => 'A4 (210 × 297 mm)'];
+    public const DEFAULT_PAPER = 'legal';
     private const MIN_ROWS = 14;
+    private const TOP_MM = 10.0;      // jarak kotak voucher dari tepi atas kertas
     private const KIND = [
         'BK' => ['accent' => 'FF0000', 'fill' => 'EDE1E0', 'title' => 'BUKTI BANK KELUAR', 'who' => 'Dibayarkan Kepada :', 'last' => 'Penerima'],
         'BM' => ['accent' => '00A651', 'fill' => 'E2EFDA', 'title' => 'BUKTI BANK MASUK', 'who' => 'Diterima dari :', 'last' => 'Penyetor'],
@@ -38,9 +42,9 @@ final class VoucherPdf
     /**
      * @param array<int,array{kind:string,number:string,date:string,party:string,by:string,lines:array<int,array{description:string,amount:string}>,total:string}> $vouchers
      */
-    public static function build(array $vouchers, Document $doc, string $paper = 'folio'): string
+    public static function build(array $vouchers, Document $doc, string $paper = self::DEFAULT_PAPER): string
     {
-        $paper = isset(self::PAPER[$paper]) ? $paper : 'folio';
+        $paper = isset(self::PAPER[$paper]) ? $paper : self::DEFAULT_PAPER;
         $pages = [];
         foreach ($vouchers as $v) {
             $pages[] = (new self())->page($v, $doc, $paper);
@@ -176,18 +180,19 @@ final class VoucherPdf
         $pw = $pwMm * $mm;
         $ph = $phMm * $mm;
         $ox = (10 + 14) * $mm;               // margin kiri @page 10 mm + padding kiri voucher 14 mm
-        $oy = (2 + 1) * $mm;                 // margin atas @page 2 mm + padding atas voucher 1 mm
+        $oy = self::TOP_MM * $mm;            // jarak kotak dari tepi atas kertas (di atas area tak-tercetak printer)
         $W = $pw - $ox - 10 * $mm;           // kanan: margin @page 10 mm, padding kanan 0
         $p = static fn(float $pct): float => $W * $pct / 100;
 
-        // tinggi (mm -> pt), disetel agar total isi ±152 mm seperti voucher stok
+        // tinggi (mm -> pt): total kotak ±138 mm (dipadatkan dari 145 mm supaya voucher yang digeser turun 10 mm
+        // dari atas tetap berhenti jauh sebelum garis tengah kertas)
         $hdrH = 13.2 * $mm;
-        $headH = 5.9 * $mm;
-        $rowH = 5.9 * $mm;
-        $lastH = 10.6 * $mm;
-        $terbH = 7.0 * $mm;
-        $sigBand = 7.1 * $mm;
-        $sigH = 18.9 * $mm;
+        $headH = 5.6 * $mm;
+        $rowH = 5.6 * $mm;
+        $lastH = 10.0 * $mm;
+        $terbH = 6.6 * $mm;
+        $sigBand = 6.8 * $mm;
+        $sigH = 17.0 * $mm;
 
         // ukuran teks (12 px = 9 pt)
         $fs = 9.0;

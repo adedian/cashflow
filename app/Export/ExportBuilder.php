@@ -71,7 +71,7 @@ final class ExportBuilder
             ];
         }
         $d = new Document(self::DOCS['bukti'], 'cashflow-bukti-bank', setting('company_name', 'PT Hexa Multi Energi'), (string) ($user['full_name'] ?? ''));
-        return [$d, VoucherPdf::build($vouchers, $d, $req->str('paper'))];   // paper: folio (default) | a4
+        return [$d, VoucherPdf::build($vouchers, $d, $req->str('paper'))];   // paper: legal (default) | folio | a4
     }
 
     public static function build(string $doc, Request $req, array $user): Document

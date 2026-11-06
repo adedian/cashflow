@@ -21,7 +21,7 @@
       '<button type="button" role="tab" data-fmt="pdf" class="on">Pratinjau PDF</button>' +
       '<button type="button" role="tab" data-fmt="xlsx">Pratinjau Excel</button></div>' +
       '<label class="ex-paper" id="exPaperBox" hidden>Kertas <select id="exPaper" class="input">' +
-      '<option value="folio">Folio (215 × 330 mm)</option><option value="a4">A4 (210 × 297 mm)</option></select></label>' +
+      '<option value="legal">Legal (215,9 × 355,6 mm)</option><option value="folio">Folio (215 × 330 mm)</option><option value="a4">A4 (210 × 297 mm)</option></select></label>' +
       '<span class="ex-hint" id="exHint"></span></div>' +
       '<div class="ex-stage" id="exStage">' +
       '<div class="ex-pane on" data-pane="pdf"></div><div class="ex-pane" data-pane="xlsx"></div></div>' +
@@ -60,7 +60,7 @@
 
   function url(kind, fmt) {
     var q = query();
-    return H.url('/export/' + state.doc + '/' + kind) + '?' + (q ? q + '&' : '') + 'format=' + fmt + (state.doc === 'bukti' ? '&paper=' + encodeURIComponent(state.paper || 'folio') : '');
+    return H.url('/export/' + state.doc + '/' + kind) + '?' + (q ? q + '&' : '') + 'format=' + fmt + (state.doc === 'bukti' ? '&paper=' + encodeURIComponent(state.paper || 'legal') : '');
   }
 
   function pane(fmt) { return modal.querySelector('[data-pane="' + fmt + '"]'); }
@@ -181,9 +181,9 @@
     var pbox = modal.querySelector('#exPaperBox');
     pbox.hidden = state.doc !== 'bukti';
     if (state.doc === 'bukti') {
-      var saved = 'folio';
-      try { saved = window.localStorage.getItem('cf_bukti_paper') || 'folio'; } catch (x) { /* abaikan */ }
-      state.paper = saved === 'a4' ? 'a4' : 'folio';
+      var saved = 'legal';
+      try { saved = window.localStorage.getItem('cf_bukti_paper') || 'legal'; } catch (x) { /* abaikan */ }
+      state.paper = (saved === 'a4' || saved === 'folio') ? saved : 'legal';
       modal.querySelector('#exPaper').value = state.paper;
     }
     H.openModal('exportModal');
