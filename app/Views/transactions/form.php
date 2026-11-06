@@ -5,18 +5,39 @@ $v = static fn(string $k, $d = '') => $t[$k] ?? $d;
 $fe = static fn(string $k) => isset($errors[$k]) ? '<div class="err">' . e($errors[$k]) . '</div>' : '';
 $action = $id ? url('/transactions/' . $id) : url('/transactions');
 $auto = (!$id && $v('source_ref') && !$errors) ? ' data-auto="1"' : '';   // isian dari tombol Bayar/Terima/Realisasikan: ikut dikosongkan bila referensi diganti
-// baris uraian: [{description, amount}] — dari kiriman (saat galat), rincian tersimpan (ubah), atau satu baris (baru / tombol Bayar·Terima)
-$lineRows = $lineRows ?: [['description' => '', 'amount' => '']];
+// baris uraian: [{description, category_id, project_id, amount}] — dari kiriman (saat galat), rincian tersimpan (ubah), atau satu baris (baru / tombol Bayar·Terima)
+$lineRows = $lineRows ?: [['description' => '', 'category_id' => '', 'project_id' => '', 'amount' => '']];
 $lineTotal = '0.00';
 foreach ($lineRows as $lr) {
     $pa = parse_amount($lr['amount'] ?? '', true);
     $lineTotal = $pa !== null ? bcadd($lineTotal, $pa, 2) : $lineTotal;
 }
-$renderLine = static function (array $r, bool $first, string $auto): string {
+// pilihan kategori (dikelompokkan menurut jenis) & proyek, dibuat sekali lalu dipakai tiap baris (nilai terpilih ditandai per baris)
+$catHtml = '';
+$curKind = null;
+foreach ($categories as $c) {
+    if ($curKind !== $c['kind']) {
+        $catHtml .= ($curKind !== null ? '</optgroup>' : '') . '<optgroup label="' . e($kinds[$c['kind']] ?? $c['kind']) . '">';
+        $curKind = $c['kind'];
+    }
+    $catHtml .= '<option value="' . (int) $c['id'] . '">' . e($c['name']) . '</option>';
+}
+$catHtml .= $curKind !== null ? '</optgroup>' : '';
+$projHtml = '';
+foreach ($projects as $p) {
+    $projHtml .= '<option value="' . (int) $p['id'] . '">' . e($p['name']) . '</option>';
+}
+$renderLine = static function (array $r, bool $first, string $auto) use ($catHtml, $projHtml): string {
     $idD = $first ? ' id="description"' : '';
     $idA = $first ? ' id="amount"' : '';
+    $cid = (int) ($r['category_id'] ?? 0);
+    $pid = (int) ($r['project_id'] ?? 0);
+    $cats = $cid > 0 ? str_replace('value="' . $cid . '">', 'value="' . $cid . '" selected>', $catHtml) : $catHtml;
+    $projs = $pid > 0 ? str_replace('value="' . $pid . '">', 'value="' . $pid . '" selected>', $projHtml) : $projHtml;
     return '<div class="line-row">'
         . '<input class="input line-desc" name="line_desc[]"' . $idD . ' maxlength="500" value="' . e((string) ($r['description'] ?? '')) . '" placeholder="Uraian" aria-label="Uraian"' . ($first ? $auto : '') . '>'
+        . '<select class="input line-cat" name="line_cat[]" aria-label="Kategori" data-combo-placeholder="Kategori…"><option value="">— belum dikategorikan —</option>' . $cats . '</select>'
+        . '<select class="input line-proj" name="line_proj[]" aria-label="Proyek" data-combo-placeholder="Proyek…"><option value="">— tanpa proyek —</option>' . $projs . '</select>'
         . '<input class="input num line-amt" name="line_amount[]"' . $idA . ' type="text" inputmode="decimal" value="' . e((string) ($r['amount'] ?? '')) . '" placeholder="Jumlah (Rp)" aria-label="Jumlah (Rp)" autocomplete="off"' . ($first ? $auto : '') . '>'
         . '<button type="button" class="btn btn-ghost btn-sm btn-icon line-del" data-line-del title="Hapus baris" aria-label="Hapus baris"><svg class="i i-sm" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>'
         . '</div>';
@@ -69,34 +90,18 @@ $renderLine = static function (array $r, bool $first, string $auto): string {
         </select><?= $fe('counterparty') ?>
         <span class="help">Tidak ada di daftar? Ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=parties')) ?>">Master Data → Customer</a>.</span>
       </div>
-      <div class="field">
-        <label for="category_id">Kategori</label>
-        <select class="input" id="category_id" name="category_id">
-          <option value="">— belum dikategorikan —</option>
-          <?php $cur = null; foreach ($categories as $c): if ($cur !== $c['kind']) { if ($cur !== null) echo '</optgroup>'; $cur = $c['kind']; echo '<optgroup label="' . e($kinds[$c['kind']] ?? $c['kind']) . '">'; } ?>
-            <option value="<?= (int) $c['id'] ?>" <?= (int) $v('category_id', 0) === (int) $c['id'] ? 'selected' : '' ?>><?= e($c['name']) ?></option>
-          <?php endforeach; if ($cur !== null) echo '</optgroup>'; ?>
-        </select><?= $fe('category_id') ?>
-      </div>
-      <div class="field">
-        <label for="project_id">Proyek</label>
-        <select class="input" id="project_id" name="project_id">
-          <option value="">— tanpa proyek —</option>
-          <?php foreach ($projects as $p): ?><option value="<?= (int) $p['id'] ?>" <?= (int) $v('project_id', 0) === (int) $p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
-        </select><?= $fe('project_id') ?>
-      </div>
       <div class="field full">
         <label for="description">Uraian <span class="req">*</span></label>
         <div class="lines" id="lines" data-max="<?= (int) \App\Services\TransactionService::MAX_LINES ?>">
-          <div class="line-head" aria-hidden="true"><span>Uraian</span><span class="r">Jumlah (Rp)</span><span></span></div>
+          <div class="line-head" aria-hidden="true"><span>Uraian</span><span>Kategori</span><span>Proyek</span><span class="r">Jumlah (Rp)</span><span></span></div>
           <div id="lineRows">
             <?php foreach ($lineRows as $i => $lr): ?><?= $renderLine($lr, $i === 0, $auto) ?><?php endforeach; ?>
           </div>
-          <template id="lineTpl"><?= $renderLine(['description' => '', 'amount' => ''], false, '') ?></template>
+          <template id="lineTpl"><?= $renderLine(['description' => '', 'category_id' => '', 'project_id' => '', 'amount' => ''], false, '') ?></template>
         </div>
         <div><button type="button" class="btn btn-ghost btn-sm" id="lineAdd"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah uraian</button></div>
-        <span class="help">Satu transaksi boleh punya beberapa uraian (mis. tagihan dan potongan PPh). Jumlah boleh bernilai negatif untuk potongan: awali dengan tanda −. Total dijumlahkan otomatis.</span>
-        <?= $fe('items') ?><?= $fe('description') ?>
+        <span class="help">Setiap uraian punya kategori, proyek, dan jumlahnya sendiri (mis. tagihan dan potongan PPh). Jumlah boleh bernilai negatif untuk potongan: awali dengan tanda −. Total dijumlahkan otomatis; laporan per kategori dan per proyek dihitung dari tiap uraian.</span>
+        <?= $fe('items') ?><?= $fe('description') ?><?= $fe('category_id') ?><?= $fe('project_id') ?>
       </div>
       <div class="field">
         <label for="ref_combo">No. invoice / PO</label>

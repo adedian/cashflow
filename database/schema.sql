@@ -161,6 +161,24 @@ CREATE TABLE IF NOT EXISTS transactions (
   CONSTRAINT fk_tx_vby   FOREIGN KEY (voided_by)  REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- rincian uraian per transaksi: uraian + kategori + proyek + jumlah (debit/credit transaksi = jumlah semua baris)
+CREATE TABLE IF NOT EXISTS transaction_items (
+  id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  transaction_id BIGINT UNSIGNED NOT NULL,
+  line_no        SMALLINT UNSIGNED NOT NULL,
+  description    VARCHAR(500) NOT NULL,
+  category_id    INT UNSIGNED NULL,
+  project_id     INT UNSIGNED NULL,
+  amount         DECIMAL(18,2) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_txi_line (transaction_id, line_no),
+  KEY ix_txi_cat (category_id),
+  KEY ix_txi_proj (project_id),
+  CONSTRAINT fk_txi_tx   FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+  CONSTRAINT fk_txi_cat  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_txi_proj FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- register invoice proyek (rekap piutang)
 CREATE TABLE IF NOT EXISTS invoices (
   id           INT UNSIGNED NOT NULL AUTO_INCREMENT,

@@ -29,9 +29,9 @@ final class MasterController extends Controller
         Page::set(['title' => 'Master Data', 'subtitle' => 'Kategori, proyek, rekening, saldo awal, dan pemetaan kategori dari Excel', 'tabs' => $tabs]);
         $data = ['tab' => $tab, 'kinds' => Lookup::KIND_LABEL];
         if ($tab === 'categories') {
-            $data['rows'] = Db::all('SELECT c.*, (SELECT COUNT(*) FROM transactions t WHERE t.category_id = c.id AND t.voided_at IS NULL) AS n FROM categories c ORDER BY FIELD(c.kind,\'pendapatan\',\'biaya\',\'pajak\',\'pembiayaan\',\'transfer\',\'lainnya\'), c.name');
+            $data['rows'] = Db::all('SELECT c.*, (SELECT COUNT(DISTINCT t.id) FROM transactions t LEFT JOIN transaction_items i ON i.transaction_id = t.id WHERE t.voided_at IS NULL AND (t.category_id = c.id OR i.category_id = c.id)) AS n FROM categories c ORDER BY FIELD(c.kind,\'pendapatan\',\'biaya\',\'pajak\',\'pembiayaan\',\'transfer\',\'lainnya\'), c.name');
         } elseif ($tab === 'projects') {
-            $data['rows'] = Db::all('SELECT p.*, (SELECT COUNT(*) FROM transactions t WHERE t.project_id = p.id AND t.voided_at IS NULL) AS n FROM projects p ORDER BY p.name');
+            $data['rows'] = Db::all('SELECT p.*, (SELECT COUNT(DISTINCT t.id) FROM transactions t LEFT JOIN transaction_items i ON i.transaction_id = t.id WHERE t.voided_at IS NULL AND (t.project_id = p.id OR i.project_id = p.id)) AS n FROM projects p ORDER BY p.name');
         } elseif ($tab === 'accounts') {
             $data['rows'] = Db::all('SELECT a.*, (SELECT COUNT(*) FROM transactions t WHERE t.account_id = a.id) AS n FROM accounts a ORDER BY a.sort_order, a.id');
             $editId = $this->req->int('edit', 0);

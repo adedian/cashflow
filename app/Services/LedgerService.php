@@ -146,11 +146,24 @@ final class LedgerService
     {
         [$w, $p] = self::flowWhere($f, $ids);
         return Db::all(
-            "SELECT DATE_FORMAT(t.tx_date, '%Y-%m') AS ym, t.account_id, t.category_id, SUM(t.debit) AS d, SUM(t.credit) AS c, COUNT(*) AS n
-             FROM transactions t" . $w . ' GROUP BY ym, t.account_id, t.category_id',
+            "SELECT DATE_FORMAT(t.tx_date, '%Y-%m') AS ym, t.account_id, t.category_id, SUM(t.debit) AS d, SUM(t.credit) AS c, COUNT(DISTINCT t.id) AS n
+             FROM " . self::LINES . ' t' . $w . ' GROUP BY ym, t.account_id, t.category_id',
             $p
         );
     }
+
+    /**
+     * Tabel turunan "baris transaksi" untuk semua agregat per kategori/proyek: satu baris per uraian (transaction_items) dengan
+     * kategori/proyek/jumlahnya sendiri; transaksi yang belum punya baris (data lama/impor) menjadi satu baris dari kolom
+     * transactions. Arah (debit/credit) mengikuti transaksi. Kolom: id, account_id, tx_date, seq, voided_at, category_id,
+     * project_id, debit, credit - sama dengan nama kolom transactions, sehingga cukup mengganti "transactions t" dengan LINES + " t".
+     */
+    public const LINES = '(SELECT t0.id, t0.account_id, t0.tx_date, t0.seq, t0.voided_at,
+        IF(i.id IS NULL, t0.category_id, i.category_id) AS category_id,
+        IF(i.id IS NULL, t0.project_id, i.project_id) AS project_id,
+        IF(i.id IS NULL, t0.debit, IF(t0.debit <> 0, i.amount, 0)) AS debit,
+        IF(i.id IS NULL, t0.credit, IF(t0.credit <> 0, i.amount, 0)) AS credit
+        FROM transactions t0 LEFT JOIN transaction_items i ON i.transaction_id = t0.id)';
 
     private static function kindOf(?int $catId): string
     {
@@ -281,7 +294,7 @@ final class LedgerService
             $w .= " AND COALESCE(c.kind, 'lainnya') NOT IN ('pembiayaan','transfer')";
             $rowsP = Db::all(
                 "SELECT COALESCE(p.name, '(Tanpa proyek)') AS label, SUM(t.credit - t.debit) AS total
-                 FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN projects p ON p.id = t.project_id" . $w .
+                 FROM " . self::LINES . ' t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN projects p ON p.id = t.project_id' . $w .
                 ' GROUP BY label HAVING total > 0 ORDER BY total DESC',
                 $p
             );
@@ -375,6 +388,25 @@ final class LedgerService
                 $r['running'] = null;
                 $byId[(int) $r['id']] = $r;
             }
+            // kategori/proyek ada di tiap baris uraian: tampilkan nama-nama dari baris (unik, urut baris, dipisah koma)
+            $names = [];
+            foreach (Db::all(
+                "SELECT i.transaction_id AS tid, c.name AS cn, p.name AS pn
+                 FROM transaction_items i LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN projects p ON p.id = i.project_id
+                 WHERE i.transaction_id IN ($in) ORDER BY i.transaction_id, i.line_no"
+            ) as $r) {
+                $t = (int) $r['tid'];
+                $names[$t] ??= ['c' => [], 'p' => []];
+                if ($r['cn'] !== null && !in_array($r['cn'], $names[$t]['c'], true)) { $names[$t]['c'][] = $r['cn']; }
+                if ($r['pn'] !== null && !in_array($r['pn'], $names[$t]['p'], true)) { $names[$t]['p'][] = $r['pn']; }
+            }
+            foreach ($names as $t => $n) {
+                if (isset($byId[$t])) {
+                    $byId[$t]['category_name'] = $n['c'] ? implode(', ', $n['c']) : null;
+                    $byId[$t]['project_name'] = $n['p'] ? implode(', ', $n['p']) : null;
+                    $byId[$t]['category_kind'] = count($n['c']) === 1 ? $byId[$t]['category_kind'] : null;
+                }
+            }
             foreach ($ids as $id) {
                 if (isset($byId[$id])) {
                     $rows[] = $byId[$id];
@@ -448,9 +480,19 @@ final class LedgerService
         if (!empty($f['account'])) { $w[] = 't.account_id = ?'; $p[] = (int) $f['account']; }
         if (!empty($f['from'])) { $w[] = 't.tx_date >= ?'; $p[] = $f['from']; }
         if (!empty($f['to'])) { $w[] = 't.tx_date <= ?'; $p[] = $f['to']; }
-        if (!empty($f['category'])) { $w[] = 't.category_id = ?'; $p[] = (int) $f['category']; }
-        if (!empty($f['kind'])) { $w[] = 'c.kind = ?'; $p[] = $f['kind']; }
-        if (!empty($f['project'])) { $w[] = 't.project_id = ?'; $p[] = (int) $f['project']; }
+        // kategori/proyek ada di tiap baris uraian: transaksi cocok bila kolomnya (data lama / nilai bersama) atau salah satu barisnya cocok
+        if (!empty($f['category'])) {
+            $w[] = '(t.category_id = ? OR EXISTS (SELECT 1 FROM transaction_items ti WHERE ti.transaction_id = t.id AND ti.category_id = ?))';
+            array_push($p, (int) $f['category'], (int) $f['category']);
+        }
+        if (!empty($f['kind'])) {
+            $w[] = '(c.kind = ? OR EXISTS (SELECT 1 FROM transaction_items ti JOIN categories tc ON tc.id = ti.category_id WHERE ti.transaction_id = t.id AND tc.kind = ?))';
+            array_push($p, $f['kind'], $f['kind']);
+        }
+        if (!empty($f['project'])) {
+            $w[] = '(t.project_id = ? OR EXISTS (SELECT 1 FROM transaction_items ti WHERE ti.transaction_id = t.id AND ti.project_id = ?))';
+            array_push($p, (int) $f['project'], (int) $f['project']);
+        }
         if (($f['dir'] ?? '') === 'in') { $w[] = 't.debit <> 0'; }
         if (($f['dir'] ?? '') === 'out') { $w[] = 't.credit <> 0'; }
         if (!empty($f['q'])) {

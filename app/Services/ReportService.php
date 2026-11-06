@@ -87,11 +87,11 @@ final class ReportService
         $sum = LedgerService::summary($f);
         [$w, $p] = self::where($f, $ids);
         $rows = Db::all(
-            "SELECT t.tx_date AS label, COUNT(*) AS n,
+            "SELECT t.tx_date AS label, COUNT(DISTINCT t.id) AS n,
                COALESCE(SUM(CASE WHEN " . self::OPS . " THEN t.debit END),0) ops_in,
                COALESCE(SUM(CASE WHEN " . self::OPS . " THEN t.credit END),0) ops_out,
                COALESCE(SUM(CASE WHEN c.kind IN ('pembiayaan','transfer') THEN t.debit - t.credit END),0) fin_net
-             FROM transactions t LEFT JOIN categories c ON c.id = t.category_id" . $w . ' GROUP BY t.tx_date ORDER BY t.tx_date',
+             FROM " . LedgerService::LINES . ' t LEFT JOIN categories c ON c.id = t.category_id' . $w . ' GROUP BY t.tx_date ORDER BY t.tx_date',
             $p
         );
         $bal = $sum['opening'];
@@ -131,11 +131,11 @@ final class ReportService
         $sum = LedgerService::summary($f2);
         [$w, $p] = self::where($f2, $ids);
         $rows = Db::all(
-            "SELECT YEAR(t.tx_date) AS label, COUNT(*) AS n,
+            "SELECT YEAR(t.tx_date) AS label, COUNT(DISTINCT t.id) AS n,
                COALESCE(SUM(CASE WHEN " . self::OPS . " THEN t.debit END),0) ops_in,
                COALESCE(SUM(CASE WHEN " . self::OPS . " THEN t.credit END),0) ops_out,
                COALESCE(SUM(CASE WHEN c.kind IN ('pembiayaan','transfer') THEN t.debit - t.credit END),0) fin_net
-             FROM transactions t LEFT JOIN categories c ON c.id = t.category_id" . $w . ' GROUP BY label ORDER BY label',
+             FROM " . LedgerService::LINES . ' t LEFT JOIN categories c ON c.id = t.category_id' . $w . ' GROUP BY label ORDER BY label',
             $p
         );
         $bal = $sum['opening'];
@@ -155,9 +155,9 @@ final class ReportService
         $ids = self::assetIds($f['account'] ?? null);
         [$w, $p] = self::where($f, $ids);
         $rows = Db::all(
-            "SELECT COALESCE(c.name,'Belum Dikategorikan') AS label, COALESCE(c.kind,'lainnya') AS kind, COUNT(*) AS n,
+            "SELECT COALESCE(c.name,'Belum Dikategorikan') AS label, COALESCE(c.kind,'lainnya') AS kind, COUNT(DISTINCT t.id) AS n,
                COALESCE(SUM(t.debit),0) AS din, COALESCE(SUM(t.credit),0) AS cout
-             FROM transactions t LEFT JOIN categories c ON c.id = t.category_id" . $w .
+             FROM " . LedgerService::LINES . ' t LEFT JOIN categories c ON c.id = t.category_id' . $w .
             " GROUP BY label, kind ORDER BY FIELD(kind,'pendapatan','biaya','pajak','lainnya','pembiayaan','transfer'), cout DESC, din DESC",
             $p
         );
@@ -175,9 +175,9 @@ final class ReportService
         $ids = self::assetIds($f['account'] ?? null);
         [$w, $p] = self::where($f, $ids);
         $rows = Db::all(
-            "SELECT COALESCE(p.name,'(Tanpa proyek)') AS label, COUNT(*) AS n,
+            "SELECT COALESCE(p.name,'(Tanpa proyek)') AS label, COUNT(DISTINCT t.id) AS n,
                COALESCE(SUM(t.debit),0) AS din, COALESCE(SUM(t.credit),0) AS cout
-             FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN projects p ON p.id = t.project_id" . $w .
+             FROM " . LedgerService::LINES . ' t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN projects p ON p.id = t.project_id' . $w .
             ' AND ' . self::OPS . ' GROUP BY label ORDER BY (p.id IS NULL), cout DESC',
             $p
         );

@@ -1,5 +1,5 @@
 <?php
-/** @var array $t @var array $lines @var array $hist @var bool $isAdmin @var array $related @var ?array $fcDecision */
+/** @var array $t @var array $lines @var array $itemRows @var array $hist @var bool $isAdmin @var array $related @var ?array $fcDecision */
 $inn = bccomp((string) $t['debit'], '0', 2) !== 0;
 $amount = $inn ? $t['debit'] : $t['credit'];
 $void = $t['voided_at'] !== null;
@@ -26,9 +26,20 @@ $void = $t['voided_at'] !== null;
       <dt>Rekening</dt><dd><?= e($t['account_name']) ?></dd>
       <dt>Pihak</dt><dd><?= e($t['counterparty'] ?: '-') ?></dd>
       <?php if ($isAdmin): ?><dt>Detail rekening pihak</dt><dd><?= e($t['counterparty_detail'] ?: '-') ?></dd><?php endif; ?>
+      <?php if (!$itemRows): ?>
       <dt>Kategori</dt><dd><?= e($t['category_name'] ?: 'Belum dikategorikan') ?><?php if ($t['category_kind']): ?> <span class="pill pill-blue"><?= e($t['category_kind']) ?></span><?php endif; ?></dd>
       <dt>Proyek</dt><dd><?= e($t['project_name'] ?: '-') ?></dd>
-      <?php if (count($lines) > 1): ?>
+      <?php endif; ?>
+      <?php if ($itemRows): ?>
+      <dt>Uraian</dt><dd>
+        <table class="tbl tx-lines"><thead><tr><th>#</th><th>Uraian</th><th>Kategori</th><th>Proyek</th><th class="r">Jumlah</th></tr></thead><tbody>
+          <?php foreach ($itemRows as $l): $neg = bccomp((string) $l['amount'], '0', 2) < 0; ?>
+          <tr><td><?= (int) $l['line_no'] ?>.</td><td><?= e($l['description']) ?></td><td><?= e($l['category_name'] ?? 'Belum dikategorikan') ?></td><td><?= e($l['project_name'] ?? '-') ?></td><td class="r num <?= $neg ? 'neg' : '' ?>"><?= e(money($l['amount'])) ?></td></tr>
+          <?php endforeach; ?>
+          <tr class="tot"><td></td><td colspan="3"><b>Total</b></td><td class="r num"><b><?= e(money($amount)) ?></b></td></tr>
+        </tbody></table>
+      </dd>
+      <?php elseif (count($lines) > 1): ?>
       <dt>Uraian</dt><dd>
         <table class="tbl tx-lines"><tbody>
           <?php foreach ($lines as $i => $l): $neg = bccomp($l['amount'], '0', 2) < 0; ?>

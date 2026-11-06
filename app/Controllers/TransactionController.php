@@ -82,7 +82,7 @@ final class TransactionController extends Controller
             $fi = Db::one('SELECT * FROM forecast_items WHERE id = ?', [(int) $related['link']['sid']]);
             $fcDecision = $fi ? ['it' => $fi, 'sum' => \App\Services\ForecastService::summary($fi), 'isAdmin' => true] : null;
         }
-        return $this->view('transactions/show', ['t' => $t, 'lines' => TransactionService::lines($t), 'hist' => $hist, 'isAdmin' => $this->isAdmin(), 'related' => $related, 'fcDecision' => $fcDecision]);
+        return $this->view('transactions/show', ['t' => $t, 'lines' => TransactionService::lines($t), 'itemRows' => TransactionService::itemRows((int) $t['id']), 'hist' => $hist, 'isAdmin' => $this->isAdmin(), 'related' => $related, 'fcDecision' => $fcDecision]);
     }
 
     private function load(int $id): array
@@ -244,15 +244,19 @@ final class TransactionController extends Controller
         $rows = [];
         if (is_array($t['line_desc'] ?? null)) {
             $amts = is_array($t['line_amount'] ?? null) ? array_values($t['line_amount']) : [];
+            $cats = is_array($t['line_cat'] ?? null) ? array_values($t['line_cat']) : [];
+            $projs = is_array($t['line_proj'] ?? null) ? array_values($t['line_proj']) : [];
             foreach (array_values($t['line_desc']) as $i => $ds) {
-                $rows[] = ['description' => is_scalar($ds) ? (string) $ds : '', 'amount' => is_scalar($amts[$i] ?? null) ? (string) $amts[$i] : ''];
+                $rows[] = ['description' => is_scalar($ds) ? (string) $ds : '', 'amount' => is_scalar($amts[$i] ?? null) ? (string) $amts[$i] : '',
+                    'category_id' => is_scalar($cats[$i] ?? null) ? (string) $cats[$i] : '', 'project_id' => is_scalar($projs[$i] ?? null) ? (string) $projs[$i] : ''];
             }
         } elseif (!empty($t['lines'])) {
             foreach ($t['lines'] as $l) {
-                $rows[] = ['description' => $l['description'], 'amount' => money($l['amount'], false)];
+                $rows[] = ['description' => $l['description'], 'amount' => money($l['amount'], false), 'category_id' => $l['category_id'] ?? '', 'project_id' => $l['project_id'] ?? ''];
             }
         } elseif (($t['description'] ?? '') !== '' || ($t['amount'] ?? '') !== '') {
-            $rows[] = ['description' => (string) ($t['description'] ?? ''), 'amount' => (string) ($t['amount'] ?? '')];
+            $rows[] = ['description' => (string) ($t['description'] ?? ''), 'amount' => (string) ($t['amount'] ?? ''),
+                'category_id' => $t['category_id'] ?? '', 'project_id' => $t['project_id'] ?? ''];
         }
         $resp = $this->view('transactions/form', [
             't' => $t, 'errors' => $errors, 'id' => $id, 'warn' => $warn, 'lineRows' => $rows,

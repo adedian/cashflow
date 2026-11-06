@@ -46,20 +46,33 @@ final class TransactionService
         // "description" + satu "amount") tetap diterima sebagai satu baris tanpa rincian tersimpan.
         [$lines, $amount, $lineErr, $summary] = self::parseLines($in);
         $err += $lineErr;
-        $d['items'] = $lines !== null ? json_encode($lines, JSON_UNESCAPED_UNICODE) : null;
+        $d['items'] = null;          // JSON lama (Revisi 10) tidak ditulis lagi; baris disimpan di tabel transaction_items
+        $d['_lines'] = $lines;       // dipisahkan oleh create()/update() sebelum menulis ke transactions
         $d['debit'] = ($dir === 'in' && $amount !== null) ? $amount : '0.00';
         $d['credit'] = ($dir === 'out' && $amount !== null) ? $amount : '0.00';
 
-        $cat = (int) ($in['category_id'] ?? 0);
-        if ($cat > 0 && !Db::one('SELECT id FROM categories WHERE id = ? AND is_active = 1', [$cat])) {
-            $err['category_id'] = 'Kategori tidak valid.';
+        if ($lines !== null) {
+            // mode baru: kategori & proyek ada di TIAP baris. Kolom pada transactions = nilai bersama bila semua baris sama,
+            // selain itu NULL (laporan/filter membaca per baris; kolom ini hanya untuk tampilan ringkas & data lama).
+            $common = static function (string $k) use ($lines): ?int {
+                $v = array_values(array_unique(array_map(static fn($l) => (int) ($l[$k] ?? 0), $lines)));
+                return count($v) === 1 && $v[0] > 0 ? $v[0] : null;
+            };
+            $d['category_id'] = $common('category_id');
+            $d['project_id'] = $common('project_id');
+        } else {
+            // bentuk lama: satu kategori & satu proyek untuk seluruh transaksi
+            $cat = (int) ($in['category_id'] ?? 0);
+            if ($cat > 0 && !Db::one('SELECT id FROM categories WHERE id = ? AND is_active = 1', [$cat])) {
+                $err['category_id'] = 'Kategori tidak valid.';
+            }
+            $d['category_id'] = $cat > 0 ? $cat : null;
+            $pr = (int) ($in['project_id'] ?? 0);
+            if ($pr > 0 && !Db::one('SELECT id FROM projects WHERE id = ? AND is_active = 1', [$pr])) {
+                $err['project_id'] = 'Proyek tidak valid.';
+            }
+            $d['project_id'] = $pr > 0 ? $pr : null;
         }
-        $d['category_id'] = $cat > 0 ? $cat : null;
-        $pr = (int) ($in['project_id'] ?? 0);
-        if ($pr > 0 && !Db::one('SELECT id FROM projects WHERE id = ? AND is_active = 1', [$pr])) {
-            $err['project_id'] = 'Proyek tidak valid.';
-        }
-        $d['project_id'] = $pr > 0 ? $pr : null;
 
         $lim = static fn(string $k, int $n) => mb_substr(trim((string) ($in[$k] ?? '')), 0, $n);
         $d['voucher_code'] = $lim('voucher_code', 30) ?: null;
@@ -110,8 +123,8 @@ final class TransactionService
     public const MAX_LINES = 30;
 
     /**
-     * Baris uraian dari formulir. Bentuk baru: line_desc[] + line_amount[] (baris kosong diabaikan, jumlah boleh negatif).
-     * Bentuk lama: description + amount.
+     * Baris uraian dari formulir. Bentuk baru: line_desc[] + line_cat[] + line_proj[] + line_amount[] (baris kosong diabaikan,
+     * jumlah boleh negatif). Bentuk lama: description + amount (+ category_id/project_id untuk seluruh transaksi).
      * @return array{0:?array,1:?string,2:array,3:string} [baris (null = bentuk lama), total, error, ringkasan uraian]
      */
     private static function parseLines(array $in): array
@@ -135,13 +148,19 @@ final class TransactionService
 
         $descs = array_values($in['line_desc']);
         $amts = is_array($in['line_amount'] ?? null) ? array_values($in['line_amount']) : [];
+        $cats = is_array($in['line_cat'] ?? null) ? array_values($in['line_cat']) : [];
+        $projs = is_array($in['line_proj'] ?? null) ? array_values($in['line_proj']) : [];
+        $okCat = array_flip(array_map('intval', array_column(Db::all('SELECT id FROM categories WHERE is_active = 1'), 'id')));
+        $okProj = array_flip(array_map('intval', array_column(Db::all('SELECT id FROM projects WHERE is_active = 1'), 'id')));
         $lines = [];
         $total = '0.00';
         foreach ($descs as $i => $rawDesc) {
             $desc = is_scalar($rawDesc) ? trim((string) $rawDesc) : '';
             $rawAmt = $amts[$i] ?? '';
             $rawAmt = is_scalar($rawAmt) ? trim((string) $rawAmt) : '';
-            if ($desc === '' && $rawAmt === '') {
+            $cid = is_scalar($cats[$i] ?? null) ? (int) $cats[$i] : 0;
+            $pid = is_scalar($projs[$i] ?? null) ? (int) $projs[$i] : 0;
+            if ($desc === '' && $rawAmt === '' && $cid === 0 && $pid === 0) {
                 continue;   // baris kosong diabaikan
             }
             $row = $i + 1;
@@ -158,10 +177,16 @@ final class TransactionService
             } elseif (($m = $bad($a)) !== null) {
                 $err['items'] ??= 'Jumlah baris ' . $row . ': ' . lcfirst($m);
             }
+            if ($cid > 0 && !isset($okCat[$cid])) {
+                $err['items'] ??= 'Kategori baris ' . $row . ' tidak valid.';
+            }
+            if ($pid > 0 && !isset($okProj[$pid])) {
+                $err['items'] ??= 'Proyek baris ' . $row . ' tidak valid.';
+            }
             if ($a !== null) {
                 $total = bcadd($total, $a, 2);
             }
-            $lines[] = ['description' => mb_substr($desc, 0, 500), 'amount' => $a ?? '0.00'];
+            $lines[] = ['description' => mb_substr($desc, 0, 500), 'category_id' => $cid > 0 ? $cid : null, 'project_id' => $pid > 0 ? $pid : null, 'amount' => $a ?? '0.00'];
         }
         if (!$lines) {
             $err['items'] = 'Isi minimal satu uraian beserta jumlahnya.';
@@ -175,19 +200,32 @@ final class TransactionService
     }
 
     /**
-     * Rincian uraian suatu transaksi untuk tampilan/cetak. Transaksi lama/impor (items NULL) menjadi satu baris
-     * dari description + nominalnya.
-     * @return array<int,array{description:string,amount:string}>
+     * Rincian uraian suatu transaksi untuk tampilan/cetak/ubah. Sumber berurutan: tabel transaction_items; JSON lama
+     * (kolom items, Revisi 10); lalu satu baris dari description + nominal + kategori/proyek pada transaksi (data lama/impor).
+     * @return array<int,array{description:string,amount:string,category_id:?int,project_id:?int}>
      */
     public static function lines(array $tx): array
     {
+        if (!empty($tx['id'])) {
+            $rows = Db::all('SELECT description, category_id, project_id, amount FROM transaction_items WHERE transaction_id = ? ORDER BY line_no', [(int) $tx['id']]);
+            if ($rows) {
+                return array_map(static fn($r) => [
+                    'description' => (string) $r['description'],
+                    'amount' => bcadd((string) $r['amount'], '0', 2),
+                    'category_id' => $r['category_id'] !== null ? (int) $r['category_id'] : null,
+                    'project_id' => $r['project_id'] !== null ? (int) $r['project_id'] : null,
+                ], $rows);
+            }
+        }
+        $hc = ($tx['category_id'] ?? null) !== null ? (int) $tx['category_id'] : null;
+        $hp = ($tx['project_id'] ?? null) !== null ? (int) $tx['project_id'] : null;
         $raw = $tx['items'] ?? null;
         if (is_string($raw) && $raw !== '') {
             $j = json_decode($raw, true);
             if (is_array($j) && $j) {
                 $out = [];
                 foreach ($j as $r) {
-                    $out[] = ['description' => (string) ($r['description'] ?? ''), 'amount' => bcadd((string) ($r['amount'] ?? '0'), '0', 2)];
+                    $out[] = ['description' => (string) ($r['description'] ?? ''), 'amount' => bcadd((string) ($r['amount'] ?? '0'), '0', 2), 'category_id' => $hc, 'project_id' => $hp];
                 }
                 return $out;
             }
@@ -195,7 +233,36 @@ final class TransactionService
         $net = bcsub((string) ($tx['debit'] ?? '0'), (string) ($tx['credit'] ?? '0'), 2);
         $one = bccomp((string) ($tx['debit'] ?? '0'), '0', 2) !== 0 && bccomp((string) ($tx['credit'] ?? '0'), '0', 2) === 0 ? (string) $tx['debit']
             : (bccomp((string) ($tx['credit'] ?? '0'), '0', 2) !== 0 && bccomp((string) ($tx['debit'] ?? '0'), '0', 2) === 0 ? (string) $tx['credit'] : ltrim($net, '-'));
-        return [['description' => (string) ($tx['description'] ?? ''), 'amount' => bcadd($one, '0', 2)]];
+        return [['description' => (string) ($tx['description'] ?? ''), 'amount' => bcadd($one, '0', 2), 'category_id' => $hc, 'project_id' => $hp]];
+    }
+
+    /** Baris tersimpan (tabel transaction_items) lengkap dengan nama kategori/proyek; kosong bila transaksi belum memakai tabel itu. */
+    public static function itemRows(int $txId): array
+    {
+        return Db::all(
+            'SELECT i.line_no, i.description, i.amount, i.category_id, i.project_id, c.name AS category_name, p.name AS project_name
+             FROM transaction_items i LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN projects p ON p.id = i.project_id
+             WHERE i.transaction_id = ? ORDER BY i.line_no',
+            [$txId]
+        );
+    }
+
+    /** Ganti seluruh baris tersimpan suatu transaksi (dipanggil di dalam transaksi DB). */
+    private static function saveLines(int $txId, ?array $lines): void
+    {
+        Db::q('DELETE FROM transaction_items WHERE transaction_id = ?', [$txId]);
+        foreach ($lines ?? [] as $i => $l) {
+            Db::insert('transaction_items', [
+                'transaction_id' => $txId, 'line_no' => $i + 1, 'description' => $l['description'],
+                'category_id' => $l['category_id'] ?? null, 'project_id' => $l['project_id'] ?? null, 'amount' => $l['amount'],
+            ]);
+        }
+    }
+
+    /** Ringkasan teks baris untuk jejak audit. */
+    private static function linesText(array $lines): string
+    {
+        return implode(' | ', array_map(static fn($l) => $l['description'] . ' [kat=' . ($l['category_id'] ?? '-') . ', proy=' . ($l['project_id'] ?? '-') . '] ' . $l['amount'], $lines));
     }
 
     public static function create(array $d, int $userId, ?string $idemKey, ?string $ref = null, bool $confirmDup = false): int
@@ -209,13 +276,18 @@ final class TransactionService
                 return (int) $dup; // kiriman ganda (double-submit): kembalikan transaksi yang sudah tersimpan
             }
         }
-        return (int) Db::tx(function () use ($d, $userId, $idemKey, $ref, $confirmDup) {
+        $lines = $d['_lines'] ?? null;
+        unset($d['_lines']);
+        return (int) Db::tx(function () use ($d, $lines, $userId, $idemKey, $ref, $confirmDup) {
             $seq = (int) Db::val('SELECT COALESCE(MAX(seq), 0) + 1 FROM transactions WHERE account_id = ?', [$d['account_id']]);
             if (($d['counterparty'] ?? null) !== null) {
                 PartyService::ensure($d['counterparty']);
             }
             $id = Db::insert('transactions', $d + ['seq' => $seq, 'idem_key' => $idemKey, 'created_by' => $userId]);
-            Audit::log('tx_create', 'transaction', (string) $id, self::summaryLine($d), null, $d);
+            if ($lines !== null) {
+                self::saveLines($id, $lines);
+            }
+            Audit::log('tx_create', 'transaction', (string) $id, self::summaryLine($d), null, $d + ($lines !== null ? ['uraian' => self::linesText($lines)] : []));
             if ($ref !== null) {
                 TxLinkService::sync($id, $d, $ref, $userId, $confirmDup);   // LinkError -> seluruh penyimpanan dibatalkan
             }
@@ -226,7 +298,9 @@ final class TransactionService
 
     public static function update(int $id, array $d, int $userId, ?int $expectedVersion, ?string $ref = null, bool $confirmDup = false): void
     {
-        Db::tx(function () use ($id, $d, $userId, $expectedVersion, $ref, $confirmDup) {
+        $lines = $d['_lines'] ?? null;
+        unset($d['_lines']);
+        Db::tx(function () use ($id, $d, $lines, $userId, $expectedVersion, $ref, $confirmDup) {
             $old = Db::one('SELECT * FROM transactions WHERE id = ? FOR UPDATE', [$id]);
             if (!$old) {
                 throw new RuntimeException('Transaksi tidak ditemukan.');
@@ -246,9 +320,12 @@ final class TransactionService
             }
             $set['updated_by'] = $userId;
             $set['row_version'] = (int) $old['row_version'] + 1;
+            $oldLines = self::lines($old);
             Db::update('transactions', $id, $set);
+            self::saveLines($id, $lines);   // bentuk lama (null) = satu baris dari kolom transaksi: baris tersimpan dihapus
             $new = Db::one('SELECT * FROM transactions WHERE id = ?', [$id]);
-            Audit::log('tx_update', 'transaction', (string) $id, 'Ubah: ' . self::summaryLine($d), self::pick($old), self::pick($new));
+            Audit::log('tx_update', 'transaction', (string) $id, 'Ubah: ' . self::summaryLine($d),
+                self::pick($old) + ['uraian' => self::linesText($oldLines)], self::pick($new) + ['uraian' => self::linesText(self::lines($new))]);
             if ($ref !== null) {
                 TxLinkService::sync($id, $d, $ref, $userId, $confirmDup);
             } elseif (($link = TxLinkService::linkOf($id)) && !$link['legacy']) {

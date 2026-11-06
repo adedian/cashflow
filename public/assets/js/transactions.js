@@ -124,12 +124,16 @@
       if (!del) return;
       var row = del.closest('.line-row');
       if (lineBox.querySelectorAll('.line-row').length > 1) { row.parentNode.removeChild(row); }
-      else { Array.prototype.forEach.call(row.querySelectorAll('input'), function (i) { i.value = ''; delete i.dataset.auto; }); }
+      else {
+        Array.prototype.forEach.call(row.querySelectorAll('input'), function (i) { i.value = ''; delete i.dataset.auto; });
+        Array.prototype.forEach.call(row.querySelectorAll('select'), function (s) { s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); });
+      }
       refresh();
     });
     if (addBtn && tpl) addBtn.addEventListener('click', function () {
       if (lineBox.querySelectorAll('.line-row').length >= max) return;
       lineBox.appendChild(tpl.content.cloneNode(true));
+      if (window.HMECombo) window.HMECombo.scan(lineBox.lastElementChild);   // dropdown kategori/proyek baris baru = kotak pencarian juga
       refresh();
       var rows = lineBox.querySelectorAll('.line-row');
       rows[rows.length - 1].querySelector('.line-desc').focus();
