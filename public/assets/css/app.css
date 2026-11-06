@@ -823,3 +823,8 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
   table.tbl.stack td.c-sel { justify-content: flex-start; }
   table.tbl.stack td.c-sel::before { content: 'Pilih'; }
 }
+
+/* Cetak Detail: pilihan kertas bukti BK/BM (Folio / A4) */
+.ex-paper { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.ex-paper[hidden] { display: none; }
+.ex-paper select { width: auto; height: 34px; padding: 0 28px 0 10px; }

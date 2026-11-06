@@ -20,6 +20,8 @@
       '<div class="ex-bar"><div class="ex-seg" role="tablist" aria-label="Format pratinjau">' +
       '<button type="button" role="tab" data-fmt="pdf" class="on">Pratinjau PDF</button>' +
       '<button type="button" role="tab" data-fmt="xlsx">Pratinjau Excel</button></div>' +
+      '<label class="ex-paper" id="exPaperBox" hidden>Kertas <select id="exPaper" class="input">' +
+      '<option value="folio">Folio (215 × 330 mm)</option><option value="a4">A4 (210 × 297 mm)</option></select></label>' +
       '<span class="ex-hint" id="exHint"></span></div>' +
       '<div class="ex-stage" id="exStage">' +
       '<div class="ex-pane on" data-pane="pdf"></div><div class="ex-pane" data-pane="xlsx"></div></div>' +
@@ -28,6 +30,14 @@
     document.body.appendChild(modal);
     modal.querySelectorAll('[data-fmt]').forEach(function (b) {
       b.addEventListener('click', function () { show(b.getAttribute('data-fmt')); });
+    });
+    // pilihan kertas bukti BK/BM: disimpan di peramban, pratinjau & unduhan mengikuti
+    modal.querySelector('#exPaper').addEventListener('change', function () {
+      state.paper = this.value;
+      try { window.localStorage.setItem('cf_bukti_paper', state.paper); } catch (x) { /* abaikan */ }
+      loaded.pdf = false;
+      pane('pdf').innerHTML = '';
+      show('pdf');
     });
     // tab lembar pada pratinjau Excel
     modal.addEventListener('click', function (ev) {
@@ -50,7 +60,7 @@
 
   function url(kind, fmt) {
     var q = query();
-    return H.url('/export/' + state.doc + '/' + kind) + '?' + (q ? q + '&' : '') + 'format=' + fmt;
+    return H.url('/export/' + state.doc + '/' + kind) + '?' + (q ? q + '&' : '') + 'format=' + fmt + (state.doc === 'bukti' ? '&paper=' + encodeURIComponent(state.paper || 'folio') : '');
   }
 
   function pane(fmt) { return modal.querySelector('[data-pane="' + fmt + '"]'); }
@@ -128,7 +138,7 @@
   function hint(fmt) {
     var h = modal.querySelector('#exHint');
     if (state.doc === 'bukti') {
-      h.textContent = 'Satu bukti (BK atau BM) per halaman. Periksa isinya, lalu unduh PDF untuk dicetak.';
+      h.textContent = 'Potret, satu bukti (BK/BM) per halaman di setengah bagian atas kertas (sisanya kosong untuk dipotong). Pilih kertas, lalu unduh PDF.';
     } else if (fmt === 'pdf') {
       h.textContent = 'Tampilan sama dengan berkas PDF yang diunduh (kertas Legal, otomatis muat satu halaman lebar).';
     } else {
@@ -168,6 +178,14 @@
     modal.querySelector('#exTitle').textContent = state.doc === 'transaksi' ? 'Cetak Mutasi Bank' : state.doc === 'bukti' ? 'Cetak Detail — Bukti Bank' : 'Cetak — ' + state.title;
     // bukti BK/BM hanya tersedia sebagai PDF (satu bukti per halaman)
     modal.querySelector('[data-fmt="xlsx"]').hidden = state.doc === 'bukti';
+    var pbox = modal.querySelector('#exPaperBox');
+    pbox.hidden = state.doc !== 'bukti';
+    if (state.doc === 'bukti') {
+      var saved = 'folio';
+      try { saved = window.localStorage.getItem('cf_bukti_paper') || 'folio'; } catch (x) { /* abaikan */ }
+      state.paper = saved === 'a4' ? 'a4' : 'folio';
+      modal.querySelector('#exPaper').value = state.paper;
+    }
     H.openModal('exportModal');
     show('pdf');
   }

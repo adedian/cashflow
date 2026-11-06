@@ -48,7 +48,7 @@ final class ExportBuilder
         if (count($ids) > 200) {
             throw new HttpException('Maksimal 200 bukti sekali cetak.', 422);
         }
-        $rows = Db::all('SELECT * FROM transactions WHERE id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') AND voided_at IS NULL ORDER BY tx_date, seq, id', $ids);
+        $rows = Db::all('SELECT t.*, u.full_name AS created_name FROM transactions t LEFT JOIN users u ON u.id = t.created_by WHERE t.id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') AND t.voided_at IS NULL ORDER BY t.tx_date, t.seq, t.id', $ids);
         if (!$rows) {
             throw new HttpException('Transaksi yang dipilih tidak ditemukan atau sudah dibatalkan.', 422);
         }
@@ -65,12 +65,13 @@ final class ExportBuilder
                 'number' => (string) ($t['voucher_code'] ?? ''),
                 'date' => self::longDate($t['tx_date']),
                 'party' => (string) ($t['counterparty'] ?? ''),
+                'by' => (string) ($t['created_name'] ?? ''),   // "Dibuat oleh" = pembuat transaksi (seperti Sistem Stok), bukan pencetak
                 'lines' => $lines,
                 'total' => $total,
             ];
         }
         $d = new Document(self::DOCS['bukti'], 'cashflow-bukti-bank', setting('company_name', 'PT Hexa Multi Energi'), (string) ($user['full_name'] ?? ''));
-        return [$d, VoucherPdf::build($vouchers, $d)];
+        return [$d, VoucherPdf::build($vouchers, $d, $req->str('paper'))];   // paper: folio (default) | a4
     }
 
     public static function build(string $doc, Request $req, array $user): Document
