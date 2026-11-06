@@ -145,7 +145,7 @@ final class ExportBuilder
         $rows = [];
         $page = 1;
         do {
-            $r = LedgerService::listTransactions($f, $page, 1000, 'date_asc', false, $page === 1);
+            $r = LedgerService::listTransactions($f, $page, 1000, 'date_asc', false, $page === 1, false, true);   // satu baris per uraian, sama dengan daftar Transaksi
             foreach ($r['rows'] as $t) {
                 $rows[] = $t;
             }
@@ -224,7 +224,8 @@ final class ExportBuilder
             if ($isAdmin && !empty($t['counterparty_detail'])) {
                 $party .= ($party !== '' ? ' - ' : '') . $t['counterparty_detail'];
             }
-            $cat = trim((string) ($t['category_raw'] ?? '')) !== '' ? $t['category_raw'] : (string) ($t['category_name'] ?? '');
+            // baris uraian punya kategori sendiri; teks kategori impor (category_raw) hanya untuk transaksi tanpa rincian
+            $cat = (int) ($t['line_no'] ?? 0) === 0 && trim((string) ($t['category_raw'] ?? '')) !== '' ? $t['category_raw'] : (string) ($t['category_name'] ?? '');
             if (trim((string) $cat) === '' && !empty($t['project_name'])) {
                 $cat = $t['project_name'];
             }
