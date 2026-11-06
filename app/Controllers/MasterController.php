@@ -161,9 +161,6 @@ final class MasterController extends Controller
         $name = $this->name('name', 120);
         $limitRaw = trim($this->req->str('credit_limit'));
         $limit = $limitRaw === '' ? null : parse_amount($limitRaw);
-        if ($limit !== null && bccomp((string) $limit, '0', 2) <= 0) {
-            $limit = null;   // limit 0 = tanpa limit (rekening bank operasional tidak memakai limit)
-        }
         $sort = max(0, min(999, $this->req->int('sort_order', 0)));
         $retry = $id === '' ? 'accounts' : 'accounts&edit=' . (int) $id; // gagal validasi → kembali ke formulir yang sama
         if ($name === '' || ($limitRaw !== '' && $limit === null)) {
