@@ -11,7 +11,25 @@ Aplikasi internal pencatatan & pemantauan arus kas: PHP 8 native (tanpa framewor
 ## Mulai cepat (XAMPP)
 
 1. Nyalakan **Apache** dan **MySQL** di XAMPP Control Panel.
-2. Salin `.env.example` menjadi `.env` lalu isi koneksi database; impor `database/schema.sql` (lalu `database/migrations/*.sql` berurutan).
+2. Buat berkas `.env` di akar proyek (jangan di-commit) dengan isi seperti di bawah, sesuaikan koneksi database; impor `database/schema.sql` (lalu `database/migrations/*.sql` berurutan).
+
+   ```ini
+   APP_ENV=production            # production | test
+   APP_DEBUG=0                   # 1 hanya untuk pengembangan lokal (menampilkan pesan galat)
+   APP_BASE=/cashflow            # subfolder URL; kosongkan bila aplikasi di akar domain
+   APP_URL=http://localhost/cashflow
+   APP_TIMEZONE=Asia/Jakarta
+
+   DB_HOST=127.0.0.1
+   DB_PORT=3306
+   DB_NAME=cashflow_hme
+   DB_USER=cashflow_hme_app      # pengguna DB khusus aplikasi (hak minimum; lihat database/tools/grants.sql)
+   DB_PASS=isi_password_kuat
+
+   MYSQLDUMP_PATH=C:/xampp/mysql/bin/mysqldump.exe
+   MYSQL_PATH=C:/xampp/mysql/bin/mysql.exe
+   SESSION_IDLE_MINUTES=120
+   ```
 3. Buat akun Super Admin: `php database/tools/create-user.php --username=... --name="..." --role=super_admin --out=storage/kredensial.txt`, lalu buka <http://localhost/cashflow/>. Segera ganti password setelah login.
 
 ## Struktur
