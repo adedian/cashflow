@@ -10,9 +10,9 @@ namespace App\Export;
  *  - halaman POTRET; kertas Legal (215,9 x 355,6 mm; default, kertas yang dipakai pengguna), Folio (215 x 330 mm,
  *    dasar desain stok) atau A4 (pilihan);
  *  - margin kanan/kiri 10 mm; voucher berpadding kiri 14 mm (kanan 0) => kotak voucher mulai 24 mm dari tepi kiri,
- *    lebar = kertas - 34 mm. Sisi ATAS sengaja lebih longgar dari stok (10 mm, bukan 3 mm): printer punya area
- *    tak-tercetak ±4-6 mm di tepi atas, sehingga pada 3 mm garis atas kotak terpotong saat dicetak;
- *  - voucher mengisi SETENGAH bagian ATAS kertas (tinggi kotak ±138 mm dari y = 10 mm; kaki ±6 mm di bawahnya;
+ *    lebar = kertas - 34 mm. Sisi ATAS = 5 mm (TOP_MM, atas permintaan pengguna; stok memakai 3 mm yang membuat garis
+ *    atas terpotong di printer pengguna, 10 mm dinilai terlalu turun);
+ *  - voucher mengisi SETENGAH bagian ATAS kertas (tinggi kotak ±138 mm dari y = 5 mm; kaki ±6 mm di bawahnya;
  *    berhenti > 1 cm sebelum garis tengah kertas Folio 165 mm supaya aman dipotong), sisanya kosong;
  *  - font isi 12 px (9 pt), judul 18 px (13,5 pt) tebal, spasi huruf judul kolom 2 px, "KEPERLUAN INTERN" 3 px;
  *  - kolom grid 10,7% (kosong) | 2,5% (KEPERLUAN INTERN) | 12,3% Perkiraan | 57,4% Uraian | 17,1% Jumlah;
@@ -31,7 +31,7 @@ final class VoucherPdf
     public const PAPER_LABEL = ['legal' => 'Legal (215,9 × 355,6 mm)', 'folio' => 'Folio (215 × 330 mm)', 'a4' => 'A4 (210 × 297 mm)'];
     public const DEFAULT_PAPER = 'legal';
     private const MIN_ROWS = 14;
-    private const TOP_MM = 10.0;      // jarak kotak voucher dari tepi atas kertas
+    private const TOP_MM = 5.0;       // jarak kotak voucher dari tepi atas kertas (permintaan pengguna: 0,5 cm lebih naik dari 10 mm)
     private const KIND = [
         'BK' => ['accent' => 'FF0000', 'fill' => 'EDE1E0', 'title' => 'BUKTI BANK KELUAR', 'who' => 'Dibayarkan Kepada :', 'last' => 'Penerima'],
         'BM' => ['accent' => '00A651', 'fill' => 'E2EFDA', 'title' => 'BUKTI BANK MASUK', 'who' => 'Diterima dari :', 'last' => 'Penyetor'],
