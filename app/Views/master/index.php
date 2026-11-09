@@ -84,7 +84,7 @@ $showLimit = $isEdit && ($edit['kind'] === 'facility' || $edit['credit_limit'] !
     <div class="field"><label>Jenis</label><input class="input" value="<?= e($accKind($edit)) ?>" disabled></div>
     <div class="field"><label>Saldo awal</label><input class="input" value="<?= e(money($edit['opening_balance'])) ?> · <?= e(fmt_date($edit['opening_date'])) ?>" disabled></div>
     <?php else: ?>
-    <div class="field"><label for="ak">Jenis</label><select class="input" id="ak" name="kind"><option value="bank">Bank HR (tanpa limit)</option><option value="facility">Loan (dengan limit)</option></select></div>
+    <div class="field"><label for="ak">Jenis</label><select class="input" id="ak" name="kind"><option value="bank">Tabungan Giro (tanpa limit)</option><option value="facility">Loan (dengan limit)</option></select></div>
     <div class="field"><label for="am">Perhitungan saldo</label><select class="input" id="am" name="balance_mode"><option value="asset">Aset (debit − kredit)</option><option value="liability">Pinjaman (kredit − debit)</option></select></div>
     <div class="field"><label for="ao">Saldo awal (Rp)</label><input class="input num" id="ao" name="opening_balance" value="0"></div>
     <div class="field"><label for="ad">Tanggal saldo awal <span class="req">*</span></label><input class="input" type="date" id="ad" name="opening_date" required></div>
