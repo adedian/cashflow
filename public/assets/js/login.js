@@ -4,6 +4,13 @@
   var tg = document.getElementById('togglePw');
   var form = document.getElementById('loginForm');
   var btn = document.getElementById('loginBtn');
+  var splash = document.getElementById('splash');
+  if (splash) {
+    var closeSplash = function () { splash.classList.add('done'); };
+    splash.addEventListener('click', closeSplash);
+    splash.addEventListener('animationend', function (ev) { if (ev.animationName === 'splashOut') closeSplash(); });
+    document.addEventListener('keydown', closeSplash, { once: true });
+  }
   if (tg && pw) {
     tg.addEventListener('click', function () {
       var show = pw.type === 'password';

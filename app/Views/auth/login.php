@@ -1,4 +1,17 @@
-<section class="login-card">
+<?php $splash = empty($error); // tampilkan animasi pembuka hanya saat halaman dibuka, bukan setelah salah password ?>
+<?php if ($splash): ?>
+<div class="splash" id="splash" role="presentation" aria-hidden="true" title="Ketuk untuk melewati">
+  <div class="splash-stage">
+    <span class="splash-pulse"></span>
+    <span class="splash-ring"></span>
+    <div class="splash-logo" style="--logo:url('<?= e(asset('images/logo-hme.png')) ?>')"><img src="<?= e(asset('images/logo-hme.png')) ?>" alt=""></div>
+  </div>
+  <div class="splash-title">Cashflow HME</div>
+  <div class="splash-sub">PT Hexa Multi Energi</div>
+  <div class="splash-bar"><i></i></div>
+</div>
+<?php endif; ?>
+<section class="login-card<?= $splash ? ' has-splash' : '' ?>">
   <div class="login-left">
     <div class="brand"><img src="<?= e(asset('images/logo-hme.png')) ?>" alt="Logo HME"><span>Cashflow HME</span></div>
     <div class="illus" aria-hidden="true">
