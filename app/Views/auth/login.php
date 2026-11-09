@@ -38,7 +38,7 @@
 <?php endif; ?>
 <section class="login-card<?= $splash ? ' has-splash' : '' ?>">
   <div class="login-left">
-    <div class="brand"><img src="<?= e(asset('images/logo-hme.png')) ?>" alt="Logo HME"><span>Cashflow HME</span></div>
+    <div class="brand"><img src="<?= e(asset('images/logo-hme.png')) ?>" alt="Logo HME"><span class="brand-name"><strong>Cashflow <em>HME</em></strong><small>PT Hexa Multi Energi</small></span></div>
     <div class="illus" aria-hidden="true">
       <svg viewBox="0 0 320 260" xmlns="http://www.w3.org/2000/svg">
         <ellipse cx="160" cy="236" rx="120" ry="14" fill="rgba(255,255,255,.14)"/>

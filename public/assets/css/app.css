@@ -340,6 +340,10 @@ body.auth-body::after { width: 420px; height: 420px; background: #9fc3ff; right:
 .login-left::after { content: ""; position: absolute; width: 320px; height: 320px; border-radius: 50%; right: -120px; bottom: -120px; background: rgba(255, 255, 255, .08); }
 .login-left .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 18px; }
 .login-left .brand { gap: 16px; }
+.login-left .brand-name { display: flex; flex-direction: column; gap: 4px; line-height: 1.05; }
+.login-left .brand-name strong { font-size: 38px; font-weight: 800; letter-spacing: -.01em; text-shadow: 0 3px 14px rgba(0, 20, 90, .45); }
+.login-left .brand-name em { font-style: normal; color: #ffb300; }
+.login-left .brand-name small { font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; opacity: .85; padding-top: 6px; border-top: 2px solid #ffb300; align-self: flex-start; }
 .login-left .brand img { width: 96px; height: 96px; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(0, 20, 80, .35)); }
 .login-left .illus { flex: 1; display: grid; place-items: center; padding: 18px 0; }
 .login-left .illus svg { width: min(300px, 80%); height: auto; }
@@ -433,8 +437,31 @@ body.auth-body::after { width: 420px; height: 420px; background: #9fc3ff; right:
 @media (max-width: 900px) {
   .g-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .login-card { grid-template-columns: 1fr; }
-  .login-left { display: none; }
-  .login-right { padding: 34px 26px; }
+  /* Tablet/ponsel: panel biru menjadi kepala kartu (logo + nama aplikasi), ilustrasi disembunyikan */
+  .login-card { min-height: 0; }
+  .login-left { padding: 24px 26px 26px; flex-direction: row; align-items: center; }
+  .login-left .illus, .login-left h2, .login-left p { display: none; }
+  .login-left .brand { gap: 14px; }
+  .login-left .brand img { width: 76px; height: 76px; }
+  .login-left .brand-name strong { font-size: 32px; }
+  .login-left .brand-name small { font-size: 11px; }
+  .login-right { padding: 30px 26px 28px; }
+  .login-right h1 { font-size: 28px; }
+  .login-right .sub { margin-bottom: 20px; }
+}
+@media (max-width: 767px) {
+  body.auth-body { padding: 14px 14px 56px; }
+  .login-card { border-radius: 20px; box-shadow: 0 18px 50px rgba(11, 60, 160, .26); }
+  .login-right .btn { width: 100%; }
+  .login-note { margin-top: 18px; }
+}
+@media (max-width: 380px) {
+  .login-left { padding: 20px 18px 22px; }
+  .login-left .brand { gap: 10px; }
+  .login-left .brand img { width: 62px; height: 62px; }
+  .login-left .brand-name strong { font-size: 25px; }
+  .login-left .brand-name small { font-size: 10px; letter-spacing: .12em; }
+  .login-right { padding: 24px 18px 22px; }
 }
 @media (max-width: 767px) {
   body { font-size: 14px; }
