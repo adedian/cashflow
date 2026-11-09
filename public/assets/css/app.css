@@ -346,40 +346,59 @@ body.auth-body::after { width: 420px; height: 420px; background: #9fc3ff; right:
 .login-left h2 { font-size: 30px; margin-bottom: 8px; }
 .login-left p { margin: 0; opacity: .9; max-width: 330px; }
 
-/* Animasi pembuka (splash) logo sebelum form login. Murni CSS: otomatis hilang sendiri
-   (tanpa JS pun tidak menutupi form); login.js hanya menambah "ketuk untuk lewati". */
+/* Animasi pembuka (splash) sebelum form login. Urutan (detik):
+   0-1.9 koin "Rp" berputar mengikuti panah arus kas -> 1.2-1.9 koin bergerak ke 6 sudut hexa
+   1.7-2.5 garis hexa tergambar lalu terisi oranye -> 2.35-3.2 logo HME Cashflow muncul kecil lalu membesar
+   3.1 judul -> 4.0-4.6 splash memudar & membesar, kartu login naik.
+   Murni CSS: otomatis hilang sendiri (tanpa JS pun tidak menutupi form); login.js hanya menambah "ketuk untuk lewati". */
 .splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; align-content: center; gap: 0;
   background: radial-gradient(circle at 50% 42%, #2f7bff 0%, #0b5cff 45%, #08349a 100%); color: #fff; cursor: pointer;
-  animation: splashOut .55s ease-in 2.35s forwards; }
+  animation: splashOut .6s ease-in 4s forwards; }
 .splash.done { display: none; }
-.splash-stage { position: relative; width: 190px; height: 190px; display: grid; place-items: center; }
-.splash-logo { position: relative; width: 150px; height: 150px; opacity: 0; transform: scale(.3) rotate(-14deg);
-  animation: splashLogoIn .95s cubic-bezier(.2, 1.35, .4, 1) .15s forwards, splashFloat 2.2s ease-in-out 1.1s infinite; }
+.splash-stage { position: relative; width: 240px; height: 240px; display: grid; place-items: center; }
+.splash-orbit { position: absolute; inset: 0; animation: splashOrbit 1.8s cubic-bezier(.5, 0, .3, 1) .1s forwards; }
+.splash-loop { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transform-origin: 50% 50%; animation: splashArc 1.8s ease-in-out .1s forwards; }
+.splash-coin { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; opacity: 0;
+  transform: rotate(var(--a)) translateX(100px) scale(0);
+  animation: splashCoinFly 1.8s cubic-bezier(.5, 0, .3, 1) .1s forwards, splashCoinVis 2.8s linear .1s forwards; }
+.splash-coin i { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; font: 700 11px/1 "Segoe UI", Arial, sans-serif; color: #8a4b00; font-style: normal;
+  background: radial-gradient(circle at 35% 30%, #ffe27a, #ffb300 60%, #e07b00); border: 2px solid #fff3c4; box-shadow: 0 0 14px rgba(255, 179, 0, .75), 0 3px 8px rgba(0, 20, 80, .35);
+  animation: splashCoinSpin 1.8s cubic-bezier(.5, 0, .3, 1) .1s forwards; }
+.splash-hex { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 1; transform-origin: 50% 50%; animation: splashHexGone .55s ease-in 2.5s forwards; }
+.splash-hex .edge { stroke-dasharray: 1; stroke-dashoffset: 1; filter: drop-shadow(0 0 6px rgba(255, 255, 255, .8)); animation: splashHexDraw .7s ease-out 1.7s forwards; }
+.splash-hex .fill { opacity: 0; animation: splashHexFill .45s ease-out 2.05s forwards; }
+.splash-logo { position: relative; width: 170px; height: 170px; opacity: 0; transform: scale(.1);
+  animation: splashLogoGrow .85s cubic-bezier(.2, 1.3, .4, 1) 2.35s forwards, splashFloat 2.2s ease-in-out 3.3s infinite; }
 .splash-logo img { width: 100%; height: 100%; object-fit: contain; display: block; filter: drop-shadow(0 12px 26px rgba(0, 15, 70, .5)); }
 .splash-logo::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .85) 50%, transparent 62%) -160% 0 / 220% 100% no-repeat;
   -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat;
-  animation: splashShine 1s ease-in-out 1.05s forwards; }
-.splash-ring, .splash-pulse { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; }
-.splash-ring { border: 2px dashed rgba(255, 255, 255, .55); opacity: 0; animation: splashRingIn .6s ease-out .3s forwards, splashSpin 5s linear .3s infinite; }
-.splash-pulse { border: 2px solid rgba(255, 255, 255, .6); opacity: 0; animation: splashPulse 1.4s ease-out .9s 2; }
-.splash-title { margin-top: 18px; font-size: 22px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: 0; transform: translateY(10px);
-  animation: splashRise .6s ease-out 1.05s forwards; }
-.splash-sub { margin-top: 4px; font-size: 13px; opacity: 0; letter-spacing: .04em; animation: splashFade .6s ease-out 1.3s forwards; --o: .8; }
-.splash-bar { margin-top: 22px; width: 150px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .25); overflow: hidden; }
+  animation: splashShine .9s ease-in-out 3.05s forwards; }
+.splash-pulse { position: absolute; inset: 35px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .6); opacity: 0; pointer-events: none; animation: splashPulse 1.1s ease-out 2.6s 2; }
+.splash-title { margin-top: 14px; font-size: 22px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: 0; transform: translateY(10px);
+  animation: splashRise .6s ease-out 3.1s forwards; }
+.splash-sub { margin-top: 4px; font-size: 13px; opacity: 0; letter-spacing: .04em; animation: splashFade .6s ease-out 3.3s forwards; --o: .8; }
+.splash-bar { margin-top: 20px; width: 150px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .25); overflow: hidden; }
 .splash-bar i { display: block; height: 100%; width: 100%; border-radius: 4px; background: #ffb300; transform: scaleX(0); transform-origin: left;
-  animation: splashBar 1.7s cubic-bezier(.4, 0, .2, 1) .5s forwards; }
-.login-card.has-splash { animation: splashCardIn .7s cubic-bezier(.2, .8, .2, 1) 2.2s backwards; }
-@keyframes splashLogoIn { 0% { opacity: 0; transform: scale(.3) rotate(-14deg); } 60% { opacity: 1; } 100% { opacity: 1; transform: scale(1) rotate(0); } }
-@keyframes splashFloat { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-6px) scale(1.04); } }
+  animation: splashBar 3.7s cubic-bezier(.4, 0, .2, 1) .3s forwards; }
+.login-card.has-splash { animation: splashCardIn .7s cubic-bezier(.2, .8, .2, 1) 3.85s backwards; }
+@keyframes splashOrbit { from { transform: rotate(0); } to { transform: rotate(720deg); } }
+@keyframes splashCoinSpin { from { transform: rotate(0); } to { transform: rotate(-720deg); } }
+@keyframes splashArc { 0% { opacity: 0; transform: scale(1); } 15% { opacity: 1; } 65% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.65); } }
+@keyframes splashCoinFly { 0% { transform: rotate(var(--a)) translateX(100px) scale(0); } 18% { transform: rotate(var(--a)) translateX(100px) scale(1); }
+  62% { transform: rotate(var(--a)) translateX(100px) scale(1); } 100% { transform: rotate(var(--a)) translateX(70px) scale(.85); } }
+@keyframes splashCoinVis { 0% { opacity: 0; } 6% { opacity: 1; } 86% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes splashHexDraw { to { stroke-dashoffset: 0; } }
+@keyframes splashHexFill { to { opacity: 1; } }
+@keyframes splashHexGone { to { opacity: 0; transform: scale(1.5); } }
+@keyframes splashLogoGrow { 0% { opacity: 0; transform: scale(.1) rotate(-20deg); } 25% { opacity: 1; } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+@keyframes splashFloat { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-5px) scale(1.03); } }
 @keyframes splashShine { from { background-position: -160% 0; } to { background-position: 160% 0; } }
-@keyframes splashRingIn { to { opacity: 1; } }
-@keyframes splashSpin { to { transform: rotate(360deg); } }
-@keyframes splashPulse { 0% { opacity: .7; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.7); } }
+@keyframes splashPulse { 0% { opacity: .7; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.8); } }
 @keyframes splashRise { to { opacity: 1; transform: none; } }
 @keyframes splashFade { to { opacity: var(--o, 1); } }
 @keyframes splashBar { to { transform: scaleX(1); } }
-@keyframes splashOut { to { opacity: 0; transform: scale(1.06); visibility: hidden; } }
+@keyframes splashOut { to { opacity: 0; transform: scale(1.12); visibility: hidden; } }
 @keyframes splashCardIn { from { opacity: 0; transform: translateY(26px) scale(.97); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .splash { display: none; }
