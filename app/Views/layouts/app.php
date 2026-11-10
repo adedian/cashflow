@@ -16,6 +16,7 @@ $nav = [
     ['/invoices', 'Piutang', 'file'],
     ['/debts', 'Hutang', 'brief'],
     ['/forecast', 'Proyeksi', 'trend'],
+    ['/reminders', 'Pengingat', 'bell'],
     ['/reports', 'Laporan', 'chart'],
     ['/notes', 'Catatan', 'note'],
 ];
@@ -97,7 +98,7 @@ $initial = mb_strtoupper(mb_substr($user['full_name'] ?? '?', 0, 1));
       <div class="notif">
         <button class="icon-btn" id="notifBtn" type="button" aria-label="Pengingat pembayaran" aria-haspopup="true" aria-expanded="false" aria-controls="notifPanel"><?= $icon('bell') ?><span class="notif-badge" id="notifBadge" hidden>0</span></button>
         <div class="notif-panel" id="notifPanel" role="dialog" aria-label="Pengingat pembayaran" hidden>
-          <div class="notif-head"><b>Pengingat Pembayaran</b><a href="<?= e(url('/')) ?>">Dashboard</a></div>
+          <div class="notif-head"><b>Pengingat Pembayaran</b><a href="<?= e(url('/reminders')) ?>">Lihat semua</a></div>
           <div class="notif-body" id="notifBody"><div class="skeleton" style="height:70px"></div></div>
         </div>
       </div>

@@ -80,6 +80,7 @@ return [
     ['POST', '/forecast/{id}/unlink',       'ForecastController@unlink',      'admin'],
 
     // --- pengingat pembayaran (dashboard & ikon lonceng) ---
+    ['GET',  '/reminders',               'ReminderController@index',  'any'],
     ['GET',  '/api/reminders',           'ReminderController@data',   'any'],
 
     // --- catatan ---

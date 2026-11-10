@@ -68,26 +68,15 @@
   });
 
   // Pengingat Pembayaran: data dari H.reminders (reminders.js), diperbarui otomatis tanpa refresh halaman
-  var remAll = false, REM_MAX = 5;
   function renderReminders(d) {
     var list = $('#remList'), cnt = $('#remCount'), meta = $('#remMeta');
     if (!list || !d) return;
     cnt.hidden = !d.count;
     cnt.textContent = d.count;
     cnt.className = 'rem-count' + (d.late ? ' late' : '');
-    if (!d.count) {
-      meta.textContent = 'Jangka pengingat ' + d.days + ' hari ke depan';
-      list.innerHTML = '<div class="rem-empty">' + H.esc(H.reminders.empty) + '</div>';
-      return;
-    }
-    meta.textContent = 'Total ' + H.money(d.total) + (d.late ? ' · ' + d.late + ' terlambat' : '') + ' · jangka ' + d.days + ' hari';
-    var items = remAll ? d.items : d.items.slice(0, REM_MAX);
-    list.innerHTML = items.map(H.reminders.row).join('') +
-      (d.count > REM_MAX ? '<button type="button" class="rem-more" id="remToggle">' + (remAll ? 'Tampilkan lebih sedikit' : 'Tampilkan ' + (d.count - REM_MAX) + ' lainnya') + '</button>' : '');
+    meta.textContent = H.reminders.meta(d);
+    list.innerHTML = H.reminders.cards(d);   // satu kartu per kategori; klik kartu = detail kategori (/reminders?cat=...)
   }
-  $('#remCard').addEventListener('click', function (ev) {
-    if (ev.target.id === 'remToggle') { remAll = !remAll; renderReminders(H.reminders.data()); }
-  });
   if (H.reminders) H.reminders.on(renderReminders);
 
   function kpi(icn, tone, k, v, d) {
