@@ -586,8 +586,8 @@ table.xl { border-collapse: collapse; table-layout: fixed; background: #fff; }
 .field label { letter-spacing: .01em; }
 
 /* tabel: kolom keterangan fleksibel, tidak melebar */
-.tbl .desc { min-width: 180px; max-width: 420px; overflow-wrap: anywhere; }
-.tbl td .sub { margin-top: 1px; }
+.tbl .desc { min-width: 160px; max-width: 420px; overflow-wrap: anywhere; }
+.tbl td .sub { margin-top: 0; line-height: 1.2; }
 .tbl tbody tr:nth-child(even) { background: #fbfcff; }
 .tbl tbody tr:hover { background: #f3f7ff; }
 .tbl td.nowrap { white-space: nowrap; }
@@ -623,8 +623,8 @@ table.xl { border-collapse: collapse; table-layout: fixed; background: #fff; }
 .fc-month .card-head { margin-bottom: 8px; }
 .fc-open { font-size: 12.5px; }
 table.tbl.fc { font-size: 13px; }
-.fc th { padding: 7px 10px; }
-.fc td { padding: 5px 10px; line-height: 1.35; vertical-align: middle; }
+.fc th { padding: 5px 10px; }
+.fc td { padding: 3px 10px; line-height: 1.25; vertical-align: middle; }
 .fc .c-date { width: 84px; }
 .fc .c-acc { width: 128px; color: #3b4566; }
 .fc .c-amt { width: 128px; }
@@ -634,7 +634,7 @@ table.tbl.fc { font-size: 13px; }
 .fc .pill { padding: 1px 7px; font-size: 10.5px; }
 .fc .c-act form { display: inline-block; vertical-align: middle; margin: 0; }
 .fc .c-act .btn { vertical-align: middle; }
-.fc .btn-icon { width: 26px; height: 26px; border-radius: 8px; }
+.fc .btn-icon { width: 24px; height: 24px; border-radius: 7px; }
 .fc-link { color: var(--text); }
 .fc-link:hover { color: var(--blue); }
 /* ringkasan bulan: lebih tegas dari baris transaksi, tetap ramping */
@@ -742,27 +742,32 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
    sebesar isinya, sisa lebar dipakai kolom uraian. Tabel Proyeksi (.fc) memakai lebar kolomnya sendiri. */
 @media (min-width: 768px) {
   table.tbl { font-size: 13px; }
-  .tbl th { padding: 7px 10px; }
-  .tbl td { padding: 5px 10px; line-height: 1.35; vertical-align: middle; }
+  .tbl th { padding: 5px 10px; }
+  .tbl td { padding: 3px 10px; line-height: 1.25; vertical-align: middle; }
   .tbl:not(.fc) td.nowrap, .tbl:not(.fc) td.r, .tbl:not(.fc) th.r { width: 1%; }
   .tbl .pill { padding: 1px 7px; font-size: 10.5px; }
-  .tbl td .btn-icon { width: 26px; height: 26px; border-radius: 8px; }
+  .tbl td .btn-icon { width: 24px; height: 24px; border-radius: 7px; }
+  .tbl td .btn-sm { height: 24px; padding: 0 9px; font-size: 12px; border-radius: 7px; }
+  .tbl td .btn-sm.btn-icon { width: 24px; padding: 0; }
+  .tbl td .btn-sm svg { width: 14px; height: 14px; }
+  .tbl td .input, .tbl td select.input { height: 28px; padding-top: 0; padding-bottom: 0; font-size: 13px; border-radius: 8px; }
+  .tbl td .combo-clear { top: 0; width: 28px; height: 28px; }
   .tbl td form { display: inline-block; vertical-align: middle; margin: 0; }
   .tbl:not(.fc) .desc { max-width: none; }
 }
 
 /* jarak antar kolom lebih lega: angka diberi lebar minimum, kolom lain diberi ruang kiri-kanan */
 @media (min-width: 768px) {
-  .tbl:not(.fc) th, .tbl:not(.fc) td { padding-left: 16px; padding-right: 16px; }
-  .tbl:not(.fc) td.r, .tbl:not(.fc) th.r { min-width: 132px; }
-  .tbl:not(.fc) .cat { min-width: 190px; }
-  .tbl:not(.fc) .proj { min-width: 150px; }
-  .tbl:not(.fc) .desc { min-width: 260px; }
+  .tbl:not(.fc) th, .tbl:not(.fc) td { padding-left: 10px; padding-right: 10px; }
+  .tbl:not(.fc) td.r, .tbl:not(.fc) th.r { min-width: 108px; }
+  .tbl:not(.fc) .cat { min-width: 150px; }
+  .tbl:not(.fc) .proj { min-width: 120px; }
+  .tbl:not(.fc) .desc { min-width: 200px; }
 }
 
 /* Proyeksi: jarak kolom sama lega dengan tabel lain */
 @media (min-width: 768px) {
-  .fc th, .fc td { padding-left: 16px; padding-right: 16px; }
+  .fc th, .fc td { padding-left: 10px; padding-right: 10px; }
   .fc .c-date { width: 100px; }
   .fc .c-acc { width: 150px; }
   .fc .c-amt { width: 144px; }
@@ -864,16 +869,16 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
 /* Daftar Transaksi: kolom diberi lebar tetap; bila layar lebih sempit dari tabel, tabel digeser mendatar (tidak dipadatkan) */
 @media (min-width: 768px) {
   .tbl.tx { width: max-content; min-width: 100%; }
-  .tbl.tx th, .tbl.tx td { padding-left: 10px; padding-right: 10px; }
-  .tbl.tx .c-code { min-width: 100px; }
-  .tbl.tx .c-party { min-width: 190px; max-width: 260px; }
-  .tbl.tx .desc { min-width: 300px; max-width: 380px; }
-  .tbl.tx .cat { min-width: 150px; }
-  .tbl.tx .proj { min-width: 130px; }
-  .tbl.tx .c-inv { min-width: 120px; }
-  .tbl.tx .c-note { min-width: 160px; max-width: 240px; }
-  .tbl.tx td.r, .tbl.tx th.r { min-width: 130px; width: 130px; }
-  .tbl.tx .c-act { min-width: 84px; }
+  .tbl.tx th, .tbl.tx td { padding-left: 8px; padding-right: 8px; }
+  .tbl.tx .c-code { min-width: 84px; }
+  .tbl.tx .c-party { min-width: 130px; max-width: 180px; }
+  .tbl.tx .desc { min-width: 200px; max-width: 290px; }
+  .tbl.tx .cat { min-width: 110px; max-width: 170px; }
+  .tbl.tx .proj { min-width: 90px; max-width: 130px; }
+  .tbl.tx .c-inv { min-width: 90px; }
+  .tbl.tx .c-note { min-width: 100px; max-width: 160px; }
+  .tbl.tx td.r, .tbl.tx th.r { min-width: 100px; width: 100px; }
+  .tbl.tx .c-act { min-width: 72px; }
   .tbl.tx td, .tbl.tx th { overflow-wrap: anywhere; }
 }
 

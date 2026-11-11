@@ -115,6 +115,9 @@ final class BackupService
     {
         $out = [];
         foreach (glob(self::dir() . '/backup-*.sql') ?: [] as $f) {
+            if (!self::validName(basename($f))) {
+                continue; // nama tak baku tidak bisa diunduh/dipulihkan lewat aplikasi; jangan ditampilkan sebagai tautan mati
+            }
             $meta = is_file($f . '.json') ? json_decode((string) file_get_contents($f . '.json'), true) : null;
             $out[] = is_array($meta) ? $meta + ['exists' => true] : ['file' => basename($f), 'size' => filesize($f), 'created_at' => date('c', filemtime($f)), 'verified' => null, 'problems' => ['Tanpa metadata verifikasi'], 'exists' => true];
         }
