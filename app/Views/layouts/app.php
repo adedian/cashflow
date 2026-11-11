@@ -11,12 +11,12 @@ $active = static function (string $prefix) use ($cur): string {
 };
 $nav = [
     ['/', 'Dashboard', 'home'],
+    ['/reminders', 'Pengingat', 'bell'],
     ['/transactions', 'Transaksi', 'list'],
     ['/accounts', 'Rekening & Limit', 'card'],
     ['/invoices', 'Piutang', 'file'],
     ['/debts', 'Hutang', 'brief'],
     ['/forecast', 'Proyeksi', 'trend'],
-    ['/reminders', 'Pengingat', 'bell'],
     ['/reports', 'Laporan', 'chart'],
     ['/notes', 'Catatan', 'note'],
 ];
