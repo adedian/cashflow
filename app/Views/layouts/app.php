@@ -42,7 +42,7 @@ $initial = mb_strtoupper(mb_substr($user['full_name'] ?? '?', 0, 1));
 <meta name="theme-color" content="#0b5cff">
 <title><?= e($title !== '' ? $title . ' · ' : '') ?>Cashflow HME</title>
 <link rel="icon" type="image/png" href="<?= e(asset('images/logo-hme.png')) ?>">
-<link rel="manifest" href="<?= e(url('/manifest.webmanifest')) ?>">
+<link rel="manifest" href="<?= e(url('/manifest.webmanifest')) ?>" crossorigin="use-credentials">
 <link rel="apple-touch-icon" href="<?= e(asset('images/apple-touch-icon.png')) ?>">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
