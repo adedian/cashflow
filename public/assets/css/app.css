@@ -65,7 +65,8 @@ img, svg { max-width: 100%; }
 .sb-brand img { width: 48px; height: 48px; object-fit: contain; flex: none; }
 .sb-brand b { font-size: 17px; letter-spacing: .2px; display: block; line-height: 1.1; }
 .sb-brand small { color: var(--muted); font-size: 11.5px; }
-.sb-nav { flex: 1; overflow-y: auto; padding: 6px 12px 12px; }
+.sb-nav { flex: 1; overflow-y: auto; padding: 6px 12px 12px; scrollbar-width: none; -ms-overflow-style: none; }
+.sb-nav::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .sb-group { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 14px 10px 6px; }
 .sb-link {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin: 2px 0; border-radius: 12px;
