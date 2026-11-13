@@ -1,6 +1,6 @@
 # Cashflow HME — PT Hexa Multi Energi
 
-Aplikasi internal pencatatan & pemantauan arus kas: PHP 8 native (tanpa framework backend), MariaDB/MySQL (PDO), HTML/CSS/JS sendiri (tanpa pustaka luar). Berjalan di XAMPP (Windows) dan siap dipindah ke VPS/hosting.
+Aplikasi internal pencatatan & pemantauan arus kas: PHP 8 native (tanpa framework backend), MariaDB/MySQL (PDO), HTML/CSS/JS sendiri (tanpa pustaka luar). Berjalan di XAMPP (Windows) dan siap dipindah ke VPS/hosting. **Versi PHP:** ≥ 8.0; XAMPP lokal kini memakai **PHP 8.3.36** (kompatibilitas diperiksa 13 Nov 2026).
 
 - **Peran:** *Super Admin* (kelola data & pengguna) dan *Viewer* (hanya baca). Tidak ada registrasi publik.
 - **Impor:** workbook Excel cash flow (pemetaan sheet di `config/import_profile.php`, contoh di `config/import_profile.example.php`) dan Impor Excel berpemetaan untuk transaksi/hutang.
