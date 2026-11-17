@@ -108,6 +108,8 @@ return [
     ['POST', '/master/parties',          'MasterController@saveParty',    'admin'],
     ['POST', '/master/parties/{id}',     'MasterController@saveParty',    'admin'],
     ['POST', '/api/parties',             'MasterController@createPartyApi', 'admin'],
+    ['POST', '/api/categories',          'MasterController@createCategoryApi', 'admin'],
+    ['POST', '/api/projects',            'MasterController@createProjectApi', 'admin'],
     ['POST', '/master/suppliers',        'MasterController@saveSupplier', 'admin'],
     ['POST', '/master/suppliers/{id}',   'MasterController@saveSupplier', 'admin'],
     ['POST', '/master/opening/{id}',    'MasterController@saveOpening',  'admin'],

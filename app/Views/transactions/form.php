@@ -27,7 +27,9 @@ $projHtml = '';
 foreach ($projects as $p) {
     $projHtml .= '<option value="' . (int) $p['id'] . '">' . e($p['name']) . '</option>';
 }
-$renderLine = static function (array $r, bool $first, string $auto) use ($catHtml, $projHtml): string {
+// tombol + (tambah cepat kategori/proyek tanpa ke Master Data); hanya untuk Super Admin (rute /api/categories & /api/projects)
+$quickBtn = static fn(string $what, string $label): string => '<button type="button" class="btn btn-ghost btn-sm btn-icon line-quick" data-quick-add="' . $what . '" title="Tambah ' . $label . ' baru" aria-label="Tambah ' . $label . ' baru"><svg class="i i-sm"><use href="#i-plus"/></svg></button>';
+$renderLine = static function (array $r, bool $first, string $auto) use ($catHtml, $projHtml, $quickBtn): string {
     $idD = $first ? ' id="description"' : '';
     $idA = $first ? ' id="amount"' : '';
     $cid = (int) ($r['category_id'] ?? 0);
@@ -36,8 +38,8 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
     $projs = $pid > 0 ? str_replace('value="' . $pid . '">', 'value="' . $pid . '" selected>', $projHtml) : $projHtml;
     return '<div class="line-row">'
         . '<input class="input line-desc" name="line_desc[]"' . $idD . ' maxlength="500" value="' . e((string) ($r['description'] ?? '')) . '" placeholder="Uraian" aria-label="Uraian"' . ($first ? $auto : '') . '>'
-        . '<select class="input line-cat" name="line_cat[]" aria-label="Kategori" data-combo-placeholder="Kategori…"><option value="">— belum dikategorikan —</option>' . $cats . '</select>'
-        . '<select class="input line-proj" name="line_proj[]" aria-label="Proyek" data-combo-placeholder="Proyek…"><option value="">— tanpa proyek —</option>' . $projs . '</select>'
+        . '<div class="line-pick line-pick-cat"><select class="input line-cat" name="line_cat[]" aria-label="Kategori" data-combo-placeholder="Kategori…"><option value="">— belum dikategorikan —</option>' . $cats . '</select>' . $quickBtn('category', 'kategori') . '</div>'
+        . '<div class="line-pick line-pick-proj"><select class="input line-proj" name="line_proj[]" aria-label="Proyek" data-combo-placeholder="Proyek…"><option value="">— tanpa proyek —</option>' . $projs . '</select>' . $quickBtn('project', 'proyek') . '</div>'
         . '<input class="input num line-amt" name="line_amount[]"' . $idA . ' type="text" inputmode="decimal" value="' . e((string) ($r['amount'] ?? '')) . '" placeholder="Jumlah (Rp)" aria-label="Jumlah (Rp)" autocomplete="off"' . ($first ? $auto : '') . '>'
         . '<button type="button" class="btn btn-ghost btn-sm btn-icon line-del" data-line-del title="Hapus baris" aria-label="Hapus baris"><svg class="i i-sm" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>'
         . '</div>';
@@ -142,3 +144,30 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
     </div>
   </form>
 </section>
+
+<?php /* dialog tambah cepat kategori / proyek (di luar #txForm agar tidak bersarang) */ ?>
+<div class="modal-back" id="quickAdd" aria-hidden="true">
+  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="qaTitle">
+    <div class="modal-head"><h3 id="qaTitle">Tambah kategori</h3><button type="button" class="icon-btn" style="background:#eef1f8;color:#3b4566" data-close-modal aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="field">
+          <label for="qaName" id="qaNameLbl">Nama kategori <span class="req">*</span></label>
+          <input class="input" id="qaName" maxlength="160" autocomplete="off">
+        </div>
+        <div class="field" id="qaKindBox">
+          <label for="qaKind">Jenis <span class="req">*</span></label>
+          <select class="input" id="qaKind" data-no-combo>
+            <?php foreach ($kinds as $k => $lbl): ?><option value="<?= e($k) ?>"><?= e($lbl) ?></option><?php endforeach; ?>
+          </select>
+        </div>
+        <div class="err" id="qaErr" hidden role="alert"></div>
+        <span class="help">Tersimpan ke Master Data dan langsung dipilih pada baris uraian ini.</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" data-close-modal>Batal</button>
+      <button type="button" class="btn" id="qaSave">Simpan &amp; pilih</button>
+    </div>
+  </div>
+</div>

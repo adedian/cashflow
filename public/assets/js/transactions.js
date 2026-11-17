@@ -140,6 +140,67 @@
     });
     refreshLines = refresh;
     refresh();
+
+    /* --- tombol "+" di samping Kategori / Proyek: tambah ke master lewat dialog, lalu langsung dipilih di baris tsb. --- */
+    var qa = document.getElementById('quickAdd');
+    if (qa) {
+      var qaName = document.getElementById('qaName'), qaKind = document.getElementById('qaKind'), qaKindBox = document.getElementById('qaKindBox');
+      var qaErr = document.getElementById('qaErr'), qaSave = document.getElementById('qaSave'), qaTitle = document.getElementById('qaTitle'), qaLbl = document.getElementById('qaNameLbl');
+      var qaWhat = 'category', qaRow = null, qaBusy = false;
+      var qaCfg = {
+        category: { title: 'Tambah kategori', label: 'Nama kategori', url: '/api/categories', cls: '.line-cat', max: 120 },
+        project: { title: 'Tambah proyek', label: 'Nama proyek', url: '/api/projects', cls: '.line-proj', max: 160 }
+      };
+      var showErr = function (m) { qaErr.hidden = !m; qaErr.textContent = m || ''; };
+      // sisipkan opsi baru ke semua dropdown sejenis (baris yang ada + templat baris baru) agar tersedia di mana-mana
+      var addOpt = function (root, sel, id, name, groupLabel) {
+        Array.prototype.forEach.call(root.querySelectorAll(sel), function (s) {
+          var exists = Array.prototype.some.call(s.options, function (o) { return o.value === String(id); });
+          if (exists) return;
+          var opt = new Option(name, String(id));
+          var host = s;
+          if (groupLabel) {
+            host = null;
+            Array.prototype.forEach.call(s.querySelectorAll('optgroup'), function (g) { if (g.label === groupLabel) host = g; });
+            if (!host) { host = document.createElement('optgroup'); host.label = groupLabel; s.appendChild(host); }
+          }
+          host.appendChild(opt);
+        });
+      };
+      var openQuick = function (what, row) {
+        qaWhat = what; qaRow = row; var c = qaCfg[what];
+        qaTitle.textContent = c.title; qaLbl.firstChild.textContent = c.label + ' ';
+        qaName.maxLength = c.max; qaName.value = ''; showErr('');
+        qaKindBox.hidden = what !== 'category';
+        if (what === 'category') { var d = document.querySelector('input[name="direction"]:checked'); qaKind.value = d && d.value === 'in' ? 'pendapatan' : 'biaya'; }
+        HME.openModal('quickAdd');
+        setTimeout(function () { qaName.focus(); }, 60);
+      };
+      lineBox.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('[data-quick-add]') : null;
+        if (b) openQuick(b.getAttribute('data-quick-add'), b.closest('.line-row'));
+      });
+      var saveQuick = function () {
+        if (qaBusy) return;
+        var name = qaName.value.replace(/\s+/g, ' ').trim();
+        if (!name) { showErr('Nama wajib diisi.'); qaName.focus(); return; }
+        var c = qaCfg[qaWhat], form = new URLSearchParams({ name: name });
+        if (qaWhat === 'category') form.set('kind', qaKind.value);
+        qaBusy = true; qaSave.disabled = true;
+        HME.api(c.url, { method: 'POST', form: form }).then(function (j) {
+          if (!j || !j.ok) { showErr((j && j.error) || 'Gagal menambahkan.'); return; }
+          var group = qaWhat === 'category' ? (qaKind.querySelector('option[value="' + j.kind + '"]') || {}).textContent : null;
+          addOpt(lineBox, c.cls, j.id, j.name, group); addOpt(tpl.content, c.cls, j.id, j.name, group);
+          var target = qaRow && qaRow.querySelector(c.cls);
+          if (target) { target.value = String(j.id); target.dispatchEvent(new Event('change', { bubbles: true })); }
+          if (HME.toast) HME.toast(j.created ? '“' + j.name + '” ditambahkan ke master.' : '“' + j.name + '” sudah ada — dipilih.', 'success', 2500);
+          HME.closeModal(qa);
+        }).catch(function () { showErr('Koneksi terputus — gagal menambahkan.'); })
+          .then(function () { qaBusy = false; qaSave.disabled = false; });
+      };
+      qaSave.addEventListener('click', saveQuick);
+      qaName.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveQuick(); } });
+    }
   }
 
   /* --- formulir: No. Invoice/PO (dropdown dinamis) — isi otomatis & ganti jenis transaksi --- */

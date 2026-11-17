@@ -295,6 +295,53 @@ final class MasterController extends Controller
         return $this->ok(['name' => $name, 'created' => true]);
     }
 
+    /** Tambah cepat kategori dari formulir Transaksi (JSON). Nama yang sudah ada dikembalikan apa adanya (tidak ganda). */
+    public function createCategoryApi(): Response
+    {
+        $name = preg_replace('/\s+/', ' ', $this->name('name', 120));
+        $kind = $this->req->str('kind');
+        if ($name === '' || !in_array($kind, self::KINDS, true)) {
+            return $this->fail('Nama kategori wajib diisi dan jenis harus dipilih.');
+        }
+        $row = Db::one('SELECT id, name, kind, is_active FROM categories WHERE name = ?', [$name]);
+        if ($row) {
+            if (!(int) $row['is_active']) {
+                return $this->fail('Kategori “' . $row['name'] . '” sudah ada tetapi nonaktif. Aktifkan di Master Data → Kategori.');
+            }
+            return $this->ok(['id' => (int) $row['id'], 'name' => $row['name'], 'kind' => $row['kind'], 'created' => false]);
+        }
+        $id = 0;
+        Db::tx(function () use ($name, $kind, &$id) {
+            $id = (int) Db::insert('categories', ['name' => $name, 'kind' => $kind]);
+            Audit::log('category_create', 'category', (string) $id, "Tambah kategori $name ($kind) (dari formulir Transaksi)", null, ['name' => $name, 'kind' => $kind]);
+            Version::bump('master');
+        });
+        return $this->ok(['id' => $id, 'name' => $name, 'kind' => $kind, 'created' => true]);
+    }
+
+    /** Tambah cepat proyek dari formulir Transaksi (JSON). */
+    public function createProjectApi(): Response
+    {
+        $name = preg_replace('/\s+/', ' ', $this->name('name', 160));
+        if ($name === '') {
+            return $this->fail('Nama proyek wajib diisi.');
+        }
+        $row = Db::one('SELECT id, name, is_active FROM projects WHERE name = ?', [$name]);
+        if ($row) {
+            if (!(int) $row['is_active']) {
+                return $this->fail('Proyek “' . $row['name'] . '” sudah ada tetapi nonaktif. Aktifkan di Master Data → Proyek.');
+            }
+            return $this->ok(['id' => (int) $row['id'], 'name' => $row['name'], 'created' => false]);
+        }
+        $id = 0;
+        Db::tx(function () use ($name, &$id) {
+            $id = (int) Db::insert('projects', ['name' => $name]);
+            Audit::log('project_create', 'project', (string) $id, "Tambah proyek $name (dari formulir Transaksi)", null, ['name' => $name]);
+            Version::bump('master');
+        });
+        return $this->ok(['id' => $id, 'name' => $name, 'created' => true]);
+    }
+
     /* ---------- supplier (dropdown Nama supplier di formulir Hutang) ---------- */
     public function saveSupplier(string $id = ''): Response
     {
