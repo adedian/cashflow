@@ -235,7 +235,8 @@ final class ForecastController extends Controller
     private function form(array $t, array $errors, ?int $id, int $status = 200): Response
     {
         Page::set(['title' => $id ? 'Ubah item proyeksi' : 'Tambah item proyeksi', 'subtitle' => 'Tidak memengaruhi saldo aktual']);
-        $r = $this->view('forecast/form', ['t' => $t, 'errors' => $errors, 'id' => $id, 'locked' => $id ? (bool) LinkService::info([$id]) : false]);
+        $accounts = Db::all('SELECT id, name, bank_name, account_no FROM accounts WHERE is_active = 1 ORDER BY sort_order, id');
+        $r = $this->view('forecast/form', ['t' => $t, 'errors' => $errors, 'id' => $id, 'accounts' => $accounts, 'locked' => $id ? (bool) LinkService::info([$id]) : false]);
         $r->status = $status;
         return $r;
     }
