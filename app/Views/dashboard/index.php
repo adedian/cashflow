@@ -51,8 +51,6 @@
   </div>
 </section>
 
-<section class="card" id="recon" hidden></section>
-
 <section class="grid g-main">
   <div class="card">
     <div class="card-head"><h2>Mutasi masuk vs mutasi keluar usaha</h2><span class="muted" style="font-size:12.5px">per bulan</span></div>

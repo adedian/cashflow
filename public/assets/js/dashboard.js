@@ -79,25 +79,6 @@
   }
   if (H.reminders) H.reminders.on(renderReminders);
 
-  // Rekonsiliasi periode (data ringkasan tetap dihitung server; 4 kartu ringkasan sudah dihapus dari tampilan dashboard)
-  function renderRecon(s) {
-    var r = $('#recon');
-    r.hidden = false;
-    r.innerHTML = '<div class="card-head" style="margin-bottom:8px"><h3>Rekonsiliasi periode</h3><span class="pill pill-blue">Saldo awal + arus kas = saldo akhir</span></div>' +
-      '<div class="grid g-4" style="gap:12px">' +
-      '<div><div class="muted" style="font-size:12.5px">Saldo awal</div><b class="num">' + H.money(s.opening) + '</b></div>' +
-      '<div><div class="muted" style="font-size:12.5px">+ Arus kas bersih usaha</div><b class="num ' + (s.ops_net.charAt(0) === '-' ? 'neg' : 'pos') + '">' + H.money(s.ops_net) + '</b></div>' +
-      '<div><div class="muted" style="font-size:12.5px">+ Pembiayaan & transfer (neto)</div><b class="num">' + H.money(addDec(s.fin_net, s.transfer_net)) + '</b></div>' +
-      '<div><div class="muted" style="font-size:12.5px">= Saldo akhir</div><b class="num">' + H.money(s.closing) + '</b></div></div>' +
-      '<p class="help mt-1 mb-0">Pembiayaan (penarikan/pembayaran pinjaman) dan pindah dana antar rekening tidak dihitung sebagai mutasi masuk/keluar usaha agar tidak terhitung ganda. Saldo gabungan = jumlah saldo rekening bank dan fasilitas.</p>';
-  }
-  // penjumlahan desimal string sederhana (hanya untuk tampilan gabungan dua nilai 2-desimal dari server)
-  function addDec(a, b) {
-    var x = Math.round(parseFloat(a) * 100), y = Math.round(parseFloat(b) * 100), t = x + y, neg = t < 0; t = Math.abs(t);
-    var s = String(t); while (s.length < 3) s = '0' + s;
-    return (neg ? '-' : '') + s.slice(0, -2) + '.' + s.slice(-2);
-  }
-
   function renderLimits(list) {
     var box = $('#limits');
     var fac = list.filter(function (a) { return a.limit !== null; });
@@ -126,7 +107,6 @@
 
   function render(d) {
     renderAccounts(d.accounts, d.can_manage);
-    renderRecon(d.summary);
     renderLimits(d.accounts);
     window.HMECharts.bars($('#chBars'), d.monthly);
     window.HMECharts.area($('#chArea'), d.monthly);
