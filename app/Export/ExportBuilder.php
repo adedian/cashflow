@@ -77,6 +77,7 @@ final class ExportBuilder
                 'by' => (string) ($t['created_name'] ?? ''),   // "Dibuat oleh" = pembuat transaksi (seperti Sistem Stok), bukan pencetak
                 'lines' => $lines,
                 'total' => $total,
+                'note' => trim((string) ($t['note'] ?? '')),   // Catatan transaksi -> kotak CATATAN pada bukti (hanya bila ada)
             ];
         }
         $d = new Document(self::DOCS['bukti'], 'cashflow-bukti-bank', setting('company_name', 'PT Hexa Multi Energi'), (string) ($user['full_name'] ?? ''));

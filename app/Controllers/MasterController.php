@@ -40,7 +40,7 @@ final class MasterController extends Controller
                 if ((int) $r['id'] === $editId) { $data['edit'] = $r; }
             }
         } elseif ($tab === 'counterparties') {
-            $data['rows'] = Db::all('SELECT c.*, (SELECT COUNT(*) FROM transactions t WHERE t.counterparty_detail = c.label AND t.voided_at IS NULL) AS n FROM counterparty_accounts c ORDER BY c.label');
+            $data['rows'] = Db::all('SELECT c.*, p.name AS party_name, (SELECT COUNT(*) FROM transactions t WHERE t.counterparty_detail = c.label AND t.voided_at IS NULL) AS n FROM counterparty_accounts c LEFT JOIN parties p ON p.id = c.party_id ORDER BY c.label');
         } elseif ($tab === 'suppliers') {
             $data['rows'] = Db::all('SELECT s.*, (SELECT COUNT(*) FROM debts d WHERE d.supplier_id = s.id AND d.voided_at IS NULL) AS n FROM suppliers s ORDER BY s.name');
         } elseif ($tab === 'parties') {
@@ -280,7 +280,7 @@ final class MasterController extends Controller
     public function createPartyApi(): Response
     {
         $name = PartyService::clean($this->req->str('name'));
-        if ($name === '' || mb_strlen($name) > 255) {
+        if ($name === '' || mb_strlen(trim((string) preg_replace('/\s+/', ' ', $this->req->str('name')))) > 255) {   // clean() memotong; panjang asli diperiksa agar tidak tersimpan terpotong diam-diam
             return $this->fail('Nama customer wajib diisi (maks. 255 karakter).');
         }
         $existing = PartyService::canonical($name);
@@ -299,16 +299,21 @@ final class MasterController extends Controller
     public function createCategoryApi(): Response
     {
         $name = preg_replace('/\s+/', ' ', $this->name('name', 120));
+        // Jenis tidak lagi dipilih di dialog tambah cepat: ditentukan dari arah transaksi (masuk → pendapatan, keluar → biaya);
+        // dapat diubah di Master Data → Kategori. Parameter "kind" lama tetap diterima bila valid.
         $kind = $this->req->str('kind');
+        if ($kind === '') {
+            $kind = $this->req->str('dir') === 'in' ? 'pendapatan' : 'biaya';
+        }
         if ($name === '' || !in_array($kind, self::KINDS, true)) {
-            return $this->fail('Nama kategori wajib diisi dan jenis harus dipilih.');
+            return $this->fail('Nama kategori wajib diisi.');
         }
         $row = Db::one('SELECT id, name, kind, is_active FROM categories WHERE name = ?', [$name]);
         if ($row) {
             if (!(int) $row['is_active']) {
                 return $this->fail('Kategori “' . $row['name'] . '” sudah ada tetapi nonaktif. Aktifkan di Master Data → Kategori.');
             }
-            return $this->ok(['id' => (int) $row['id'], 'name' => $row['name'], 'kind' => $row['kind'], 'created' => false]);
+            return $this->ok(['id' => (int) $row['id'], 'name' => $row['name'], 'kind' => $row['kind'], 'kind_label' => Lookup::KIND_LABEL[$row['kind']] ?? $row['kind'], 'created' => false]);
         }
         $id = 0;
         Db::tx(function () use ($name, $kind, &$id) {
@@ -316,7 +321,7 @@ final class MasterController extends Controller
             Audit::log('category_create', 'category', (string) $id, "Tambah kategori $name ($kind) (dari formulir Transaksi)", null, ['name' => $name, 'kind' => $kind]);
             Version::bump('master');
         });
-        return $this->ok(['id' => $id, 'name' => $name, 'kind' => $kind, 'created' => true]);
+        return $this->ok(['id' => $id, 'name' => $name, 'kind' => $kind, 'kind_label' => Lookup::KIND_LABEL[$kind] ?? $kind, 'created' => true]);
     }
 
     /** Tambah cepat proyek dari formulir Transaksi (JSON). */
@@ -340,6 +345,69 @@ final class MasterController extends Controller
             Version::bump('master');
         });
         return $this->ok(['id' => $id, 'name' => $name, 'created' => true]);
+    }
+
+    /**
+     * Tambah cepat Bank / rekening pihak dari formulir Transaksi (JSON). Isian: bank, account_no (6–30 digit), party (opsional, nama pihak di master).
+     * Label = "<Bank> <No> [a.n. <Pihak>]". Tidak membuat data ganda: label yang sama, atau bank + nomor yang sama (juga pada rekening lama
+     * yang hanya berupa teks label), mengembalikan rekening yang sudah ada.
+     */
+    public function createCounterpartyApi(): Response
+    {
+        $bank = preg_replace('/\s+/', ' ', $this->name('bank', 80));
+        $digits = preg_replace('/[\s.\-]/', '', trim($this->req->str('account_no')));
+        $partyIn = PartyService::clean($this->req->str('party'));
+        if ($bank === '') {
+            return $this->fail('Nama bank wajib diisi.');
+        }
+        if (!preg_match('/^\d{6,30}$/', (string) $digits)) {
+            return $this->fail('Nomor rekening harus berupa 6–30 digit angka.');
+        }
+        $partyName = null;
+        $partyId = null;
+        if ($partyIn !== '') {
+            $partyName = PartyService::canonical($partyIn);
+            if ($partyName !== null) {
+                $partyId = (int) Db::val('SELECT id FROM parties WHERE name = ?', [$partyName]);
+            }
+        }
+        $label = mb_substr($bank . ' ' . $digits . ($partyIn !== '' ? ' a.n. ' . ($partyName ?? $partyIn) : ''), 0, 255);
+        $esc = static fn(string $s): string => addcslashes($s, '%_\\');
+        // 1) rekening yang sama (bank + nomor) — juga mengenali label lama bebas-teks yang memuat bank & nomor tsb
+        $same = Db::all(
+            "SELECT id, label, is_active, party_id FROM counterparty_accounts
+             WHERE label = ? OR (account_no = ? AND bank_name = ?)
+                OR (REPLACE(REPLACE(REPLACE(label, ' ', ''), '-', ''), '.', '') LIKE ? AND label LIKE ?)
+             ORDER BY is_active DESC, id",
+            [$label, $digits, $bank, '%' . $esc($digits) . '%', '%' . $esc($bank) . '%']
+        );
+        foreach ($same as $r) {
+            if (!(int) $r['is_active']) {
+                return $this->fail('Rekening “' . $r['label'] . '” sudah ada tetapi nonaktif. Aktifkan di Master Data → Rekening Lawan.');
+            }
+        }
+        if ($same) {
+            $r = $same[0];
+            if ($partyIn !== '' && $r['party_id'] !== null && (int) $r['party_id'] !== (int) $partyId) {
+                return $this->fail('Rekening ini sudah terdaftar atas pihak lain (“' . $r['label'] . '”).');
+            }
+            return $this->ok(['id' => (int) $r['id'], 'label' => $r['label'], 'created' => false]);
+        }
+        $id = 0;
+        $newParty = false;
+        Db::tx(function () use ($bank, $digits, $label, $partyIn, &$partyName, &$partyId, &$newParty, &$id) {
+            if ($partyIn !== '' && $partyId === null) {
+                // pihak belum ada di master: dibuat sekaligus (validasi & pencegahan duplikat sama seperti Master Data → Customer)
+                $partyId = (int) PartyService::ensure($partyIn);
+                $partyName = $partyIn;
+                $newParty = true;
+                Audit::log('party_create', 'party', (string) $partyId, "Tambah customer $partyIn (dari tambah cepat rekening pihak)", null, ['name' => $partyIn]);
+            }
+            $id = (int) Db::insert('counterparty_accounts', ['label' => $label, 'party_id' => $partyId, 'bank_name' => $bank, 'account_no' => $digits]);
+            Audit::log('cpa_create', 'counterparty_account', (string) $id, "Tambah rekening lawan $label (dari formulir Transaksi)", null, ['label' => $label, 'party_id' => $partyId]);
+            Version::bump('master');
+        });
+        return $this->ok(['id' => $id, 'label' => $label, 'created' => true, 'party' => $partyName, 'party_created' => $newParty]);
     }
 
     /* ---------- supplier (dropdown Nama supplier di formulir Hutang) ---------- */

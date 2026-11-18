@@ -79,17 +79,8 @@
   }
   if (H.reminders) H.reminders.on(renderReminders);
 
-  function kpi(icn, tone, k, v, d) {
-    return '<div class="card stat"><div class="k"><span class="ic ' + tone + '">' + icon(icn) + '</span>' + k + '</div><div class="v num">' + v + '</div><div class="d">' + d + '</div></div>';
-  }
-
-  function renderKpis(s, range) {
-    var per = s.from ? H.fmtDate(s.from) + ' – ' + H.fmtDate(s.to) : 'seluruh data';
-    $('#kpis').innerHTML =
-      kpi('db', '', 'Saldo awal · semua rekening', H.money(s.opening), s.from ? 'per ' + H.fmtDate(s.from) : 'saldo pembukaan akun') +
-      kpi('in', 'g', 'Mutasi masuk usaha', H.money(s.ops_in), 'di luar pembiayaan & transfer') +
-      kpi('out', 'r', 'Mutasi keluar usaha', H.money(s.ops_out), s.tx_count + ' transaksi pada ' + per) +
-      kpi('card', 'o', 'Saldo akhir · semua rekening', H.money(s.closing), 'Arus kas bersih usaha ' + '<b class="' + (s.ops_net.charAt(0) === '-' ? 'neg' : 'pos') + '">' + H.money(s.ops_net) + '</b>');
+  // Rekonsiliasi periode (data ringkasan tetap dihitung server; 4 kartu ringkasan sudah dihapus dari tampilan dashboard)
+  function renderRecon(s) {
     var r = $('#recon');
     r.hidden = false;
     r.innerHTML = '<div class="card-head" style="margin-bottom:8px"><h3>Rekonsiliasi periode</h3><span class="pill pill-blue">Saldo awal + arus kas = saldo akhir</span></div>' +
@@ -135,7 +126,7 @@
 
   function render(d) {
     renderAccounts(d.accounts, d.can_manage);
-    renderKpis(d.summary, d.range);
+    renderRecon(d.summary);
     renderLimits(d.accounts);
     window.HMECharts.bars($('#chBars'), d.monthly);
     window.HMECharts.area($('#chArea'), d.monthly);

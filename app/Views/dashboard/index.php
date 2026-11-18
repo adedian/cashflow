@@ -3,6 +3,10 @@
 /** @var array $accounts */
 /** @var array $range */
 ?>
+<section class="grid g-4" id="accCards" aria-label="Informasi Saldo Rekening">
+  <?php for ($i = 0; $i < 4; $i++): ?><div class="acc-card"><div class="skeleton" style="height:118px;border-radius:0"></div></div><?php endfor; ?>
+</section>
+
 <section class="card rem" id="remCard" aria-label="Pengingat Pembayaran">
   <div class="rem-head">
     <h2>Pengingat Pembayaran</h2><span class="rem-count" id="remCount" hidden>0</span>
@@ -45,14 +49,6 @@
       <?php if ($range['last']): ?>Data tercatat <?= e(fmt_date($range['first'])) ?> – <?= e(fmt_date($range['last'])) ?>.<?php else: ?>Belum ada transaksi. Super Admin dapat mengimpor Excel atau menambah transaksi.<?php endif; ?>
     </p>
   </div>
-</section>
-
-<section class="grid g-4" id="accCards" aria-label="Rekening Perusahaan">
-  <?php for ($i = 0; $i < 4; $i++): ?><div class="acc-card"><div class="skeleton" style="height:118px;border-radius:0"></div></div><?php endfor; ?>
-</section>
-
-<section class="grid g-4" id="kpis" aria-label="Ringkasan periode">
-  <?php for ($i = 0; $i < 4; $i++): ?><div class="card"><div class="skeleton" style="height:58px"></div></div><?php endfor; ?>
 </section>
 
 <section class="card" id="recon" hidden></section>

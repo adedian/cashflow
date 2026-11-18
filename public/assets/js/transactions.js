@@ -144,7 +144,7 @@
     /* --- tombol "+" di samping Kategori / Proyek: tambah ke master lewat dialog, lalu langsung dipilih di baris tsb. --- */
     var qa = document.getElementById('quickAdd');
     if (qa) {
-      var qaName = document.getElementById('qaName'), qaKind = document.getElementById('qaKind'), qaKindBox = document.getElementById('qaKindBox');
+      var qaName = document.getElementById('qaName'), qaHelp = document.getElementById('qaHelp');
       var qaErr = document.getElementById('qaErr'), qaSave = document.getElementById('qaSave'), qaTitle = document.getElementById('qaTitle'), qaLbl = document.getElementById('qaNameLbl');
       var qaWhat = 'category', qaRow = null, qaBusy = false;
       var qaCfg = {
@@ -171,8 +171,9 @@
         qaWhat = what; qaRow = row; var c = qaCfg[what];
         qaTitle.textContent = c.title; qaLbl.firstChild.textContent = c.label + ' ';
         qaName.maxLength = c.max; qaName.value = ''; showErr('');
-        qaKindBox.hidden = what !== 'category';
-        if (what === 'category') { var d = document.querySelector('input[name="direction"]:checked'); qaKind.value = d && d.value === 'in' ? 'pendapatan' : 'biaya'; }
+        if (qaHelp) qaHelp.textContent = what === 'category'
+          ? 'Tersimpan ke Master Data dan langsung dipilih pada baris uraian ini. Jenis kategori mengikuti arah transaksi (Mutasi Masuk → Pendapatan, Mutasi Keluar → Biaya); dapat diubah di Master Data → Kategori.'
+          : 'Tersimpan ke Master Data dan langsung dipilih pada baris uraian ini.';
         HME.openModal('quickAdd');
         setTimeout(function () { qaName.focus(); }, 60);
       };
@@ -185,11 +186,11 @@
         var name = qaName.value.replace(/\s+/g, ' ').trim();
         if (!name) { showErr('Nama wajib diisi.'); qaName.focus(); return; }
         var c = qaCfg[qaWhat], form = new URLSearchParams({ name: name });
-        if (qaWhat === 'category') form.set('kind', qaKind.value);
+        if (qaWhat === 'category') { var d = document.querySelector('input[name="direction"]:checked'); form.set('dir', d && d.value === 'in' ? 'in' : 'out'); }
         qaBusy = true; qaSave.disabled = true;
         HME.api(c.url, { method: 'POST', form: form }).then(function (j) {
           if (!j || !j.ok) { showErr((j && j.error) || 'Gagal menambahkan.'); return; }
-          var group = qaWhat === 'category' ? (qaKind.querySelector('option[value="' + j.kind + '"]') || {}).textContent : null;
+          var group = qaWhat === 'category' ? j.kind_label : null;
           addOpt(lineBox, c.cls, j.id, j.name, group); addOpt(tpl.content, c.cls, j.id, j.name, group);
           var target = qaRow && qaRow.querySelector(c.cls);
           if (target) { target.value = String(j.id); target.dispatchEvent(new Event('change', { bubbles: true })); }
@@ -202,6 +203,83 @@
       qaName.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveQuick(); } });
     }
   }
+
+  /* --- tombol "+" di samping Pihak & Bank/rekening pihak: tambah ke master lewat dialog ringkas, lalu langsung dipilih. --- */
+  (function () {
+    var party = document.getElementById('counterparty'), bank = document.getElementById('counterparty_detail');
+    var qp = document.getElementById('quickParty'), qb = document.getElementById('quickBank');
+    if (!party || !bank || !qp || !qb) return;
+    var $ = function (id) { return document.getElementById(id); };
+    var show = function (box, m) { box.hidden = !m; box.textContent = m || ''; };
+    var hasOpt = function (s, v) { return Array.prototype.some.call(s.options, function (o) { return o.value.toLowerCase() === v.toLowerCase(); }); };
+    // sisipkan opsi (bila belum ada) ke dropdown asli lalu pilih; combo.js menyinkronkan tampilannya lewat event change
+    var pickIn = function (sel, value) {
+      Array.prototype.forEach.call(sel.options, function (o) { if (o.value.toLowerCase() === value.toLowerCase()) value = o.value; });
+      if (!hasOpt(sel, value)) sel.appendChild(new Option(value, value));
+      sel.value = value; delete sel.dataset.auto;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    var done = function (msg) { if (H.toast) H.toast(msg, 'success', 2500); };
+
+    /* pihak */
+    var pName = $('qpName'), pErr = $('qpErr'), pSave = $('qpSave'), pBusy = false;
+    var openParty = function () { pName.value = ''; show(pErr, ''); H.openModal('quickParty'); setTimeout(function () { pName.focus(); }, 60); };
+    var saveParty = function () {
+      if (pBusy) return;
+      var name = pName.value.replace(/\s+/g, ' ').trim();
+      if (!name) { show(pErr, 'Nama pihak wajib diisi.'); pName.focus(); return; }
+      if (name.length > 255) { show(pErr, 'Nama pihak maksimal 255 karakter.'); return; }
+      pBusy = true; pSave.disabled = true;
+      H.api('/api/parties', { method: 'POST', form: new URLSearchParams({ name: name }) }).then(function (j) {
+        if (!j || !j.ok) { show(pErr, (j && j.error) || 'Gagal menambahkan.'); return; }
+        var bp = $('qbParty');   // opsi baru juga tersedia di dropdown pemilik rekening pada dialog Bank
+        if (bp && !hasOpt(bp, j.name)) bp.appendChild(new Option(j.name, j.name));
+        pickIn(party, j.name);
+        done(j.created ? '“' + j.name + '” ditambahkan ke master.' : '“' + j.name + '” sudah ada — dipilih.');
+        H.closeModal(qp);
+      }).catch(function () { show(pErr, 'Koneksi terputus — gagal menambahkan.'); })
+        .then(function () { pBusy = false; pSave.disabled = false; });
+    };
+    pSave.addEventListener('click', saveParty);
+    pName.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveParty(); } });
+
+    /* bank / rekening pihak */
+    var bBank = $('qbBank'), bNo = $('qbNo'), bParty = $('qbParty'), bErr = $('qbErr'), bSave = $('qbSave'), bBusy = false;
+    var openBank = function () {
+      bBank.value = ''; bNo.value = ''; show(bErr, '');
+      // pemilik rekening = pihak yang sedang dipilih di formulir (bila ada di daftar)
+      var cur = party.value || '';
+      if (cur && !hasOpt(bParty, cur)) bParty.appendChild(new Option(cur, cur));
+      bParty.value = cur;
+      bParty.dispatchEvent(new Event('change', { bubbles: true }));
+      H.openModal('quickBank'); setTimeout(function () { bBank.focus(); }, 60);
+    };
+    var saveBank = function () {
+      if (bBusy) return;
+      var b = bBank.value.replace(/\s+/g, ' ').trim(), no = bNo.value.replace(/[\s.\-]/g, '');
+      if (!b) { show(bErr, 'Nama bank wajib diisi.'); bBank.focus(); return; }
+      if (!/^\d{6,30}$/.test(no)) { show(bErr, 'Nomor rekening harus berupa 6–30 digit angka.'); bNo.focus(); return; }
+      bBusy = true; bSave.disabled = true;
+      H.api('/api/counterparties', { method: 'POST', form: new URLSearchParams({ bank: b, account_no: no, party: bParty.value || '' }) }).then(function (j) {
+        if (!j || !j.ok) { show(bErr, (j && j.error) || 'Gagal menambahkan.'); return; }
+        if (j.party) {   // pihak baru (dibuat bersama rekening) tersedia di dropdown Pihak juga
+          [party, bParty].forEach(function (s) { if (!hasOpt(s, j.party)) s.appendChild(new Option(j.party, j.party)); });
+        }
+        pickIn(bank, j.label);
+        done(j.created ? '“' + j.label + '” ditambahkan ke master.' : '“' + j.label + '” sudah ada — dipilih.');
+        H.closeModal(qb);
+      }).catch(function () { show(bErr, 'Koneksi terputus — gagal menambahkan.'); })
+        .then(function () { bBusy = false; bSave.disabled = false; });
+    };
+    bSave.addEventListener('click', saveBank);
+    [bBank, bNo].forEach(function (i) { i.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveBank(); } }); });
+
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-quick-master]') : null;
+      if (!b) return;
+      if (b.getAttribute('data-quick-master') === 'party') openParty(); else openBank();
+    });
+  })();
 
   /* --- formulir: No. Invoice/PO (dropdown dinamis) — isi otomatis & ganti jenis transaksi --- */
   var refBox = document.getElementById('ref_combo');

@@ -19,6 +19,8 @@ namespace App\Export;
  *    header 29,25% | 42% | 28,75%; bawah: CATATAN 29,25% + 4 kolom tanda tangan sama lebar;
  *  - 14 baris isi + baris "Ch/G.B. No. | TOTAL"; baris bertambah bila uraian lebih banyak;
  *  - warna: keluar #FF0000 / isian #EDE1E0, masuk #00A651 / isian #E2EFDA;
+ *  - CATATAN: isi catatan transaksi dibungkus di kotak CATATAN (hanya bila terisi). Catatan panjang: font mengecil bertahap (8 → 6 pt), lalu kotak
+ *    bawah (CATATAN + tanda tangan) dipertinggi selama masih aman di atas garis tengah kertas; bila tetap tidak muat, dipotong dengan "...".
  *  - kaki: "Dibuat oleh: <pembuat transaksi> · <tanggal jam> WIB" (abu-abu, 10 px, rata kanan).
  * Digambar langsung (bukan lewat model Sheet) dengan font Helvetica bawaan PDF, sama seperti PdfWriter.
  *
@@ -40,7 +42,7 @@ final class VoucherPdf
     private string $o = '';
 
     /**
-     * @param array<int,array{kind:string,number:string,date:string,party:string,by:string,lines:array<int,array{description:string,amount:string}>,total:string}> $vouchers
+     * @param array<int,array{kind:string,number:string,date:string,party:string,by:string,lines:array<int,array{description:string,amount:string}>,total:string,note?:string}> $vouchers
      */
     public static function build(array $vouchers, Document $doc, string $paper = self::DEFAULT_PAPER): string
     {
@@ -223,6 +225,35 @@ final class VoucherPdf
         $lastTop = $bodyTop + $nRows * $rowH;
         $terbTop = $lastTop + $lastH;
         $botTop = $terbTop + $terbH;
+        // Catatan transaksi: muat di kotak CATATAN (lebar 29,25%); bila panjang, font mengecil lalu kotak dipertinggi (batas aman: di atas garis tengah kertas)
+        $cx = 7 * 0.75;
+        $noteTop = 5 * 0.75 + $fs * 0.9 + 4.0;                       // jarak dari botTop ke baris catatan pertama (di bawah judul CATATAN)
+        $noteW = $p(29.25) - 2 * $cx;
+        $noteLines = [];
+        $noteSz = 8.0;
+        $noteText = trim((string) preg_replace('/\n{3,}/', "\n\n", str_replace(["\r\n", "\r"], "\n", (string) ($v['note'] ?? ''))));
+        if ($noteText !== '') {
+            $baseH = $botTop + $sigBand + $sigH;
+            $maxH = max($baseH, $ph / 2 - 14 * $mm - $oy);           // batas bawah kotak: 14 mm di atas garis tengah kertas (ruang kaki + pemotongan)
+            $room = $maxH - $botTop - 3.0 - $noteTop;                  // tinggi tersedia untuk baris catatan
+            $fit = false;
+            for ($noteSz = 8.0; $noteSz >= 6.0 - 0.001; $noteSz -= 0.5) {
+                $noteLines = self::wrap($noteText, $noteSz, $noteW);
+                if (count($noteLines) * $noteSz * 1.2 <= $room) { $fit = true; break; }
+            }
+            if (!$fit) {
+                $noteSz = 6.0;
+                $cap = max(1, (int) floor($room / ($noteSz * 1.2)));
+                $noteLines = array_slice(self::wrap($noteText, $noteSz, $noteW), 0, $cap);
+                $last = rtrim(end($noteLines)) . '...';
+                while (self::tw($last, false, $noteSz) > $noteW && mb_strlen($last) > 4) {
+                    $last = rtrim(mb_substr($last, 0, -4)) . '...';
+                }
+                $noteLines[count($noteLines) - 1] = $last;
+            }
+            $needSigH = $noteTop + count($noteLines) * $noteSz * 1.2 + 3.0 - $sigBand;   // kotak tanda tangan ikut meninggi bila perlu
+            $sigH = max($sigH, $needSigH);
+        }
         $H = $botTop + $sigBand + $sigH;
 
         $this->o = "q\n1 0 0 -1 0 " . self::n($ph) . " cm\n1 0 0 1 " . self::n($ox) . ' ' . self::n($oy) . " cm\n";
@@ -319,9 +350,11 @@ final class VoucherPdf
         $this->text($col[1] + $pad, self::mid($terbTop, $terbH, $ts), $words, $ts, 'i', '1A1A1A');
 
         // --- CATATAN + tanda tangan
-        $cx = 7 * 0.75;
         $this->text($cx, $botTop + 5 * 0.75 + $fs * 0.9, 'CATATAN :', $fs, 'b', $acc);
         $this->line($cx, $botTop + 5 * 0.75 + $fs * 0.9 + 1.4, $cx + self::tw('CATATAN :', true, $fs), $botTop + 5 * 0.75 + $fs * 0.9 + 1.4, $acc, 0.7);
+        foreach ($noteLines as $i => $nl) {
+            $this->text($cx, $botTop + $noteTop + ($i + 1) * $noteSz * 1.2 - $noteSz * 0.25, $nl, $noteSz, 'r', '1A1A1A');
+        }
         foreach (['Pembukuan', 'Mengetahui', 'Kasir', $K['last']] as $i => $lbl) {
             $this->text($p(29.25 + 17.6875 * ($i + 0.5)), self::mid($botTop, $sigBand, $fs), $lbl, $fs, 'b', 'FFFFFF', 'c');
         }

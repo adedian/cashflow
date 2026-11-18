@@ -77,11 +77,16 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS counterparty_accounts (
   id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
   label      VARCHAR(255) NOT NULL COMMENT 'mis. "BCA 0490393030 a.n. PT Contoh"',
+  party_id   INT UNSIGNED NULL COMMENT 'pemilik rekening (parties.id); NULL = belum dihubungkan',
+  bank_name  VARCHAR(80) NULL,
+  account_no VARCHAR(40) NULL,
   is_active  TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_cpa_label (label)
+  UNIQUE KEY uq_cpa_label (label),
+  KEY ix_cpa_party (party_id),
+  KEY ix_cpa_no (account_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- hasil normalisasi kategori teks bebas Excel -> kategori + proyek

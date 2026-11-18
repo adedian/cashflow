@@ -170,11 +170,12 @@ $showLimit = $isEdit && ($edit['kind'] === 'facility' || $edit['credit_limit'] !
 </section>
 <section class="card card-flush">
   <div class="table-wrap"><table class="tbl">
-    <thead><tr><th>Bank / rekening pihak</th><th class="r">Transaksi</th><th>Aktif</th><th></th></tr></thead>
+    <thead><tr><th>Bank / rekening pihak</th><th>Pihak</th><th class="r">Transaksi</th><th>Aktif</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($rows as $r): $fid = 'mq' . (int) $r['id']; ?>
       <tr>
         <td><?= $rowForm($fid, url('/master/counterparties/' . (int) $r['id'])) ?><input form="<?= $fid ?>" class="input" name="label" value="<?= e($r['label']) ?>" maxlength="255" required aria-label="Bank / rekening pihak"></td>
+        <td class="muted"><?= e((string) ($r['party_name'] ?? '')) ?: '—' ?></td>
         <td class="r num"><?= number_format((int) $r['n'], 0, ',', '.') ?></td>
         <td><label class="check"><input form="<?= $fid ?>" type="checkbox" name="is_active" value="1" <?= $r['is_active'] ? 'checked' : '' ?>></label></td>
         <td><button form="<?= $fid ?>" class="btn btn-ghost btn-sm" type="submit" data-no-lock>Simpan</button></td>

@@ -85,12 +85,12 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
       <div class="field">
         <label for="counterparty">Pihak (penerima/pembayar)</label>
         <?php $curParty = trim((string) $v('counterparty')); $partyNames = array_column($parties, 'name'); ?>
-        <select class="input" id="counterparty" name="counterparty" data-combo data-combo-create="/api/parties" data-combo-placeholder="Ketik untuk mencari pihak…"<?= $auto ?>>
+        <div class="field-pick"><select class="input" id="counterparty" name="counterparty" data-combo data-combo-create="/api/parties" data-combo-placeholder="Ketik untuk mencari pihak…"<?= $auto ?>>
           <option value="">— pilih pihak —</option>
           <?php if ($curParty !== '' && !in_array(mb_strtolower($curParty), array_map('mb_strtolower', $partyNames), true)): ?><option value="<?= e($curParty) ?>" selected><?= e($curParty) ?> (belum di master)</option><?php endif; ?>
           <?php foreach ($partyNames as $pn): ?><option value="<?= e($pn) ?>" <?= mb_strtolower($pn) === mb_strtolower($curParty) ? 'selected' : '' ?>><?= e($pn) ?></option><?php endforeach; ?>
-        </select><?= $fe('counterparty') ?>
-        <span class="help">Tidak ada di daftar? Ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=parties')) ?>">Master Data → Customer</a>.</span>
+        </select><button type="button" class="btn btn-ghost btn-sm btn-icon field-quick" data-quick-master="party" title="Tambah pihak baru" aria-label="Tambah pihak baru"><svg class="i i-sm"><use href="#i-plus"/></svg></button></div><?= $fe('counterparty') ?>
+        <span class="help">Tidak ada di daftar? Klik <b>+</b> atau ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=parties')) ?>">Master Data → Customer</a>.</span>
       </div>
       <div class="field full">
         <label for="description">Uraian <span class="req">*</span></label>
@@ -125,12 +125,12 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
       </div>
       <div class="field">
         <label for="counterparty_detail">Bank / rekening pihak <span class="help">(hanya terlihat Super Admin)</span></label>
-        <select class="input" id="counterparty_detail" name="counterparty_detail">
+        <div class="field-pick"><select class="input" id="counterparty_detail" name="counterparty_detail">
           <option value="">— pilih rekening lawan —</option>
           <?php $curCp = trim((string) $v('counterparty_detail')); $cpLabels = array_column($counterpartyAccounts, 'label'); ?>
           <?php if ($curCp !== '' && !in_array($curCp, $cpLabels, true)): ?><option value="<?= e($curCp) ?>" selected><?= e($curCp) ?> (belum di master)</option><?php endif; ?>
           <?php foreach ($cpLabels as $lbl): ?><option value="<?= e($lbl) ?>" <?= $lbl === $curCp ? 'selected' : '' ?>><?= e($lbl) ?></option><?php endforeach; ?>
-        </select><?= $fe('counterparty_detail') ?>
+        </select><button type="button" class="btn btn-ghost btn-sm btn-icon field-quick" data-quick-master="bank" title="Tambah bank / rekening pihak baru" aria-label="Tambah bank / rekening pihak baru"><svg class="i i-sm"><use href="#i-plus"/></svg></button></div><?= $fe('counterparty_detail') ?>
         <span class="help">Daftar dikelola di <a href="<?= e(url('/master?tab=counterparties')) ?>">Master Data → Rekening Lawan</a>.</span>
       </div>
       <div class="field full">
@@ -155,19 +155,66 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
           <label for="qaName" id="qaNameLbl">Nama kategori <span class="req">*</span></label>
           <input class="input" id="qaName" maxlength="160" autocomplete="off">
         </div>
-        <div class="field" id="qaKindBox">
-          <label for="qaKind">Jenis <span class="req">*</span></label>
-          <select class="input" id="qaKind" data-no-combo>
-            <?php foreach ($kinds as $k => $lbl): ?><option value="<?= e($k) ?>"><?= e($lbl) ?></option><?php endforeach; ?>
-          </select>
-        </div>
         <div class="err" id="qaErr" hidden role="alert"></div>
-        <span class="help">Tersimpan ke Master Data dan langsung dipilih pada baris uraian ini.</span>
+        <span class="help" id="qaHelp">Tersimpan ke Master Data dan langsung dipilih pada baris uraian ini.</span>
       </div>
     </div>
     <div class="modal-foot">
       <button type="button" class="btn btn-ghost" data-close-modal>Batal</button>
       <button type="button" class="btn" id="qaSave">Simpan &amp; pilih</button>
+    </div>
+  </div>
+</div>
+
+<?php /* dialog tambah cepat Pihak & Bank/rekening pihak (master: Customer / Rekening Lawan) */ ?>
+<div class="modal-back" id="quickParty" aria-hidden="true">
+  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="qpTitle">
+    <div class="modal-head"><h3 id="qpTitle">Tambah pihak</h3><button type="button" class="icon-btn" style="background:#eef1f8;color:#3b4566" data-close-modal aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="field">
+          <label for="qpName">Nama pihak (penerima / pembayar) <span class="req">*</span></label>
+          <input class="input" id="qpName" maxlength="255" autocomplete="off" placeholder="mis. PT. Contoh Abadi">
+        </div>
+        <div class="err" id="qpErr" hidden role="alert"></div>
+        <span class="help">Tersimpan ke Master Data → Customer dan langsung dipilih. Nama yang sudah ada (tanpa membedakan huruf besar/kecil) tidak dibuat ganda — pihak yang ada langsung dipilih.</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" data-close-modal>Batal</button>
+      <button type="button" class="btn" id="qpSave">Simpan &amp; pilih</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-back" id="quickBank" aria-hidden="true">
+  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="qbTitle">
+    <div class="modal-head"><h3 id="qbTitle">Tambah bank / rekening pihak</h3><button type="button" class="icon-btn" style="background:#eef1f8;color:#3b4566" data-close-modal aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="field">
+          <label for="qbBank">Bank <span class="req">*</span></label>
+          <input class="input" id="qbBank" maxlength="80" autocomplete="off" placeholder="mis. BCA">
+        </div>
+        <div class="field">
+          <label for="qbNo">Nomor rekening <span class="req">*</span></label>
+          <input class="input num" id="qbNo" maxlength="40" inputmode="numeric" autocomplete="off" placeholder="6–30 digit angka">
+        </div>
+        <div class="field">
+          <label for="qbParty">Pemilik rekening (pihak)</label>
+          <select class="input" id="qbParty" data-combo data-combo-create="/api/parties" data-combo-placeholder="Ketik untuk mencari pihak…">
+            <option value="">— tanpa pihak —</option>
+            <?php foreach ($partyNames as $pn): ?><option value="<?= e($pn) ?>"><?= e($pn) ?></option><?php endforeach; ?>
+          </select>
+          <span class="help">Otomatis mengikuti kolom Pihak di formulir. Bila dipilih, rekening dihubungkan dengan pihak tersebut (“a.n. …”).</span>
+        </div>
+        <div class="err" id="qbErr" hidden role="alert"></div>
+        <span class="help">Tersimpan ke Master Data → Rekening Lawan dan langsung dipilih. Rekening dengan bank &amp; nomor yang sama tidak dibuat ganda — yang sudah ada langsung dipilih.</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" data-close-modal>Batal</button>
+      <button type="button" class="btn" id="qbSave">Simpan &amp; pilih</button>
     </div>
   </div>
 </div>
