@@ -347,6 +347,29 @@ final class MasterController extends Controller
         return $this->ok(['id' => $id, 'name' => $name, 'created' => true]);
     }
 
+    /** Tambah cepat supplier / vendor / pihak pemberi hutang dari formulir Hutang (JSON). Nama yang sudah ada (tanpa beda huruf besar/kecil) dikembalikan apa adanya. */
+    public function createSupplierApi(): Response
+    {
+        $name = preg_replace('/\s+/', ' ', $this->name('name', 160));
+        if ($name === '') {
+            return $this->fail('Nama supplier wajib diisi.');
+        }
+        $row = Db::one('SELECT id, name, is_active FROM suppliers WHERE LOWER(name) = LOWER(?)', [$name]);
+        if ($row) {
+            if (!(int) $row['is_active']) {
+                return $this->fail('Supplier “' . $row['name'] . '” sudah ada tetapi nonaktif. Aktifkan di Master Data → Supplier.');
+            }
+            return $this->ok(['id' => (int) $row['id'], 'name' => $row['name'], 'created' => false]);
+        }
+        $id = 0;
+        Db::tx(function () use ($name, &$id) {
+            $id = (int) Db::insert('suppliers', ['name' => $name]);
+            Audit::log('supplier_create', 'supplier', (string) $id, "Tambah supplier $name (dari formulir Hutang)", null, ['name' => $name]);
+            Version::bump('master');
+        });
+        return $this->ok(['id' => $id, 'name' => $name, 'created' => true]);
+    }
+
     /**
      * Tambah cepat Bank / rekening pihak dari formulir Transaksi (JSON). Isian: bank, account_no (6–30 digit), party (opsional, nama pihak di master).
      * Label = "<Bank> <No> [a.n. <Pihak>]". Tidak membuat data ganda: label yang sama, atau bank + nomor yang sama (juga pada rekening lama

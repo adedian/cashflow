@@ -111,6 +111,7 @@ return [
     ['POST', '/api/counterparties',      'MasterController@createCounterpartyApi', 'admin'],
     ['POST', '/api/categories',        'MasterController@createCategoryApi', 'admin'],
     ['POST', '/api/projects',            'MasterController@createProjectApi', 'admin'],
+    ['POST', '/api/suppliers',           'MasterController@createSupplierApi', 'admin'],
     ['POST', '/master/suppliers',        'MasterController@saveSupplier', 'admin'],
     ['POST', '/master/suppliers/{id}',   'MasterController@saveSupplier', 'admin'],
     ['POST', '/master/opening/{id}',    'MasterController@saveOpening',  'admin'],

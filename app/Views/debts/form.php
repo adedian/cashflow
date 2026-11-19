@@ -25,11 +25,11 @@ $swap = static fn(string $std, string $loan) => '<span data-std="' . e($std) . '
       </div>
       <div class="field full">
         <label for="supplier_id">Nama supplier / vendor / pihak pemberi hutang <span class="req">*</span></label>
-        <select class="input" id="supplier_id" name="supplier_id" data-combo data-combo-placeholder="Ketik untuk mencari supplier…" required>
+        <div class="field-pick"><select class="input" id="supplier_id" name="supplier_id" data-combo data-combo-create="/api/suppliers" data-combo-placeholder="Ketik untuk mencari supplier…" required>
           <option value="">— pilih supplier —</option>
           <?php foreach ($suppliers as $s): ?><option value="<?= (int) $s['id'] ?>" <?= $curSup === (int) $s['id'] ? 'selected' : '' ?>><?= e($s['name']) ?><?= $s['is_active'] ? '' : ' (nonaktif)' ?></option><?php endforeach; ?>
-        </select><?= $fe('supplier') ?>
-        <span class="help"><?= $suppliers ? '' : 'Belum ada supplier. ' ?>Supplier dikelola di <a href="<?= e(url('/master?tab=suppliers')) ?>">Master Data → Supplier</a>; tambahkan di sana bila belum tersedia.</span>
+        </select><button type="button" class="btn btn-ghost btn-sm btn-icon field-quick" data-quick-supplier title="Tambah supplier baru" aria-label="Tambah supplier baru"><svg class="i i-sm"><use href="#i-plus"/></svg></button></div><?= $fe('supplier') ?>
+        <span class="help"><?= $suppliers ? '' : 'Belum ada supplier. ' ?>Tidak ada di daftar? Klik <b>+</b> atau ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=suppliers')) ?>">Master Data → Supplier</a>.</span>
       </div>
       <div class="field full"><label for="description">Keterangan</label><input class="input" id="description" name="description" maxlength="500" value="<?= e($v('description')) ?>"><?= $fe('description') ?></div>
       <div class="field"><label for="amount">Nominal hutang (Rp) <span class="req">*</span></label><input class="input num" id="amount" name="amount" inputmode="decimal" value="<?= e($v('amount')) ?>" required><?= $fe('amount') ?></div>
@@ -52,3 +52,24 @@ $swap = static fn(string $std, string $loan) => '<span data-std="' . e($std) . '
     <div class="mt-3" style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" type="submit">Simpan</button><a class="btn btn-ghost" href="<?= e(url($id ? '/debts/' . $id : '/debts?category=' . $curCat)) ?>">Batal</a></div>
   </form>
 </section>
+
+<?php /* dialog tambah cepat supplier (master: Supplier); di luar <form> agar tidak bersarang */ ?>
+<div class="modal-back" id="quickSupplier" aria-hidden="true">
+  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="qsTitle">
+    <div class="modal-head"><h3 id="qsTitle">Tambah supplier</h3><button type="button" class="icon-btn" style="background:#eef1f8;color:#3b4566" data-close-modal aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="field">
+          <label for="qsName">Nama supplier / vendor / pihak pemberi hutang <span class="req">*</span></label>
+          <input class="input" id="qsName" maxlength="160" autocomplete="off" placeholder="mis. PT. Contoh Abadi">
+        </div>
+        <div class="err" id="qsErr" hidden role="alert"></div>
+        <span class="help">Tersimpan ke Master Data → Supplier dan langsung dipilih. Nama yang sudah ada (tanpa membedakan huruf besar/kecil) tidak dibuat ganda — supplier yang ada langsung dipilih.</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" data-close-modal>Batal</button>
+      <button type="button" class="btn" id="qsSave">Simpan &amp; pilih</button>
+    </div>
+  </div>
+</div>
