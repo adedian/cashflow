@@ -27,9 +27,7 @@ $projHtml = '';
 foreach ($projects as $p) {
     $projHtml .= '<option value="' . (int) $p['id'] . '">' . e($p['name']) . '</option>';
 }
-// tombol + (tambah cepat kategori/proyek tanpa ke Master Data); hanya untuk Super Admin (rute /api/categories & /api/projects)
-$quickBtn = static fn(string $what, string $label): string => '<button type="button" class="btn btn-ghost btn-sm btn-icon line-quick" data-quick-add="' . $what . '" title="Tambah ' . $label . ' baru" aria-label="Tambah ' . $label . ' baru"><svg class="i i-sm"><use href="#i-plus"/></svg></button>';
-$renderLine = static function (array $r, bool $first, string $auto) use ($catHtml, $projHtml, $quickBtn): string {
+$renderLine = static function (array $r, bool $first, string $auto) use ($catHtml, $projHtml): string {
     $idD = $first ? ' id="description"' : '';
     $idA = $first ? ' id="amount"' : '';
     $cid = (int) ($r['category_id'] ?? 0);
@@ -38,8 +36,8 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
     $projs = $pid > 0 ? str_replace('value="' . $pid . '">', 'value="' . $pid . '" selected>', $projHtml) : $projHtml;
     return '<div class="line-row">'
         . '<input class="input line-desc" name="line_desc[]"' . $idD . ' maxlength="500" value="' . e((string) ($r['description'] ?? '')) . '" placeholder="Uraian" aria-label="Uraian"' . ($first ? $auto : '') . '>'
-        . '<div class="line-pick line-pick-cat"><select class="input line-cat" name="line_cat[]" aria-label="Kategori" data-combo-create-event data-combo-placeholder="Ketik untuk mencari kategori…"><option value="">— belum dikategorikan —</option>' . $cats . '</select>' . $quickBtn('category', 'kategori') . '</div>'
-        . '<div class="line-pick line-pick-proj"><select class="input line-proj" name="line_proj[]" aria-label="Proyek" data-combo-create-event data-combo-placeholder="Ketik untuk mencari proyek…"><option value="">— tanpa proyek —</option>' . $projs . '</select>' . $quickBtn('project', 'proyek') . '</div>'
+        . '<div class="line-pick line-pick-cat"><select class="input line-cat" name="line_cat[]" aria-label="Kategori" data-combo-create-event data-combo-placeholder="Ketik untuk mencari kategori…"><option value="">— belum dikategorikan —</option>' . $cats . '</select></div>'
+        . '<div class="line-pick line-pick-proj"><select class="input line-proj" name="line_proj[]" aria-label="Proyek" data-combo-create-event data-combo-placeholder="Ketik untuk mencari proyek…"><option value="">— tanpa proyek —</option>' . $projs . '</select></div>'
         . '<input class="input num line-amt" name="line_amount[]"' . $idA . ' type="text" inputmode="decimal" value="' . e((string) ($r['amount'] ?? '')) . '" placeholder="Jumlah (Rp)" aria-label="Jumlah (Rp)" autocomplete="off"' . ($first ? $auto : '') . '>'
         . '<button type="button" class="btn btn-ghost btn-sm btn-icon line-del" data-line-del title="Hapus baris" aria-label="Hapus baris"><svg class="i i-sm" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>'
         . '</div>';
@@ -89,8 +87,8 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
           <option value="">— pilih pihak —</option>
           <?php if ($curParty !== '' && !in_array(mb_strtolower($curParty), array_map('mb_strtolower', $partyNames), true)): ?><option value="<?= e($curParty) ?>" selected><?= e($curParty) ?> (belum di master)</option><?php endif; ?>
           <?php foreach ($partyNames as $pn): ?><option value="<?= e($pn) ?>" <?= mb_strtolower($pn) === mb_strtolower($curParty) ? 'selected' : '' ?>><?= e($pn) ?></option><?php endforeach; ?>
-        </select><button type="button" class="btn btn-ghost btn-sm btn-icon field-quick" data-quick-master="party" title="Tambah pihak baru" aria-label="Tambah pihak baru"><svg class="i i-sm"><use href="#i-plus"/></svg></button></div><?= $fe('counterparty') ?>
-        <span class="help">Tidak ada di daftar? Klik <b>+</b> atau ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=parties')) ?>">Master Data → Customer</a>.</span>
+        </select></div><?= $fe('counterparty') ?>
+        <span class="help">Tidak ada di daftar? Ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=parties')) ?>">Master Data → Customer</a>.</span>
       </div>
       <div class="field full">
         <label for="description">Uraian <span class="req">*</span></label>
@@ -130,8 +128,8 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
           <?php $curCp = trim((string) $v('counterparty_detail')); $cpLabels = array_column($counterpartyAccounts, 'label'); ?>
           <?php if ($curCp !== '' && !in_array($curCp, $cpLabels, true)): ?><option value="<?= e($curCp) ?>" selected><?= e($curCp) ?> (belum di master)</option><?php endif; ?>
           <?php foreach ($cpLabels as $lbl): ?><option value="<?= e($lbl) ?>" <?= $lbl === $curCp ? 'selected' : '' ?>><?= e($lbl) ?></option><?php endforeach; ?>
-        </select><button type="button" class="btn btn-ghost btn-sm btn-icon field-quick" data-quick-master="bank" title="Tambah bank / rekening pihak baru" aria-label="Tambah bank / rekening pihak baru"><svg class="i i-sm"><use href="#i-plus"/></svg></button></div><?= $fe('counterparty_detail') ?>
-        <span class="help">Daftar dikelola di <a href="<?= e(url('/master?tab=counterparties')) ?>">Master Data → Rekening Lawan</a>.</span>
+        </select></div><?= $fe('counterparty_detail') ?>
+        <span class="help">Rekening baru: ketik bank dan nomornya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=counterparties')) ?>">Master Data → Rekening Lawan</a>.</span>
       </div>
       <div class="field full">
         <label for="note">Catatan tambahan</label>
@@ -145,48 +143,7 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
   </form>
 </section>
 
-<?php /* dialog tambah cepat kategori / proyek (di luar #txForm agar tidak bersarang) */ ?>
-<div class="modal-back" id="quickAdd" aria-hidden="true">
-  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="qaTitle">
-    <div class="modal-head"><h3 id="qaTitle">Tambah kategori</h3><button type="button" class="icon-btn" style="background:#eef1f8;color:#3b4566" data-close-modal aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button></div>
-    <div class="modal-body">
-      <div class="form-grid" style="grid-template-columns:1fr">
-        <div class="field">
-          <label for="qaName" id="qaNameLbl">Nama kategori <span class="req">*</span></label>
-          <input class="input" id="qaName" maxlength="160" autocomplete="off">
-        </div>
-        <div class="err" id="qaErr" hidden role="alert"></div>
-        <span class="help" id="qaHelp">Tersimpan ke Master Data dan langsung dipilih pada baris uraian ini.</span>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button type="button" class="btn btn-ghost" data-close-modal>Batal</button>
-      <button type="button" class="btn" id="qaSave">Simpan &amp; pilih</button>
-    </div>
-  </div>
-</div>
-
-<?php /* dialog tambah cepat Pihak & Bank/rekening pihak (master: Customer / Rekening Lawan) */ ?>
-<div class="modal-back" id="quickParty" aria-hidden="true">
-  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="qpTitle">
-    <div class="modal-head"><h3 id="qpTitle">Tambah pihak</h3><button type="button" class="icon-btn" style="background:#eef1f8;color:#3b4566" data-close-modal aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button></div>
-    <div class="modal-body">
-      <div class="form-grid" style="grid-template-columns:1fr">
-        <div class="field">
-          <label for="qpName">Nama pihak (penerima / pembayar) <span class="req">*</span></label>
-          <input class="input" id="qpName" maxlength="255" autocomplete="off" placeholder="mis. PT. Contoh Abadi">
-        </div>
-        <div class="err" id="qpErr" hidden role="alert"></div>
-        <span class="help">Tersimpan ke Master Data → Customer dan langsung dipilih. Nama yang sudah ada (tanpa membedakan huruf besar/kecil) tidak dibuat ganda — pihak yang ada langsung dipilih.</span>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button type="button" class="btn btn-ghost" data-close-modal>Batal</button>
-      <button type="button" class="btn" id="qpSave">Simpan &amp; pilih</button>
-    </div>
-  </div>
-</div>
-
+<?php /* dialog tambah Bank/rekening pihak (master: Rekening Lawan) — dibuka dari pilihan “Tambah” di dropdown Bank/rekening */ ?>
 <div class="modal-back" id="quickBank" aria-hidden="true">
   <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="qbTitle">
     <div class="modal-head"><h3 id="qbTitle">Tambah bank / rekening pihak</h3><button type="button" class="icon-btn" style="background:#eef1f8;color:#3b4566" data-close-modal aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button></div>

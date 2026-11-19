@@ -131,7 +131,7 @@ final class InvoiceController extends Controller
         $lampu = $kind === 'lampu';
         Page::set(['title' => $id ? 'Ubah piutang' : 'Tambah ' . ($lampu ? 'piutang lampu' : 'invoice'),
             'subtitle' => $lampu ? 'Total piutang = Σ Qty × Harga satuan; Tgl. jatuh tempo = Tgl. nota + jumlah hari' : 'Sisa dihitung otomatis: nominal − dibayar',
-            'scripts' => $lampu ? ['invoice-form.js', 'invoice-quick.js'] : ['invoice-quick.js']]);
+            'scripts' => $lampu ? ['invoice-form.js'] : []]);
         $r = $this->view('invoices/form', ['t' => $t, 'errors' => $errors, 'id' => $id, 'kind' => $kind,
             'parties' => PartyService::options((string) ($t['customer'] ?? '')),
             'projects' => array_column(Lookup::projects(), 'name'),

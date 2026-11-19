@@ -141,88 +141,54 @@
     refreshLines = refresh;
     refresh();
 
-    /* --- tombol "+" di samping Kategori / Proyek: tambah ke master lewat dialog, lalu langsung dipilih di baris tsb. --- */
-    var qa = document.getElementById('quickAdd');
-    if (qa) {
-      var qaName = document.getElementById('qaName'), qaHelp = document.getElementById('qaHelp');
-      var qaErr = document.getElementById('qaErr'), qaSave = document.getElementById('qaSave'), qaTitle = document.getElementById('qaTitle'), qaLbl = document.getElementById('qaNameLbl');
-      var qaWhat = 'category', qaRow = null, qaBusy = false;
-      var qaCfg = {
-        category: { title: 'Tambah kategori', label: 'Nama kategori', url: '/api/categories', cls: '.line-cat', max: 120 },
-        project: { title: 'Tambah proyek', label: 'Nama proyek', url: '/api/projects', cls: '.line-proj', max: 160 }
-      };
-      var showErr = function (m) { qaErr.hidden = !m; qaErr.textContent = m || ''; };
-      // sisipkan opsi baru ke semua dropdown sejenis (baris yang ada + templat baris baru) agar tersedia di mana-mana
-      var addOpt = function (root, sel, id, name, groupLabel) {
-        Array.prototype.forEach.call(root.querySelectorAll(sel), function (s) {
-          var exists = Array.prototype.some.call(s.options, function (o) { return o.value === String(id); });
-          if (exists) return;
-          var opt = new Option(name, String(id));
-          var host = s;
-          if (groupLabel) {
-            host = null;
-            Array.prototype.forEach.call(s.querySelectorAll('optgroup'), function (g) { if (g.label === groupLabel) host = g; });
-            if (!host) { host = document.createElement('optgroup'); host.label = groupLabel; s.appendChild(host); }
-          }
-          host.appendChild(opt);
-        });
-      };
-      var openQuick = function (what, row) {
-        qaWhat = what; qaRow = row; var c = qaCfg[what];
-        qaTitle.textContent = c.title; qaLbl.firstChild.textContent = c.label + ' ';
-        qaName.maxLength = c.max; qaName.value = ''; showErr('');
-        if (qaHelp) qaHelp.textContent = what === 'category'
-          ? 'Tersimpan ke Master Data dan langsung dipilih pada baris uraian ini. Jenis kategori mengikuti arah transaksi (Mutasi Masuk → Pendapatan, Mutasi Keluar → Biaya); dapat diubah di Master Data → Kategori.'
-          : 'Tersimpan ke Master Data dan langsung dipilih pada baris uraian ini.';
-        HME.openModal('quickAdd');
-        setTimeout(function () { qaName.focus(); }, 60);
-      };
-      lineBox.addEventListener('click', function (e) {
-        var b = e.target.closest ? e.target.closest('[data-quick-add]') : null;
-        if (b) openQuick(b.getAttribute('data-quick-add'), b.closest('.line-row'));
+    /* --- ketik nama di dropdown Kategori / Proyek → "+ Tambah “…” sebagai baru": simpan ke master lalu langsung dipilih di baris tsb. --- */
+    var qaCfg = {
+      category: { url: '/api/categories', cls: '.line-cat' },
+      project: { url: '/api/projects', cls: '.line-proj' }
+    };
+    // sisipkan opsi baru ke semua dropdown sejenis (baris yang ada + templat baris baru) agar tersedia di mana-mana
+    var addOpt = function (root, sel, id, name, groupLabel) {
+      Array.prototype.forEach.call(root.querySelectorAll(sel), function (s) {
+        var exists = Array.prototype.some.call(s.options, function (o) { return o.value === String(id); });
+        if (exists) return;
+        var opt = new Option(name, String(id));
+        var host = s;
+        if (groupLabel) {
+          host = null;
+          Array.prototype.forEach.call(s.querySelectorAll('optgroup'), function (g) { if (g.label === groupLabel) host = g; });
+          if (!host) { host = document.createElement('optgroup'); host.label = groupLabel; s.appendChild(host); }
+        }
+        host.appendChild(opt);
       });
-      // simpan ke master lalu pilih di baris tsb; dipakai dialog "+" maupun pilihan "Tambah “…” sebagai baru" di dropdown
-      var createLine = function (what, row, name) {
-        var c = qaCfg[what], form = new URLSearchParams({ name: name });
-        if (what === 'category') { var d = document.querySelector('input[name="direction"]:checked'); form.set('dir', d && d.value === 'in' ? 'in' : 'out'); }
-        return HME.api(c.url, { method: 'POST', form: form }).then(function (j) {
-          if (!j || !j.ok) return (j && j.error) || 'Gagal menambahkan.';
-          var group = what === 'category' ? j.kind_label : null;
-          addOpt(lineBox, c.cls, j.id, j.name, group); addOpt(tpl.content, c.cls, j.id, j.name, group);
-          var target = row && row.querySelector(c.cls);
-          if (target) { target.value = String(j.id); target.dispatchEvent(new Event('change', { bubbles: true })); }
-          if (HME.toast) HME.toast(j.created ? '“' + j.name + '” ditambahkan ke master.' : '“' + j.name + '” sudah ada — dipilih.', 'success', 2500);
-          return '';
-        }).catch(function () { return 'Koneksi terputus — gagal menambahkan.'; });
-      };
-      var saveQuick = function () {
-        if (qaBusy) return;
-        var name = qaName.value.replace(/\s+/g, ' ').trim();
-        if (!name) { showErr('Nama wajib diisi.'); qaName.focus(); return; }
-        qaBusy = true; qaSave.disabled = true;
-        createLine(qaWhat, qaRow, name).then(function (err) {
-          if (err) showErr(err); else HME.closeModal(qa);
-          qaBusy = false; qaSave.disabled = false;
-        });
-      };
-      // ketik nama di dropdown Kategori/Proyek → "+ Tambah “…” sebagai baru"
-      lineBox.addEventListener('combo:create', function (e) {
-        var s = e.target, row = s.closest ? s.closest('.line-row') : null;
-        var what = s.classList.contains('line-cat') ? 'category' : s.classList.contains('line-proj') ? 'project' : '';
-        var name = String((e.detail && e.detail.name) || '').replace(/\s+/g, ' ').trim();
-        if (!what || !row || !name) return;
-        createLine(what, row, name).then(function (err) { if (err && HME.toast) HME.toast(err, 'error', 4000); });
-      });
-      qaSave.addEventListener('click', saveQuick);
-      qaName.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveQuick(); } });
-    }
+    };
+    var createLine = function (what, row, name) {
+      var c = qaCfg[what], form = new URLSearchParams({ name: name });
+      // jenis kategori mengikuti arah transaksi (Mutasi Masuk → Pendapatan, Mutasi Keluar → Biaya); dapat diubah di Master Data → Kategori
+      if (what === 'category') { var d = document.querySelector('input[name="direction"]:checked'); form.set('dir', d && d.value === 'in' ? 'in' : 'out'); }
+      return HME.api(c.url, { method: 'POST', form: form }).then(function (j) {
+        if (!j || !j.ok) return (j && j.error) || 'Gagal menambahkan.';
+        var group = what === 'category' ? j.kind_label : null;
+        addOpt(lineBox, c.cls, j.id, j.name, group); addOpt(tpl.content, c.cls, j.id, j.name, group);
+        var target = row && row.querySelector(c.cls);
+        if (target) { target.value = String(j.id); target.dispatchEvent(new Event('change', { bubbles: true })); }
+        if (HME.toast) HME.toast(j.created ? '“' + j.name + '” ditambahkan ke master.' : '“' + j.name + '” sudah ada — dipilih.', 'success', 2500);
+        return '';
+      }).catch(function () { return 'Koneksi terputus — gagal menambahkan.'; });
+    };
+    lineBox.addEventListener('combo:create', function (e) {
+      var s = e.target, row = s.closest ? s.closest('.line-row') : null;
+      var what = s.classList.contains('line-cat') ? 'category' : s.classList.contains('line-proj') ? 'project' : '';
+      var name = String((e.detail && e.detail.name) || '').replace(/\s+/g, ' ').trim();
+      if (!what || !row || !name) return;
+      createLine(what, row, name).then(function (err) { if (err && HME.toast) HME.toast(err, 'error', 4000); });
+    });
   }
 
-  /* --- tombol "+" di samping Pihak & Bank/rekening pihak: tambah ke master lewat dialog ringkas, lalu langsung dipilih. --- */
+  /* --- Bank/rekening pihak: pilihan "Tambah “…” sebagai baru" membuka dialog ringkas, simpan ke master lalu langsung dipilih. --- */
   (function () {
     var party = document.getElementById('counterparty'), bank = document.getElementById('counterparty_detail');
-    var qp = document.getElementById('quickParty'), qb = document.getElementById('quickBank');
-    if (!party || !bank || !qp || !qb) return;
+    var qb = document.getElementById('quickBank');
+    if (!party || !bank || !qb) return;
     var $ = function (id) { return document.getElementById(id); };
     var show = function (box, m) { box.hidden = !m; box.textContent = m || ''; };
     var hasOpt = function (s, v) { return Array.prototype.some.call(s.options, function (o) { return o.value.toLowerCase() === v.toLowerCase(); }); };
@@ -234,28 +200,6 @@
       sel.dispatchEvent(new Event('change', { bubbles: true }));
     };
     var done = function (msg) { if (H.toast) H.toast(msg, 'success', 2500); };
-
-    /* pihak */
-    var pName = $('qpName'), pErr = $('qpErr'), pSave = $('qpSave'), pBusy = false;
-    var openParty = function () { pName.value = ''; show(pErr, ''); H.openModal('quickParty'); setTimeout(function () { pName.focus(); }, 60); };
-    var saveParty = function () {
-      if (pBusy) return;
-      var name = pName.value.replace(/\s+/g, ' ').trim();
-      if (!name) { show(pErr, 'Nama pihak wajib diisi.'); pName.focus(); return; }
-      if (name.length > 255) { show(pErr, 'Nama pihak maksimal 255 karakter.'); return; }
-      pBusy = true; pSave.disabled = true;
-      H.api('/api/parties', { method: 'POST', form: new URLSearchParams({ name: name }) }).then(function (j) {
-        if (!j || !j.ok) { show(pErr, (j && j.error) || 'Gagal menambahkan.'); return; }
-        var bp = $('qbParty');   // opsi baru juga tersedia di dropdown pemilik rekening pada dialog Bank
-        if (bp && !hasOpt(bp, j.name)) bp.appendChild(new Option(j.name, j.name));
-        pickIn(party, j.name);
-        done(j.created ? '“' + j.name + '” ditambahkan ke master.' : '“' + j.name + '” sudah ada — dipilih.');
-        H.closeModal(qp);
-      }).catch(function () { show(pErr, 'Koneksi terputus — gagal menambahkan.'); })
-        .then(function () { pBusy = false; pSave.disabled = false; });
-    };
-    pSave.addEventListener('click', saveParty);
-    pName.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveParty(); } });
 
     /* bank / rekening pihak */
     var bBank = $('qbBank'), bNo = $('qbNo'), bParty = $('qbParty'), bErr = $('qbErr'), bSave = $('qbSave'), bBusy = false;
@@ -295,12 +239,6 @@
     };
     bSave.addEventListener('click', saveBank);
     [bBank, bNo].forEach(function (i) { i.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveBank(); } }); });
-
-    document.addEventListener('click', function (e) {
-      var b = e.target.closest ? e.target.closest('[data-quick-master]') : null;
-      if (!b) return;
-      if (b.getAttribute('data-quick-master') === 'party') openParty(); else openBank('');
-    });
   })();
 
   /* --- formulir: No. Invoice/PO (dropdown dinamis) — isi otomatis & ganti jenis transaksi --- */

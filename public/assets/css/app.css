@@ -889,12 +889,10 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
 .lines { display: flex; flex-direction: column; gap: 8px; }
 .line-head, .line-row { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) 150px 40px; gap: 8px; align-items: center; }
 .line-row select.input { padding-left: 10px; padding-right: 26px; text-overflow: ellipsis; }
-/* kategori/proyek + tombol "+" tambah cepat */
+/* pembungkus dropdown kategori/proyek/pihak */
 .line-pick, .field-pick { display: flex; gap: 4px; align-items: center; min-width: 0; }
 .field-pick .combo { flex: 1 1 auto; min-width: 0; }
-.field-pick .field-quick { flex: 0 0 auto; width: 36px; height: 40px; padding: 0; justify-content: center; color: var(--brand, #1a56db); }
 .line-pick .combo { flex: 1 1 auto; min-width: 0; }
-.line-row .line-quick { flex: 0 0 auto; width: 36px; height: 40px; padding: 0; justify-content: center; color: var(--brand, #1a56db); }
 .line-head { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 0 2px; }
 .line-head .r { text-align: right; }
 #lineRows { display: flex; flex-direction: column; gap: 8px; }
