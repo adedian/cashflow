@@ -114,6 +114,9 @@ return [
     ['POST', '/api/suppliers',           'MasterController@createSupplierApi', 'admin'],
     ['POST', '/master/suppliers',        'MasterController@saveSupplier', 'admin'],
     ['POST', '/master/suppliers/{id}',   'MasterController@saveSupplier', 'admin'],
+    ['POST', '/api/products',            'MasterController@createProductApi', 'admin'],
+    ['POST', '/master/products',         'MasterController@saveProduct',  'admin'],
+    ['POST', '/master/products/{id}',    'MasterController@saveProduct',  'admin'],
     ['POST', '/master/opening/{id}',    'MasterController@saveOpening',  'admin'],
     ['POST', '/master/mapping/{id}',     'MasterController@saveMapping',  'admin'],
 

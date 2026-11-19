@@ -31,5 +31,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON cashflow_hme.forecast_realizations TO 'c
 GRANT SELECT, INSERT, UPDATE, DELETE ON cashflow_hme.parties TO 'cashflow_hme_app'@'127.0.0.1';
 -- Revisi 11: kategori & proyek per baris uraian
 GRANT SELECT, INSERT, UPDATE, DELETE ON cashflow_hme.transaction_items TO 'cashflow_hme_app'@'127.0.0.1';
+-- Master Barang
+GRANT SELECT, INSERT, UPDATE, DELETE ON cashflow_hme.products TO 'cashflow_hme_app'@'127.0.0.1';
 GRANT LOCK TABLES ON cashflow_hme.* TO 'cashflow_hme_app'@'127.0.0.1';
 FLUSH PRIVILEGES;

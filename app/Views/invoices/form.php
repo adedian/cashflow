@@ -1,9 +1,22 @@
-<?php /** @var array $t @var array $errors @var ?int $id @var string $kind @var array $parties @var array $projects @var array $items */
+<?php /** @var array $t @var array $errors @var ?int $id @var string $kind @var array $parties @var array $projects @var array $items @var array $products */
 $v = static fn(string $k, $d = '') => $t[$k] ?? $d;
 $fe = static fn(string $k) => isset($errors[$k]) ? '<div class="err">' . e($errors[$k]) . '</div>' : '';
 $lampu = $kind === 'lampu';
 $num = static fn($x): string => $x === '' || $x === null ? '' : (preg_match('/^\d+(\.\d+)?$/', (string) $x) ? money((string) $x, false) : (string) $x);
 // Customer dari master Customer (dropdown + "Tambah"); nama lama yang belum di master tetap tampil terpilih
+// Nama barang dari master Barang (dropdown + "Tambah"); nama lama yang belum di master tetap tampil terpilih. Satuan & harga tampil sebagai keterangan; harga mengisi kolom harga satuan bila masih kosong.
+$productNames = array_map('mb_strtolower', array_column($products ?? [], 'name'));
+$itemSelect = static function (string $sel) use ($products, $productNames): string {
+    $h = '<select class="input" name="item_name[]" data-combo data-combo-create="/api/products" data-combo-create-value="name" data-combo-placeholder="Cari / tambah barang…" aria-label="Nama barang"><option value="">— pilih barang —</option>';
+    if ($sel !== '' && !in_array(mb_strtolower($sel), $productNames, true)) {
+        $h .= '<option value="' . e($sel) . '" selected>' . e($sel) . ' (belum di master)</option>';
+    }
+    foreach ($products as $p) {
+        $sub = trim(($p['unit'] ?? '') . ($p['price'] !== null ? ' · Rp ' . money($p['price'], false) : ''), ' ·');
+        $h .= '<option value="' . e($p['name']) . '"' . ($sub !== '' ? ' data-sub="' . e($sub) . '"' : '') . ($p['price'] !== null ? ' data-price="' . e(money($p['price'], false)) . '"' : '') . (mb_strtolower($p['name']) === mb_strtolower($sel) ? ' selected' : '') . '>' . e($p['name']) . '</option>';
+    }
+    return $h . '</select>';
+};
 $cur = trim((string) $v('customer'));
 $names = array_column($parties, 'name');
 ob_start(); ?>
@@ -38,7 +51,7 @@ ob_start(); ?>
         <?php $rows = $items ?: ($legacy ? [] : [['name' => '', 'qty' => '', 'price' => '']]); foreach ($rows as $i => $it): ?>
           <tr>
             <td class="ln"><?= $i + 1 ?></td>
-            <td><input class="input" name="item_name[]" maxlength="160" value="<?= e($it['name']) ?>" aria-label="Nama barang" placeholder="mis. Lampu LED 50W"></td>
+            <td><?= $itemSelect((string) $it['name']) ?></td>
             <td><input class="input num r" name="item_qty[]" inputmode="decimal" value="<?= e($num($it['qty'])) ?>" aria-label="Qty"></td>
             <td><input class="input num r" name="item_price[]" inputmode="decimal" value="<?= e($num($it['price'])) ?>" aria-label="Harga satuan"></td>
             <td class="r num sub">-</td>
@@ -49,7 +62,7 @@ ob_start(); ?>
         <tfoot><tr><td colspan="4" class="r"><b>Total piutang</b></td><td class="r num"><b id="itemsTotal">-</b></td><td></td></tr></tfoot>
       </table>
     </div>
-    <div class="mt-1" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="button" class="btn btn-ghost btn-sm" id="addItem"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah barang</button><span class="help">Jumlah = Qty × Harga satuan; Total piutang = jumlah semua barang (dihitung ulang oleh server).</span></div>
+    <div class="mt-1" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="button" class="btn btn-ghost btn-sm" id="addItem"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah barang</button><span class="help">Barang dipilih dari <a href="<?= e(url('/master?tab=products')) ?>">Master Data → Barang</a>; tidak ada? Ketik namanya lalu pilih “Tambah”. Harga satuan terisi dari master bila ada. Jumlah = Qty × Harga satuan; Total piutang = jumlah semua barang (dihitung ulang oleh server).</span></div>
     <?= $fe('items') ?>
     <?php if ($legacy): ?>
     <div class="field mt-2" id="legacyAmount" style="max-width:320px"><label for="amount">Total piutang (Rp) — data lama tanpa rincian</label><input class="input num" id="amount" name="amount" inputmode="decimal" value="<?= e($num($v('amount'))) ?>"><span class="help">Isi rincian barang di atas untuk menghitung total otomatis.</span><?= $fe('amount') ?></div>
@@ -75,7 +88,7 @@ ob_start(); ?>
     </div>
     <template id="itemTpl"><tr>
       <td class="ln"></td>
-      <td><input class="input" name="item_name[]" maxlength="160" aria-label="Nama barang" placeholder="mis. Lampu LED 50W"></td>
+      <td><?= $itemSelect('') ?></td>
       <td><input class="input num r" name="item_qty[]" inputmode="decimal" aria-label="Qty"></td>
       <td><input class="input num r" name="item_price[]" inputmode="decimal" aria-label="Harga satuan"></td>
       <td class="r num sub">-</td>

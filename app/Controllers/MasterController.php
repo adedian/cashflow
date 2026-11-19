@@ -21,9 +21,9 @@ final class MasterController extends Controller
 
     public function index(): Response
     {
-        $tab = in_array($this->req->str('tab'), ['categories', 'projects', 'accounts', 'counterparties', 'suppliers', 'parties', 'opening', 'mapping'], true) ? $this->req->str('tab') : 'categories';
+        $tab = in_array($this->req->str('tab'), ['categories', 'projects', 'accounts', 'counterparties', 'suppliers', 'parties', 'products', 'opening', 'mapping'], true) ? $this->req->str('tab') : 'categories';
         $tabs = [];
-        foreach (['categories' => 'Kategori', 'projects' => 'Proyek', 'accounts' => 'Rekening', 'counterparties' => 'Rekening Lawan', 'suppliers' => 'Supplier', 'parties' => 'Customer', 'opening' => 'Saldo Awal', 'mapping' => 'Pemetaan Excel'] as $k => $l) {
+        foreach (['categories' => 'Kategori', 'projects' => 'Proyek', 'accounts' => 'Rekening', 'counterparties' => 'Rekening Lawan', 'suppliers' => 'Supplier', 'parties' => 'Customer', 'products' => 'Barang', 'opening' => 'Saldo Awal', 'mapping' => 'Pemetaan Excel'] as $k => $l) {
             $tabs[] = ['href' => url('/master?tab=' . $k), 'label' => $l, 'active' => $k === $tab];
         }
         Page::set(['title' => 'Master Data', 'subtitle' => 'Kategori, proyek, rekening, saldo awal, dan pemetaan kategori dari Excel', 'tabs' => $tabs, 'scripts' => ['master.js']]);
@@ -45,6 +45,8 @@ final class MasterController extends Controller
             $data['rows'] = Db::all('SELECT s.*, (SELECT COUNT(*) FROM debts d WHERE d.supplier_id = s.id AND d.voided_at IS NULL) AS n FROM suppliers s ORDER BY s.name');
         } elseif ($tab === 'parties') {
             $data['rows'] = Db::all('SELECT p.*, (SELECT COUNT(*) FROM transactions t WHERE t.counterparty = p.name AND t.voided_at IS NULL) AS n FROM parties p ORDER BY p.name');
+        } elseif ($tab === 'products') {
+            $data['rows'] = Db::all('SELECT * FROM products ORDER BY name');
         } elseif ($tab === 'opening') {
             $first = [];
             foreach (Db::all('SELECT account_id, MIN(tx_date) AS d FROM transactions GROUP BY account_id') as $r) {
@@ -466,6 +468,65 @@ final class MasterController extends Controller
         });
         $this->flash('success', 'Supplier tersimpan.' . ($renamed ? " $renamed hutang diperbarui." : ''));
         return $this->back('suppliers');
+    }
+
+    /* ---------- barang (nama unik, satuan & harga satuan acuan opsional) ---------- */
+    public function saveProduct(string $id = ''): Response
+    {
+        $name = preg_replace('/\s+/', ' ', $this->name('name', 160));
+        $unit = preg_replace('/\s+/', ' ', $this->name('unit', 30)) ?: null;
+        $priceRaw = trim($this->req->str('price'));
+        $price = $priceRaw === '' ? null : parse_amount($priceRaw);
+        if ($name === '') {
+            $this->flash('error', 'Nama barang wajib diisi.');
+            return $this->back('products');
+        }
+        if ($priceRaw !== '' && $price === null) {
+            $this->flash('error', 'Harga satuan harus berupa nominal valid (tidak boleh negatif).');
+            return $this->back('products');
+        }
+        if (Db::val('SELECT id FROM products WHERE name = ? AND id <> ?', [$name, (int) $id])) {
+            $this->flash('error', 'Barang tersebut sudah ada.');
+            return $this->back('products');
+        }
+        Db::tx(function () use ($id, $name, $unit, $price) {
+            if ($id === '') {
+                $new = Db::insert('products', ['name' => $name, 'unit' => $unit, 'price' => $price]);
+                Audit::log('product_create', 'product', (string) $new, "Tambah barang $name", null, ['name' => $name, 'unit' => $unit, 'price' => $price]);
+            } else {
+                $old = Db::one('SELECT * FROM products WHERE id = ?', [(int) $id]);
+                if (!$old) { throw new \App\Core\HttpException('Barang tidak ditemukan.', 404); }
+                $active = $this->req->bool('is_active') ? 1 : 0;
+                Db::update('products', (int) $id, ['name' => $name, 'unit' => $unit, 'price' => $price, 'is_active' => $active]);
+                Audit::log('product_update', 'product', $id, "Ubah barang $name", ['name' => $old['name'], 'unit' => $old['unit'], 'price' => $old['price'], 'is_active' => $old['is_active']], ['name' => $name, 'unit' => $unit, 'price' => $price, 'is_active' => $active]);
+            }
+            Version::bump('master');
+        });
+        $this->flash('success', 'Barang tersimpan.');
+        return $this->back('products');
+    }
+
+    /** Tambah cepat barang dari formulir Piutang Lampu (JSON). Nama yang sudah ada (tanpa beda huruf besar/kecil) dikembalikan apa adanya. */
+    public function createProductApi(): Response
+    {
+        $name = preg_replace('/\s+/', ' ', $this->name('name', 160));
+        if ($name === '') {
+            return $this->fail('Nama barang wajib diisi.');
+        }
+        $row = Db::one('SELECT id, name, is_active FROM products WHERE name = ?', [$name]);
+        if ($row) {
+            if (!(int) $row['is_active']) {
+                return $this->fail('Barang “' . $row['name'] . '” sudah ada tetapi nonaktif. Aktifkan di Master Data → Barang.');
+            }
+            return $this->ok(['id' => (int) $row['id'], 'name' => $row['name'], 'created' => false]);
+        }
+        $id = 0;
+        Db::tx(function () use ($name, &$id) {
+            $id = (int) Db::insert('products', ['name' => $name]);
+            Audit::log('product_create', 'product', (string) $id, "Tambah barang $name (dari formulir Piutang Lampu)", null, ['name' => $name]);
+            Version::bump('master');
+        });
+        return $this->ok(['id' => $id, 'name' => $name, 'created' => true]);
     }
 
     /* ---------- rekening lawan (pihak penerima/pembayar) ---------- */

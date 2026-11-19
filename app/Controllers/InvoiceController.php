@@ -136,6 +136,7 @@ final class InvoiceController extends Controller
             'parties' => PartyService::options((string) ($t['customer'] ?? '')),
             'projects' => array_column(Lookup::projects(), 'name'),
             'items' => $lampu ? self::itemsOf($t) : [],
+            'products' => $lampu ? Db::all('SELECT name, unit, price FROM products WHERE is_active = 1 ORDER BY name') : [],
             'payTxs' => $lampu ? self::payTxOptions((int) ($t['pay_tx_id'] ?? 0)) : []]);
         $r->status = $status;
         return $r;
@@ -327,8 +328,19 @@ final class InvoiceController extends Controller
         $items = [];
         $sum = '0.00';
         $names = (array) ($in['item_name'] ?? []);
+        // nama barang harus dari master Barang (ejaan disamakan); nama lama pada piutang ini yang belum/tidak aktif di master tetap boleh bila tidak diganti
+        $oldNames = $existing ? array_map(static fn($it) => mb_strtolower((string) ($it['name'] ?? '')), self::itemsOf($existing)) : [];
         foreach ($names as $i => $n) {
             $n = mb_substr(trim((string) preg_replace('/\s+/', ' ', (string) $n)), 0, 160);
+            if ($n !== '') {
+                $p = Db::one('SELECT name, is_active FROM products WHERE name = ?', [$n]);
+                if ($p && (int) $p['is_active']) {
+                    $n = $p['name'];
+                } elseif (!in_array(mb_strtolower($n), $oldNames, true)) {
+                    $e['items'] = 'Baris barang ke-' . ($i + 1) . ': “' . $n . '” ' . ($p ? 'nonaktif di master Barang.' : 'belum ada di master Barang. Pilih dari daftar atau tambahkan lewat “Tambah” di dropdown (atau Master Data → Barang).');
+                    continue;
+                }
+            }
             $qRaw = trim((string) ($in['item_qty'][$i] ?? ''));
             $pRaw = trim((string) ($in['item_price'][$i] ?? ''));
             if ($n === '' && $qRaw === '' && $pRaw === '') { continue; }

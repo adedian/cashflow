@@ -236,6 +236,35 @@ $showLimit = $isEdit && ($edit['kind'] === 'facility' || $edit['credit_limit'] !
     </tbody></table></div>
 </section>
 
+<?php elseif ($tab === 'products'): ?>
+<section class="card">
+  <div class="card-head"><h2>Tambah barang</h2></div>
+  <form method="post" action="<?= e(url('/master/products')) ?>" class="filters">
+    <?= csrf_field() ?>
+    <div class="field grow"><label for="nbn">Nama barang</label><input class="input" id="nbn" name="name" maxlength="160" required placeholder="mis. Lampu LED 50W" autocomplete="off"></div>
+    <div class="field"><label for="nbu">Satuan</label><input class="input" id="nbu" name="unit" maxlength="30" placeholder="mis. pcs" autocomplete="off" style="max-width:120px"></div>
+    <div class="field"><label for="nbp">Harga satuan (Rp)</label><input class="input num" id="nbp" name="price" inputmode="decimal" placeholder="opsional" autocomplete="off" style="max-width:170px"></div>
+    <div class="field" style="flex:0 0 auto"><button class="btn" type="submit">Tambah</button></div>
+  </form>
+  <p class="help mt-1 mb-0">Daftar barang yang dikelola di sini. Satuan dan harga satuan bersifat opsional (harga acuan, bukan harga transaksi). Barang yang dinonaktifkan disembunyikan dari pilihan di masa depan; data lama tetap utuh.</p>
+</section>
+<section class="card card-flush">
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr><th>Nama barang</th><th>Satuan</th><th class="r">Harga satuan (Rp)</th><th>Aktif</th><th></th></tr></thead>
+    <tbody>
+    <?php foreach ($rows as $r): $fid = 'mb' . (int) $r['id']; ?>
+      <tr>
+        <td><?= $rowForm($fid, url('/master/products/' . (int) $r['id'])) ?><input form="<?= $fid ?>" class="input" name="name" value="<?= e($r['name']) ?>" maxlength="160" required aria-label="Nama barang"></td>
+        <td><input form="<?= $fid ?>" class="input" name="unit" value="<?= e((string) ($r['unit'] ?? '')) ?>" maxlength="30" aria-label="Satuan" style="max-width:120px"></td>
+        <td class="r"><input form="<?= $fid ?>" class="input num" name="price" value="<?= $r['price'] !== null ? e(money($r['price'], false)) : '' ?>" inputmode="decimal" aria-label="Harga satuan" style="text-align:right;min-width:150px"></td>
+        <td><label class="check"><input form="<?= $fid ?>" type="checkbox" name="is_active" value="1" <?= $r['is_active'] ? 'checked' : '' ?>></label></td>
+        <td><button form="<?= $fid ?>" class="btn btn-ghost btn-sm" type="submit" data-no-lock>Simpan</button></td>
+      </tr>
+    <?php endforeach; ?>
+    <?php if (!$rows): ?><tr><td colspan="5" class="muted">Belum ada barang.</td></tr><?php endif; ?>
+    </tbody></table></div>
+</section>
+
 <?php elseif ($tab === 'opening'): ?>
 <?php
 $totBank = '0.00';

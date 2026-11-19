@@ -55,8 +55,10 @@
   function addRow() {
     var tr = tpl.content.firstElementChild.cloneNode(true);
     tbody.appendChild(tr);
+    if (window.HMECombo) window.HMECombo.scan(tr);   // baris dari <template> tidak ikut dipercantik saat halaman dimuat
     recalc();
-    tr.querySelector('[name="item_name[]"]').focus();
+    var f = tr.querySelector('.combo-input') || tr.querySelector('[name="item_name[]"]');
+    if (f) f.focus();
   }
 
   document.getElementById('addItem').addEventListener('click', addRow);
@@ -72,6 +74,12 @@
   });
   form.addEventListener('change', function (ev) {
     if (ev.target.id === 'invoice_date') due();
+    if (ev.target.name === 'item_name[]') {
+      // barang dipilih: harga satuan acuan dari master mengisi kolom harga bila masih kosong (tidak menimpa isian pengguna)
+      var po = ev.target.selectedOptions[0], pr = ev.target.closest('tr').querySelector('[name="item_price[]"]');
+      if (po && po.getAttribute('data-price') && pr && pr.value.trim() === '') pr.value = po.getAttribute('data-price');
+      recalc();
+    }
     if (ev.target.id === 'pay_tx_id') {
       // kode bukti dipilih: tgl. bayar & dibayar diambil dari transaksinya
       var o = ev.target.selectedOptions[0];

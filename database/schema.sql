@@ -276,6 +276,19 @@ CREATE TABLE IF NOT EXISTS suppliers (
   UNIQUE KEY uq_suppliers_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- master barang (Master Data → Barang): nama unik, satuan & harga satuan acuan opsional
+CREATE TABLE IF NOT EXISTS products (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name       VARCHAR(160) NOT NULL,
+  unit       VARCHAR(30) NULL,
+  price      DECIMAL(18,2) NULL,
+  is_active  TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_products_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Hutang kepada supplier/vendor (BUKAN transaksi kas; sisa & status dihitung dari pembayaran)
 CREATE TABLE IF NOT EXISTS debts (
   id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
