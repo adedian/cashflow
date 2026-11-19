@@ -46,7 +46,7 @@ ob_start(); ?>
     <h3 class="mt-3 mb-1" style="font-size:15px">Uraian barang</h3>
     <div class="table-wrap">
       <table class="tbl inv-items" id="itemsTbl">
-        <thead><tr><th style="width:36px">No</th><th>Nama barang</th><th class="r" style="width:110px">Qty</th><th class="r" style="width:170px">Harga satuan (Rp)</th><th class="r" style="width:170px">Jumlah (Rp)</th><th style="width:44px"></th></tr></thead>
+        <thead><tr><th style="width:36px">No</th><th>Nama barang</th><th class="r" style="width:110px">Qty</th><th class="r" style="width:170px">Harga satuan (Rp)</th><th class="r" style="width:170px">Jumlah (Rp)</th><th style="width:56px"></th></tr></thead>
         <tbody>
         <?php $rows = $items ?: ($legacy ? [] : [['name' => '', 'qty' => '', 'price' => '']]); foreach ($rows as $i => $it): ?>
           <tr>
