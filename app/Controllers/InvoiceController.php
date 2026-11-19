@@ -8,6 +8,7 @@ use App\Core\Db;
 use App\Core\HttpException;
 use App\Core\Page;
 use App\Core\Response;
+use App\Models\Lookup;
 use App\Services\Audit;
 use App\Services\Filters;
 use App\Services\LinkService;
@@ -130,9 +131,10 @@ final class InvoiceController extends Controller
         $lampu = $kind === 'lampu';
         Page::set(['title' => $id ? 'Ubah piutang' : 'Tambah ' . ($lampu ? 'piutang lampu' : 'invoice'),
             'subtitle' => $lampu ? 'Total piutang = Σ Qty × Harga satuan; Tgl. jatuh tempo = Tgl. nota + jumlah hari' : 'Sisa dihitung otomatis: nominal − dibayar',
-            'scripts' => $lampu ? ['invoice-form.js'] : []]);
+            'scripts' => $lampu ? ['invoice-form.js', 'invoice-quick.js'] : ['invoice-quick.js']]);
         $r = $this->view('invoices/form', ['t' => $t, 'errors' => $errors, 'id' => $id, 'kind' => $kind,
             'parties' => PartyService::options((string) ($t['customer'] ?? '')),
+            'projects' => array_column(Lookup::projects(), 'name'),
             'items' => $lampu ? self::itemsOf($t) : [],
             'payTxs' => $lampu ? self::payTxOptions((int) ($t['pay_tx_id'] ?? 0)) : []]);
         $r->status = $status;

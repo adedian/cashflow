@@ -1,4 +1,4 @@
-<?php /** @var array $t @var array $errors @var ?int $id @var string $kind @var array $parties @var array $items */
+<?php /** @var array $t @var array $errors @var ?int $id @var string $kind @var array $parties @var array $projects @var array $items */
 $v = static fn(string $k, $d = '') => $t[$k] ?? $d;
 $fe = static fn(string $k) => isset($errors[$k]) ? '<div class="err">' . e($errors[$k]) . '</div>' : '';
 $lampu = $kind === 'lampu';
@@ -8,12 +8,12 @@ $cur = trim((string) $v('customer'));
 $names = array_column($parties, 'name');
 ob_start(); ?>
       <div class="field full"><label for="customer">Customer <span class="req">*</span></label>
-        <select class="input" id="customer" name="customer" data-combo data-combo-create="/api/parties" data-combo-placeholder="Ketik untuk mencari customer…" required>
+        <div class="field-pick"><select class="input" id="customer" name="customer" data-combo data-combo-create="/api/parties" data-combo-placeholder="Ketik untuk mencari customer…" required>
           <option value="">— pilih customer —</option>
           <?php if ($cur !== '' && !in_array(mb_strtolower($cur), array_map('mb_strtolower', $names), true)): ?><option value="<?= e($cur) ?>" selected><?= e($cur) ?> (belum di master)</option><?php endif; ?>
           <?php foreach ($names as $pn): ?><option value="<?= e($pn) ?>" <?= mb_strtolower($pn) === mb_strtolower($cur) ? 'selected' : '' ?>><?= e($pn) ?></option><?php endforeach; ?>
-        </select>
-        <span class="help">Tidak ada di daftar? Ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=parties')) ?>">Master Data → Customer</a>.</span><?= $fe('customer') ?></div>
+        </select><button type="button" class="btn btn-ghost btn-sm btn-icon field-quick" data-quick-pick="customer" title="Tambah customer baru" aria-label="Tambah customer baru"><svg class="i i-sm"><use href="#i-plus"/></svg></button></div><?= $fe('customer') ?>
+        <span class="help">Tidak ada di daftar? Klik <b>+</b> atau ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=parties')) ?>">Master Data → Customer</a>.</span></div>
 <?php $customerField = ob_get_clean();
 ?>
 <section class="card" style="max-width:<?= $lampu ? '980px' : '820px' ?>">
@@ -84,7 +84,14 @@ ob_start(); ?>
     <?php else: ?>
     <div class="form-grid">
       <?= $customerField ?>
-      <div class="field"><label for="project_name">Proyek</label><input class="input" id="project_name" name="project_name" maxlength="200" value="<?= e($v('project_name')) ?>"></div>
+      <?php $curProj = trim((string) $v('project_name')); ?>
+      <div class="field"><label for="project_name">Proyek</label>
+        <div class="field-pick"><select class="input" id="project_name" name="project_name" data-combo data-combo-create="/api/projects" data-combo-create-value="name" data-combo-placeholder="Ketik untuk mencari proyek…">
+          <option value="">— tanpa proyek —</option>
+          <?php if ($curProj !== '' && !in_array(mb_strtolower($curProj), array_map('mb_strtolower', $projects), true)): ?><option value="<?= e($curProj) ?>" selected><?= e($curProj) ?> (belum di master)</option><?php endif; ?>
+          <?php foreach ($projects as $pj): ?><option value="<?= e($pj) ?>" <?= mb_strtolower($pj) === mb_strtolower($curProj) ? 'selected' : '' ?>><?= e($pj) ?></option><?php endforeach; ?>
+        </select><button type="button" class="btn btn-ghost btn-sm btn-icon field-quick" data-quick-pick="project_name" title="Tambah proyek baru" aria-label="Tambah proyek baru"><svg class="i i-sm"><use href="#i-plus"/></svg></button></div><?= $fe('project_name') ?>
+        <span class="help">Tidak ada di daftar? Klik <b>+</b> atau ketik namanya lalu pilih “Tambah”. Dikelola di <a href="<?= e(url('/master?tab=projects')) ?>">Master Data → Proyek</a>.</span></div>
       <div class="field"><label for="invoice_no">No. invoice</label><input class="input" id="invoice_no" name="invoice_no" maxlength="80" value="<?= e($v('invoice_no')) ?>"></div>
       <div class="field full"><label for="description">Keterangan</label><input class="input" id="description" name="description" maxlength="255" value="<?= e($v('description')) ?>"></div>
       <div class="field"><label for="invoice_date">Tanggal invoice</label><input class="input" type="date" id="invoice_date" name="invoice_date" value="<?= e($v('invoice_date')) ?>"><?= $fe('invoice_date') ?></div>
@@ -98,3 +105,24 @@ ob_start(); ?>
     <div class="mt-3" style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" type="submit">Simpan</button><a class="btn btn-ghost" href="<?= e(url($id ? '/invoices/' . $id : '/invoices?kind=' . $kind)) ?>">Batal</a></div>
   </form>
 </section>
+
+<?php /* dialog tambah cepat Customer / Proyek (master); di luar <form> agar tidak bersarang. Diisi ulang oleh invoice-quick.js */ ?>
+<div class="modal-back" id="quickPick" aria-hidden="true">
+  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="qkTitle">
+    <div class="modal-head"><h3 id="qkTitle">Tambah</h3><button type="button" class="icon-btn" style="background:#eef1f8;color:#3b4566" data-close-modal aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="field">
+          <label for="qkName" id="qkLabel">Nama <span class="req">*</span></label>
+          <input class="input" id="qkName" maxlength="255" autocomplete="off">
+        </div>
+        <div class="err" id="qkErr" hidden role="alert"></div>
+        <span class="help" id="qkHelp"></span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" data-close-modal>Batal</button>
+      <button type="button" class="btn" id="qkSave">Simpan &amp; pilih</button>
+    </div>
+  </div>
+</div>

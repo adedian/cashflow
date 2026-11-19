@@ -181,7 +181,7 @@
       window.HME.api(createUrl, { method: 'POST', form: new URLSearchParams({ name: name }) }).then(function (j) {
         if (!j || !j.ok) { ui.list.textContent = ''; ui.list.appendChild(el('li', 'combo-empty combo-error', (j && j.error) || 'Gagal menambahkan.')); return; }
         // API yang mengembalikan id (mis. supplier) → nilai opsi = id; selain itu nilai opsi = nama (pihak)
-        var byId = j.id !== undefined && j.id !== null, val = byId ? String(j.id) : j.name, exists = false;
+        var byId = j.id !== undefined && j.id !== null && sel.getAttribute('data-combo-create-value') !== 'name', val = byId ? String(j.id) : j.name, exists = false;
         Array.prototype.forEach.call(sel.options, function (o) { if (byId ? o.value === val : o.value.toLowerCase() === j.name.toLowerCase()) { exists = true; val = o.value; } });
         if (!exists) sel.appendChild(new Option(j.name, val));
         if (j.created && window.HME.toast) window.HME.toast('“' + j.name + '” ditambahkan ke master.', 'success', 2500);
