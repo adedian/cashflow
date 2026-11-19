@@ -38,8 +38,8 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
     $projs = $pid > 0 ? str_replace('value="' . $pid . '">', 'value="' . $pid . '" selected>', $projHtml) : $projHtml;
     return '<div class="line-row">'
         . '<input class="input line-desc" name="line_desc[]"' . $idD . ' maxlength="500" value="' . e((string) ($r['description'] ?? '')) . '" placeholder="Uraian" aria-label="Uraian"' . ($first ? $auto : '') . '>'
-        . '<div class="line-pick line-pick-cat"><select class="input line-cat" name="line_cat[]" aria-label="Kategori" data-combo-placeholder="Kategori…"><option value="">— belum dikategorikan —</option>' . $cats . '</select>' . $quickBtn('category', 'kategori') . '</div>'
-        . '<div class="line-pick line-pick-proj"><select class="input line-proj" name="line_proj[]" aria-label="Proyek" data-combo-placeholder="Proyek…"><option value="">— tanpa proyek —</option>' . $projs . '</select>' . $quickBtn('project', 'proyek') . '</div>'
+        . '<div class="line-pick line-pick-cat"><select class="input line-cat" name="line_cat[]" aria-label="Kategori" data-combo-create-event data-combo-placeholder="Ketik untuk mencari kategori…"><option value="">— belum dikategorikan —</option>' . $cats . '</select>' . $quickBtn('category', 'kategori') . '</div>'
+        . '<div class="line-pick line-pick-proj"><select class="input line-proj" name="line_proj[]" aria-label="Proyek" data-combo-create-event data-combo-placeholder="Ketik untuk mencari proyek…"><option value="">— tanpa proyek —</option>' . $projs . '</select>' . $quickBtn('project', 'proyek') . '</div>'
         . '<input class="input num line-amt" name="line_amount[]"' . $idA . ' type="text" inputmode="decimal" value="' . e((string) ($r['amount'] ?? '')) . '" placeholder="Jumlah (Rp)" aria-label="Jumlah (Rp)" autocomplete="off"' . ($first ? $auto : '') . '>'
         . '<button type="button" class="btn btn-ghost btn-sm btn-icon line-del" data-line-del title="Hapus baris" aria-label="Hapus baris"><svg class="i i-sm" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>'
         . '</div>';
@@ -125,7 +125,7 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
       </div>
       <div class="field">
         <label for="counterparty_detail">Bank / rekening pihak <span class="help">(hanya terlihat Super Admin)</span></label>
-        <div class="field-pick"><select class="input" id="counterparty_detail" name="counterparty_detail">
+        <div class="field-pick"><select class="input" id="counterparty_detail" name="counterparty_detail" data-combo-create-event data-combo-placeholder="Ketik untuk mencari bank / rekening…">
           <option value="">— pilih rekening lawan —</option>
           <?php $curCp = trim((string) $v('counterparty_detail')); $cpLabels = array_column($counterpartyAccounts, 'label'); ?>
           <?php if ($curCp !== '' && !in_array($curCp, $cpLabels, true)): ?><option value="<?= e($curCp) ?>" selected><?= e($curCp) ?> (belum di master)</option><?php endif; ?>

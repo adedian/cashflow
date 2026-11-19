@@ -2,6 +2,7 @@
  *  - SEMUA <select> (kecuali [multiple] / [data-no-combo]) otomatis menjadi dropdown berpencarian; select asli tetap ada & ikut terkirim,
  *    sehingga formulir tanpa JavaScript tetap berfungsi. Mendukung <optgroup>, atribut form="...", dan event 'change'.
  *  - <select data-combo-create="/api/..."> : bila ketikan tidak ada di daftar, muncul pilihan "Tambah ..." (membuat entri master lewat API).
+ *  - <select data-combo-create-event> : sama, tetapi memicu event 'combo:create' {detail:{name}} pada select; halaman yang menyimpannya.
  *  - <div data-combo-remote="url"> : daftar dimuat dari server (No. Invoice/PO), mengikuti jenis transaksi. Berisi <input type="hidden" class="combo-value">.
  *    Memicu event 'combo:pick' (detail = item | null); API: el.comboApi.clear(), .reload(), .value().
  * Daftar memakai posisi 'fixed' agar tidak terpotong tabel/modal, dan otomatis naik ke atas bila ruang bawah sempit.
@@ -115,6 +116,7 @@
     var lbl = sel.getAttribute('aria-label') || (sel.id && document.querySelector('label[for="' + sel.id + '"]') ? document.querySelector('label[for="' + sel.id + '"]').textContent.replace('*', '').trim() : '');
     var ui = build(sel.getAttribute('data-combo-placeholder') || 'Ketik untuk mencari…', lbl);
     var createUrl = sel.getAttribute('data-combo-create');
+    var createEvt = sel.hasAttribute('data-combo-create-event');   // pilihan "Tambah …" memicu event 'combo:create' (detail.name) alih-alih memanggil API
     // wadah mewarisi gaya sebaris select (lebar/min-width) agar tata letak tidak berubah
     if (sel.style.cssText) ui.wrap.style.cssText = sel.style.cssText;
     ui.input.style.width = '100%';
@@ -162,12 +164,17 @@
         ui.list.appendChild(li);
         if (o.value !== '') n++;
       });
-      if (createUrl && q && !exact) {
+      if ((createUrl || createEvt) && q && !exact) {
         var raw = ui.input.value.trim();
         var add = el('li', 'combo-opt combo-add');
         add.setAttribute('role', 'option');
         add.appendChild(el('div', 'combo-t', '+ Tambah “' + raw + '” sebagai baru'));
-        add.addEventListener('mousedown', function () { create(raw); });
+        add.addEventListener('mousedown', function () {
+          if (createUrl) { create(raw); return; }
+          // tanpa API sendiri: halaman yang menangani (kategori/proyek per baris, bank/rekening)
+          pop.close(); sync();
+          sel.dispatchEvent(new CustomEvent('combo:create', { bubbles: true, detail: { name: raw } }));
+        });
         ui.list.appendChild(add);
       } else if (!n) {
         ui.list.appendChild(el('li', 'combo-empty', q ? 'Tidak ada yang cocok dengan “' + q + '”.' : 'Daftar kosong.'));

@@ -181,24 +181,38 @@
         var b = e.target.closest ? e.target.closest('[data-quick-add]') : null;
         if (b) openQuick(b.getAttribute('data-quick-add'), b.closest('.line-row'));
       });
+      // simpan ke master lalu pilih di baris tsb; dipakai dialog "+" maupun pilihan "Tambah “…” sebagai baru" di dropdown
+      var createLine = function (what, row, name) {
+        var c = qaCfg[what], form = new URLSearchParams({ name: name });
+        if (what === 'category') { var d = document.querySelector('input[name="direction"]:checked'); form.set('dir', d && d.value === 'in' ? 'in' : 'out'); }
+        return HME.api(c.url, { method: 'POST', form: form }).then(function (j) {
+          if (!j || !j.ok) return (j && j.error) || 'Gagal menambahkan.';
+          var group = what === 'category' ? j.kind_label : null;
+          addOpt(lineBox, c.cls, j.id, j.name, group); addOpt(tpl.content, c.cls, j.id, j.name, group);
+          var target = row && row.querySelector(c.cls);
+          if (target) { target.value = String(j.id); target.dispatchEvent(new Event('change', { bubbles: true })); }
+          if (HME.toast) HME.toast(j.created ? '“' + j.name + '” ditambahkan ke master.' : '“' + j.name + '” sudah ada — dipilih.', 'success', 2500);
+          return '';
+        }).catch(function () { return 'Koneksi terputus — gagal menambahkan.'; });
+      };
       var saveQuick = function () {
         if (qaBusy) return;
         var name = qaName.value.replace(/\s+/g, ' ').trim();
         if (!name) { showErr('Nama wajib diisi.'); qaName.focus(); return; }
-        var c = qaCfg[qaWhat], form = new URLSearchParams({ name: name });
-        if (qaWhat === 'category') { var d = document.querySelector('input[name="direction"]:checked'); form.set('dir', d && d.value === 'in' ? 'in' : 'out'); }
         qaBusy = true; qaSave.disabled = true;
-        HME.api(c.url, { method: 'POST', form: form }).then(function (j) {
-          if (!j || !j.ok) { showErr((j && j.error) || 'Gagal menambahkan.'); return; }
-          var group = qaWhat === 'category' ? j.kind_label : null;
-          addOpt(lineBox, c.cls, j.id, j.name, group); addOpt(tpl.content, c.cls, j.id, j.name, group);
-          var target = qaRow && qaRow.querySelector(c.cls);
-          if (target) { target.value = String(j.id); target.dispatchEvent(new Event('change', { bubbles: true })); }
-          if (HME.toast) HME.toast(j.created ? '“' + j.name + '” ditambahkan ke master.' : '“' + j.name + '” sudah ada — dipilih.', 'success', 2500);
-          HME.closeModal(qa);
-        }).catch(function () { showErr('Koneksi terputus — gagal menambahkan.'); })
-          .then(function () { qaBusy = false; qaSave.disabled = false; });
+        createLine(qaWhat, qaRow, name).then(function (err) {
+          if (err) showErr(err); else HME.closeModal(qa);
+          qaBusy = false; qaSave.disabled = false;
+        });
       };
+      // ketik nama di dropdown Kategori/Proyek → "+ Tambah “…” sebagai baru"
+      lineBox.addEventListener('combo:create', function (e) {
+        var s = e.target, row = s.closest ? s.closest('.line-row') : null;
+        var what = s.classList.contains('line-cat') ? 'category' : s.classList.contains('line-proj') ? 'project' : '';
+        var name = String((e.detail && e.detail.name) || '').replace(/\s+/g, ' ').trim();
+        if (!what || !row || !name) return;
+        createLine(what, row, name).then(function (err) { if (err && HME.toast) HME.toast(err, 'error', 4000); });
+      });
       qaSave.addEventListener('click', saveQuick);
       qaName.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveQuick(); } });
     }
@@ -245,15 +259,23 @@
 
     /* bank / rekening pihak */
     var bBank = $('qbBank'), bNo = $('qbNo'), bParty = $('qbParty'), bErr = $('qbErr'), bSave = $('qbSave'), bBusy = false;
-    var openBank = function () {
+    var openBank = function (typed) {
       bBank.value = ''; bNo.value = ''; show(bErr, '');
+      // ketikan dari dropdown ("BCA 1234567890"): deret angka 6–30 digit → no. rekening, sisanya → nama bank
+      if (typed) {
+        var m = String(typed).match(/\d[\d\s.\-]{4,}\d/);
+        if (m && /^\d{6,30}$/.test(m[0].replace(/[\s.\-]/g, ''))) { bNo.value = m[0].replace(/[\s.\-]/g, ''); typed = typed.replace(m[0], ' '); }
+        bBank.value = typed.replace(/\s+/g, ' ').replace(/^[\s\-–—:]+|[\s\-–—:]+$/g, '');
+      }
       // pemilik rekening = pihak yang sedang dipilih di formulir (bila ada di daftar)
       var cur = party.value || '';
       if (cur && !hasOpt(bParty, cur)) bParty.appendChild(new Option(cur, cur));
       bParty.value = cur;
       bParty.dispatchEvent(new Event('change', { bubbles: true }));
-      H.openModal('quickBank'); setTimeout(function () { bBank.focus(); }, 60);
+      H.openModal('quickBank'); setTimeout(function () { (bBank.value && !bNo.value ? bNo : bBank).focus(); }, 60);
     };
+    // ketik di dropdown Bank/rekening → "+ Tambah “…” sebagai baru" membuka dialog dengan ketikan terisi (nama bank + no. rekening wajib)
+    bank.addEventListener('combo:create', function (e) { openBank(e.detail && e.detail.name); });
     var saveBank = function () {
       if (bBusy) return;
       var b = bBank.value.replace(/\s+/g, ' ').trim(), no = bNo.value.replace(/[\s.\-]/g, '');
@@ -277,7 +299,7 @@
     document.addEventListener('click', function (e) {
       var b = e.target.closest ? e.target.closest('[data-quick-master]') : null;
       if (!b) return;
-      if (b.getAttribute('data-quick-master') === 'party') openParty(); else openBank();
+      if (b.getAttribute('data-quick-master') === 'party') openParty(); else openBank('');
     });
   })();
 
