@@ -108,6 +108,8 @@ ob_start(); ?>
       <div class="field"><label for="invoice_no">No. invoice</label><input class="input" id="invoice_no" name="invoice_no" maxlength="80" value="<?= e($v('invoice_no')) ?>"></div>
       <div class="field full"><label for="description">Keterangan</label><input class="input" id="description" name="description" maxlength="255" value="<?= e($v('description')) ?>"></div>
       <div class="field"><label for="invoice_date">Tanggal invoice</label><input class="input" type="date" id="invoice_date" name="invoice_date" value="<?= e($v('invoice_date')) ?>"><?= $fe('invoice_date') ?></div>
+      <div class="field"><label for="due_date">Tgl. jatuh tempo<?= $id && !$v('due_date') ? '' : ' <span class="req">*</span>' ?></label><input class="input" type="date" id="due_date" name="due_date" value="<?= e($v('due_date')) ?>"<?= $id && !$v('due_date') ? '' : ' required' ?>><?= $fe('due_date') ?>
+        <span class="help">Piutang yang belum lunas otomatis muncul di Proyeksi (penerimaan) pada tanggal ini.</span></div>
       <div class="field"><label for="amount">Nominal tagihan (Rp) <span class="req">*</span></label><input class="input num" id="amount" name="amount" inputmode="decimal" value="<?= e($v('amount')) ?>" required><?= $fe('amount') ?></div>
       <div class="field"><label for="paid">Sudah dibayar (Rp) <span class="help">— total, termasuk penerimaan lewat Transaksi</span></label><input class="input num" id="paid" name="paid" inputmode="decimal" value="<?= e($v('paid')) ?>"><?= $fe('paid') ?></div>
       <div class="field full"><label class="check"><input type="checkbox" name="paid_known" value="1" <?= !empty($t['paid_known']) ? 'checked' : '' ?>>Pembayaran sudah dipastikan</label>

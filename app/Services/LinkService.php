@@ -374,7 +374,8 @@ final class LinkService
                 if (bccomp($rem, self::EPS, 3) <= 0) {
                     return null;
                 }
-                $desc = mb_substr(trim($i['customer'] . (($i['invoice_no'] ?? '') !== '' ? ' — ' . ($i['kind'] === 'lampu' ? 'SJ ' : 'Invoice no. ') . $i['invoice_no'] : '')), 0, 500);
+                $desc = mb_substr(trim($i['customer'] . (($i['invoice_no'] ?? '') !== '' ? ' — ' . ($i['kind'] === 'lampu' ? 'SJ ' : 'Invoice no. ') . $i['invoice_no'] : '')
+                    . ($i['kind'] !== 'lampu' && ($i['project_name'] ?? '') !== '' ? ' (' . $i['project_name'] . ')' : '')), 0, 500);
                 $fid = Db::insert('forecast_items', [
                     'period_month' => substr((string) $i['due_date'], 0, 7), 'expected_date' => $i['due_date'], 'direction' => 'in', 'description' => $desc,
                     'account_hint' => null, 'amount' => $rem, 'is_active' => 1, 'created_by' => self::actor(),

@@ -230,6 +230,10 @@ final class InvoiceController extends Controller
             $d[$k] = $raw === '' ? null : Filters::date($raw);
             if ($raw !== '' && $d[$k] === null) { $e[$k] = $label . ' tidak valid.'; }
         }
+        // Piutang Proyek: jatuh tempo wajib untuk data baru (agar masuk Proyeksi); data lama tanpa jatuh tempo boleh tetap kosong
+        if ($kind === 'proyek' && $d['due_date'] === null && !isset($e['due_date']) && ($existing === null || $existing['due_date'] !== null)) {
+            $e['due_date'] = 'Tgl. jatuh tempo wajib diisi.';
+        }
         $d['due_note'] = mb_substr(trim((string) ($in['due_note'] ?? '')), 0, 30) ?: null;
         $d['salesperson'] = mb_substr(trim((string) ($in['salesperson'] ?? '')), 0, 40) ?: null;
         $d['pay_ref'] = mb_substr(trim((string) ($in['pay_ref'] ?? '')), 0, 40) ?: null;
@@ -406,7 +410,6 @@ final class InvoiceController extends Controller
     {
         $this->requireAdmin();
         $old = $this->find((int) $id);
-        $hadDue = $old['due_date'] !== null;
         [$d, $e] = $this->validate($this->req->post, $old['kind'], $old);
         if ($e) { return $this->form($this->req->post + ['id' => $id, 'pay_ref' => $old['pay_ref'], 'due_note' => $old['due_note'], 'due_date' => $old['due_date']], $e, (int) $id, $old['kind'], 422); }
         unset($d['kind']);
@@ -417,7 +420,7 @@ final class InvoiceController extends Controller
             Version::bump('invoices');
         });
         LinkService::autoLink();
-        if (!$hadDue) { LinkService::ensureForecastForInvoice((int) $id); }
+        LinkService::ensureForecastForInvoice((int) $id);   // tak berbuat apa-apa bila sudah tertaut / belum memenuhi syarat
         $this->flash('success', 'Perubahan tersimpan.');
         return $this->redirect('/invoices/' . (int) $id);
     }
