@@ -2,7 +2,7 @@
 /** @var array $f @var array $accounts @var array $categories @var array $projects @var array $parties @var array $base @var bool $canExport @var bool $isAdmin @var bool $includeVoid */
 $kinds = \App\Models\Lookup::KIND_LABEL;
 ?>
-<section class="card">
+<section class="card tx-pin">
   <form class="filters" id="txFilter" method="get" action="<?= e(url('/transactions')) ?>">
     <div class="field grow">
       <label for="q">Cari</label>

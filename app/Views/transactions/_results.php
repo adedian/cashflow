@@ -8,7 +8,7 @@ $sortLink = static function (string $asc, string $desc) use ($sort, $link): stri
 };
 $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
 ?>
-<div class="card-head" style="padding:20px 22px 0">
+<div class="card-head tx-pin-head" style="padding:20px 22px 0">
   <div>
     <h2>Hasil</h2>
     <span class="muted" style="font-size:12.5px"><?= number_format($res['total'], 0, ',', '.') ?> baris uraian · debit <b class="pos"><?= e(money($res['sum_debit'])) ?></b> · kredit <b class="neg"><?= e(money($res['sum_credit'])) ?></b> · selisih <b class="num"><?= e(money($net)) ?></b></span>

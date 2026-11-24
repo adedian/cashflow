@@ -1015,19 +1015,11 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
   table.tbl.stack.rd-tbl tfoot td:first-child { display: none; }
 }
 
-/* ---- Transaksi: "freeze panes" ala Excel (layar lebar) ----
-   Bagian atas (judul, filter, "Hasil" + tombol, judul kolom) tetap terlihat; hanya isi tabel yang bergulir (atas-bawah dan kiri-kanan).
-   Kolom kiri (centang, Tgl, Nomor Bukti, Rekening Lawan) ikut membeku saat tabel digeser ke kanan.
-   Hanya untuk layar >= 1100 px lebar dan >= 620 px tinggi; di bawah itu halaman bergulir seperti biasa. */
-@media screen and (min-width: 1100px) and (min-height: 620px) {
-  .main:has(#txResults) { height: 100vh; min-height: 0; overflow-y: auto; }
-  .main:has(#txResults) > .hero { flex: 0 0 auto; }
-  .main:has(#txResults) > .content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-bottom: 12px; }
-  #txResults { flex: 1 1 auto; min-height: 420px; display: flex; flex-direction: column; }   /* layar pendek: halaman bergulir, tabel tetap punya ruang */
-  #txResults > .card-head, #txResults > .pager { flex: 0 0 auto; }
-  #txResults > .table-wrap { flex: 1 1 auto; min-height: 0; overflow: auto; margin-top: 8px; }
-  #txResults > .empty { flex: 0 0 auto; }
-
+/* ---- Transaksi: "freeze panes" ala Excel (layar lebar >= 1100 px) ----
+   Halaman tetap bergulir panjang ke bawah seperti biasa. Kolom kiri (centang, Tgl, Nomor Bukti, Rekening Lawan) membeku saat tabel
+   digeser ke kanan (CSS sticky di dalam .table-wrap); judul kolom tetap menempel di atas layar saat halaman digulir ke bawah
+   (transaksi.js menggeser baris judul — sticky CSS tidak bisa karena .table-wrap harus bergulir mendatar). */
+@media screen and (min-width: 1100px) {
   .tbl.tx { --w-tgl: 104px; --w-code: 122px; --w-party: 190px; border-collapse: separate; border-spacing: 0; }
   .tbl.tx .c-sel, .tbl.tx .c-tgl, .tbl.tx .c-code, .tbl.tx .c-party { position: sticky; z-index: 1; }
   .tbl.tx thead th { z-index: 2; }
@@ -1043,4 +1035,14 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
   .tbl.tx tbody tr:hover td.c-sel, .tbl.tx tbody tr:hover td.c-tgl,
   .tbl.tx tbody tr:hover td.c-code, .tbl.tx tbody tr:hover td.c-party { background: #f3f7ff; }
   .tbl.tx tr.voided td.c-sel, .tbl.tx tr.voided td.c-tgl, .tbl.tx tr.voided td.c-code, .tbl.tx tr.voided td.c-party { opacity: 1; color: var(--muted); }
+  .tbl.tx thead.is-stuck th { box-shadow: 0 2px 4px -1px rgba(15, 23, 42, .2); }
+  .tbl.tx thead.is-stuck th.c-party { box-shadow: 3px 2px 4px -2px rgba(15, 23, 42, .22); }
+}
+
+/* Transaksi (layar >= 1100 x 720 px): kartu filter, baris "Hasil" (+ tombol cetak), dan judul kolom menempel di atas layar saat halaman
+   digulir ke bawah; baris tabel tetap memanjang ke bawah seperti biasa. Tinggi kartu filter dibaca transactions.js (--tx-pin-top). */
+@media screen and (min-width: 1100px) and (min-height: 720px) {
+  .tx-pin { position: sticky; top: 0; z-index: 7; }
+  #txResults { overflow: clip; }   /* menggantikan overflow:hidden (card-flush) yang membuat sticky tidak menempel ke layar; sudut tetap membulat */
+  #txResults > .tx-pin-head { position: sticky; top: var(--tx-pin-top, 0px); z-index: 6; background: var(--card, #fff); margin-bottom: 0; padding-bottom: 10px; }
 }

@@ -5,6 +5,36 @@
   /* --- daftar: muat ulang hasil (tanpa reload halaman) saat data transaksi berubah di sesi lain --- */
   var res = document.getElementById('txResults');
 
+  /* --- daftar: bagian atas menempel saat halaman digulir ke bawah (layar lebar). Kartu filter + baris "Hasil" ditempel CSS (sticky);
+         judul kolom tidak bisa memakai sticky karena .table-wrap bergulir mendatar, jadi baris judul digeser turun sebesar jarak tabel yang
+         sudah lewat dari batas bawah bagian yang menempel. Tinggi kartu filter dikirim ke CSS lewat --tx-pin-top (tempat baris "Hasil" menempel). --- */
+  if (res) {
+    var wide = window.matchMedia('(min-width: 1100px)'), pinned = window.matchMedia('(min-width: 1100px) and (min-height: 720px)');
+    var stick = function () {
+      var wrap = res.querySelector('.table-wrap'), head = wrap && wrap.querySelector('thead');
+      if (!head) return;
+      var ths = head.querySelectorAll('th'), off = 0, target = 0;
+      if (pinned.matches) {
+        var card = document.querySelector('.tx-pin'), hasil = res.querySelector('.tx-pin-head');
+        var fh = card ? card.offsetHeight : 0;
+        if (res.style.getPropertyValue('--tx-pin-top') !== fh + 'px') res.style.setProperty('--tx-pin-top', fh + 'px');
+        target = fh + (hasil ? hasil.offsetHeight : 0);
+      } else if (res.style.getPropertyValue('--tx-pin-top')) {
+        res.style.removeProperty('--tx-pin-top');
+      }
+      if (wide.matches) {
+        var top = wrap.getBoundingClientRect().top, room = wrap.offsetHeight - head.offsetHeight - 48;   // berhenti sebelum dasar tabel
+        off = Math.max(0, Math.min(target - top, room));
+      }
+      var v = off > 0 ? 'translateY(' + Math.round(off) + 'px)' : '';
+      for (var i = 0; i < ths.length; i++) { if (ths[i].style.transform !== v) ths[i].style.transform = v; }
+      head.classList.toggle('is-stuck', off > 0);
+    };
+    window.addEventListener('scroll', stick, { passive: true });
+    window.addEventListener('resize', stick);
+    stick();
+  }
+
   /* --- daftar: centang transaksi untuk Cetak Detail (bukti BK/BM). Pilihan bertahan antar halaman/filter selama tab terbuka. --- */
   var SEL_KEY = 'cf_tx_sel', SEL_MAX = 200;
   var sel = [];
