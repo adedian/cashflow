@@ -293,10 +293,13 @@ final class VoucherPdf
         $hp = 8 * 0.75;                      // padding sel header 8 px
         $this->text($hp, self::mid(0, $half, $fs), $K['who'], $fs, 'r', '1A1A1A');
         $pw1 = $p(29.25) - 2 * $hp;
-        $pz = self::fitSize($v['party'], false, $fs, 5.8, $pw1) ?? 5.8;
+        // rekening pihak bisa panjang ("Nama - Bank ac. nomor"): font dikecilkan sampai 4.6 pt dulu, baru dipotong dengan "..."
+        $pz = self::fitSize($v['party'], false, $fs, 4.6, $pw1) ?? 4.6;
         $party = $v['party'];
-        while (self::tw($party, false, $pz) > $pw1 && mb_strlen($party) > 4) {
-            $party = rtrim(mb_substr($party, 0, -2)) . '...';
+        // potong dari teks asli (bukan dari hasil potongan sebelumnya, yang dulu justru memanjang dan membuat loop tak berujung)
+        for ($cut = mb_strlen($party); self::tw($party, false, $pz) > $pw1 && $cut > 4;) {
+            $cut -= 2;
+            $party = rtrim(mb_substr((string) $v['party'], 0, $cut)) . '...';
         }
         $this->text($hp, self::mid($half, $half, $pz), $party, $pz, 'r', '1A1A1A');
         $midX = $p(29.25 + 21);
