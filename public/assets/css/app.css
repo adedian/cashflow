@@ -1014,3 +1014,33 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
   table.tbl.stack.rd-tbl tfoot, table.tbl.stack.rd-tbl tfoot tr { display: block; }
   table.tbl.stack.rd-tbl tfoot td:first-child { display: none; }
 }
+
+/* ---- Transaksi: "freeze panes" ala Excel (layar lebar) ----
+   Bagian atas (judul, filter, "Hasil" + tombol, judul kolom) tetap terlihat; hanya isi tabel yang bergulir (atas-bawah dan kiri-kanan).
+   Kolom kiri (centang, Tgl, Nomor Bukti, Rekening Lawan) ikut membeku saat tabel digeser ke kanan.
+   Hanya untuk layar >= 1100 px lebar dan >= 620 px tinggi; di bawah itu halaman bergulir seperti biasa. */
+@media screen and (min-width: 1100px) and (min-height: 620px) {
+  .main:has(#txResults) { height: 100vh; min-height: 0; overflow-y: auto; }
+  .main:has(#txResults) > .hero { flex: 0 0 auto; }
+  .main:has(#txResults) > .content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-bottom: 12px; }
+  #txResults { flex: 1 1 auto; min-height: 420px; display: flex; flex-direction: column; }   /* layar pendek: halaman bergulir, tabel tetap punya ruang */
+  #txResults > .card-head, #txResults > .pager { flex: 0 0 auto; }
+  #txResults > .table-wrap { flex: 1 1 auto; min-height: 0; overflow: auto; margin-top: 8px; }
+  #txResults > .empty { flex: 0 0 auto; }
+
+  .tbl.tx { --w-tgl: 104px; --w-code: 122px; --w-party: 190px; border-collapse: separate; border-spacing: 0; }
+  .tbl.tx .c-sel, .tbl.tx .c-tgl, .tbl.tx .c-code, .tbl.tx .c-party { position: sticky; z-index: 1; }
+  .tbl.tx thead th { z-index: 2; }
+  .tbl.tx thead th.c-sel, .tbl.tx thead th.c-tgl, .tbl.tx thead th.c-code, .tbl.tx thead th.c-party { z-index: 4; }
+  .tbl.tx .c-sel { left: 0; }
+  .tbl.tx .c-tgl { left: var(--fz-sel, 0px); width: var(--w-tgl); min-width: var(--w-tgl); max-width: var(--w-tgl); }
+  .tbl.tx .c-code { left: calc(var(--fz-sel, 0px) + var(--w-tgl)); width: var(--w-code); min-width: var(--w-code); max-width: var(--w-code); overflow: hidden; text-overflow: ellipsis; }
+  .tbl.tx .c-party { left: calc(var(--fz-sel, 0px) + var(--w-tgl) + var(--w-code)); width: var(--w-party); min-width: var(--w-party); max-width: var(--w-party); box-shadow: 3px 0 4px -2px rgba(15, 23, 42, .22); }
+  /* sel beku harus berlatar penuh agar isi yang bergulir tidak tembus */
+  .tbl.tx tbody td.c-sel, .tbl.tx tbody td.c-tgl, .tbl.tx tbody td.c-code, .tbl.tx tbody td.c-party { background: #fff; }
+  .tbl.tx tbody tr:nth-child(even) td.c-sel, .tbl.tx tbody tr:nth-child(even) td.c-tgl,
+  .tbl.tx tbody tr:nth-child(even) td.c-code, .tbl.tx tbody tr:nth-child(even) td.c-party { background: #fbfcff; }
+  .tbl.tx tbody tr:hover td.c-sel, .tbl.tx tbody tr:hover td.c-tgl,
+  .tbl.tx tbody tr:hover td.c-code, .tbl.tx tbody tr:hover td.c-party { background: #f3f7ff; }
+  .tbl.tx tr.voided td.c-sel, .tbl.tx tr.voided td.c-tgl, .tbl.tx tr.voided td.c-code, .tbl.tx tr.voided td.c-party { opacity: 1; color: var(--muted); }
+}

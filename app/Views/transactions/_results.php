@@ -29,11 +29,12 @@ $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
   <div class="empty"><svg class="i"><use href="#i-list"/></svg><p>Tidak ada transaksi yang cocok dengan filter.</p></div>
 <?php else: ?>
 <div class="table-wrap mt-1">
-  <table class="tbl stack tx">
+  <?php /* --fz-sel: lebar kolom centang (0 bila tak ada) — dipakai CSS "freeze" kolom kiri (Tgl, Nomor Bukti, Rekening Lawan) */ ?>
+  <table class="tbl stack tx" style="--fz-sel:<?= can_export() ? 36 : 0 ?>px">
     <thead>
       <tr>
         <?php if (can_export()): ?><th class="c-sel no-print"><input type="checkbox" id="txSelAll" aria-label="Pilih semua transaksi di halaman ini"></th><?php endif; ?>
-        <th><a href="<?= e($sortLink('date_asc', 'date_desc')) ?>" style="color:inherit">Tgl <?= $sort === 'date_asc' ? '▲' : ($sort === 'date_desc' ? '▼' : '') ?></a></th>
+        <th class="c-tgl"><a href="<?= e($sortLink('date_asc', 'date_desc')) ?>" style="color:inherit">Tgl <?= $sort === 'date_asc' ? '▲' : ($sort === 'date_desc' ? '▼' : '') ?></a></th>
         <th class="c-code">Nomor Bukti</th>
         <th class="c-party">Rekening Lawan</th>
         <th class="desc">Keterangan</th>
@@ -57,7 +58,7 @@ $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
     ?>
       <tr class="<?= $void ? 'voided' : '' ?>">
         <?php if (can_export()): ?><td class="c-sel no-print" data-label="Pilih"><?php if ($firstOfTx): ?><input type="checkbox" class="tx-sel" value="<?= (int) $t['id'] ?>"<?= $void ? ' disabled title="Transaksi dibatalkan tidak dicetak"' : '' ?> aria-label="Pilih transaksi <?= e($t['voucher_code'] ?: '#' . (int) $t['id']) ?>"><?php endif; ?></td><?php endif; ?>
-        <td data-label="Tgl" class="nowrap"><?= e(fmt_date($t['tx_date'])) ?><div class="sub" title="<?= e($t['account_name']) ?>"><?= e($t['account_code']) ?></div></td>
+        <td data-label="Tgl" class="nowrap c-tgl"><?= e(fmt_date($t['tx_date'])) ?><div class="sub" title="<?= e($t['account_name']) ?>"><?= e($t['account_code']) ?></div></td>
         <td data-label="Nomor Bukti" class="nowrap c-code"><?= e($t['voucher_code'] ?? '') ?></td>
         <td data-label="Rekening Lawan" class="c-party">
           <?= e($t['counterparty'] ?? '') ?>

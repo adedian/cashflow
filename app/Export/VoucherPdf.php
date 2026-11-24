@@ -223,7 +223,22 @@ final class VoucherPdf
                 }
             }
         }
-        $nRows = max(self::MIN_ROWS, count($rows));
+        // No. Invoice / PO: italic di baris ke-4 dari bawah kotak URAIAN (baris ke-(nRows-4)); bila panjang, font mengecil lalu dibungkus
+        // ke baris di bawahnya (maks. 3 baris, tetap menyisakan satu baris kosong di dasar). Baris bertambah bila isi sudah memenuhi kotak.
+        $refText = trim((string) ($v['refs'] ?? ''));
+        $refLines = [];
+        $refZ = $fs;
+        if ($refText !== '') {
+            $z = self::fitSize($refText, false, $fs, 6.5, $uw);
+            if ($z !== null) {
+                $refZ = $z;
+                $refLines = [$refText];
+            } else {
+                $refZ = 6.5;
+                $refLines = array_slice(self::wrap($refText, $refZ, $uw), 0, 3);
+            }
+        }
+        $nRows = max(self::MIN_ROWS, count($rows) + ($refLines ? 4 : 0));
         $bodyTop = $hdrH + $headH;
         $lastTop = $bodyTop + $nRows * $rowH;
         $terbTop = $lastTop + $lastH;
@@ -340,6 +355,10 @@ final class VoucherPdf
                 $this->text($col[4] + $pad, self::mid($top, $rowH, $az), 'Rp', $az, 'r', '1A1A1A');
                 $this->text($col[5] - $pad, self::mid($top, $rowH, $az), $n, $az, 'r', $neg ? 'B00020' : '1A1A1A', 'r');
             }
+        }
+
+        foreach ($refLines as $i => $rl) {
+            $this->text($col[3] + $pad, self::mid($bodyTop + ($nRows - 4 + $i) * $rowH, $rowH, $refZ), $rl, $refZ, 'i', '1A1A1A');
         }
 
         // --- Ch/G.B. No. (membungkus jadi dua baris) + TOTAL

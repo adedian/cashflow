@@ -62,6 +62,17 @@ final class ExportBuilder
                 $l['description'] = trim((string) ($l['note'] ?? ''));
             }
             unset($l);
+            // No. Invoice / PO (kolom "No. Invoice" tiap baris; data lama: ref_no transaksi) -> dicetak di baris ke-4 dari bawah kotak URAIAN
+            $refList = [];
+            foreach ($lines as $l) {
+                $rn = trim((string) ($l['ref_no'] ?? ''));
+                if ($rn !== '' && !in_array($rn, $refList, true)) {
+                    $refList[] = $rn;
+                }
+            }
+            if (!$refList && trim((string) ($t['ref_no'] ?? '')) !== '') {
+                $refList[] = trim((string) $t['ref_no']);
+            }
             // kotak CATATAN: hanya catatan tingkat transaksi (data lama); catatan per baris sudah tampil di URAIAN
             $noteParts = [];
             if (trim((string) ($t['note'] ?? '')) !== '') {
@@ -76,6 +87,7 @@ final class ExportBuilder
                 'kind' => bccomp($net, '0', 2) > 0 ? 'BM' : 'BK',
                 'number' => (string) ($t['voucher_code'] ?? ''),
                 'date' => self::longDate($t['tx_date']),
+                'refs' => implode(', ', $refList),
                 'account' => trim((string) ($accName[$t['account_id']] ?? '')),   // rekening perusahaan: dicetak di atas kotak (di luar kotak)
                 // bukti memuat REKENING pihak (mis. "BCA 123 a.n. PT X") bila ada; rekening hanya terlihat Super Admin, selain itu / bila kosong tetap nama pihak
                 'party' => $isAdmin && trim((string) ($t['counterparty_detail'] ?? '')) !== '' ? cp_label($t['counterparty_detail']) : (string) ($t['counterparty'] ?? ''),
