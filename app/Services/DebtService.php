@@ -29,6 +29,15 @@ final class DebtService
         return $category === 'direksi';
     }
 
+    /**
+     * Hanya Hutang Usaha yang punya jatuh tempo. Hutang Direksi (pantau lama pinjaman) dan Hutang Lain-lain tidak memakai jatuh tempo,
+     * sehingga tidak muncul di Pengingat Pembayaran, tidak ditandai terlambat, dan tidak otomatis masuk Proyeksi.
+     */
+    public static function hasDue(string $category): bool
+    {
+        return $category === 'usaha';
+    }
+
     private const BASE = 'FROM debts d LEFT JOIN (' . TxLinkService::DEBT_PAID_SUB . ') p ON p.debt_id = d.id';
 
     /** @return array{where:string,params:array} */
@@ -53,7 +62,7 @@ final class DebtService
             case 'belum':     $w[] = "COALESCE(p.paid, 0) = 0 AND $rem > " . self::EPS; break;
             case 'sebagian':  $w[] = "COALESCE(p.paid, 0) > 0 AND $rem > " . self::EPS; break;
             case 'lunas':     $w[] = "$rem <= " . self::EPS; break;
-            case 'terlambat': $w[] = "$rem > " . self::EPS . ' AND d.due_date IS NOT NULL AND d.due_date < ?'; $p[] = $today; break;
+            case 'terlambat': $w[] = "$rem > " . self::EPS . " AND d.category = 'usaha' AND d.due_date IS NOT NULL AND d.due_date < ?"; $p[] = $today; break;
         }
         foreach (['due_from' => ['d.due_date', '>='], 'due_to' => ['d.due_date', '<='], 'date_from' => ['d.debt_date', '>='], 'date_to' => ['d.debt_date', '<=']] as $k => [$col, $op]) {
             if (!empty($f[$k])) {
@@ -81,8 +90,8 @@ final class DebtService
         );
         $tot = Db::one(
             'SELECT COALESCE(SUM(d.amount), 0) AS a, COALESCE(SUM(COALESCE(p.paid, 0)), 0) AS p, COALESCE(SUM(GREATEST(d.amount - COALESCE(p.paid, 0), 0)), 0) AS o, '
-            . 'COALESCE(SUM(CASE WHEN d.amount - COALESCE(p.paid, 0) > ' . self::EPS . ' AND d.due_date IS NOT NULL AND d.due_date < ? THEN d.amount - COALESCE(p.paid, 0) ELSE 0 END), 0) AS late_amt, '
-            . 'COALESCE(SUM(d.amount - COALESCE(p.paid, 0) > ' . self::EPS . ' AND d.due_date IS NOT NULL AND d.due_date < ?), 0) AS late_n, '
+            . 'COALESCE(SUM(CASE WHEN d.amount - COALESCE(p.paid, 0) > ' . self::EPS . " AND d.category = 'usaha' AND d.due_date IS NOT NULL AND d.due_date < ? THEN d.amount - COALESCE(p.paid, 0) ELSE 0 END), 0) AS late_amt, "
+            . 'COALESCE(SUM(d.amount - COALESCE(p.paid, 0) > ' . self::EPS . " AND d.category = 'usaha' AND d.due_date IS NOT NULL AND d.due_date < ?), 0) AS late_n, "
             . 'MAX(CASE WHEN d.amount - COALESCE(p.paid, 0) > ' . self::EPS . ' AND d.debt_date IS NOT NULL THEN GREATEST(DATEDIFF(?, d.debt_date), 0) END) AS longest '
             . self::BASE . $q['where'],
             array_merge([$today, $today, $today], $q['params'])
@@ -133,7 +142,7 @@ final class DebtService
         $r['remaining'] = $open ? $rem : '0.00';
         $r['status'] = !$open ? 'lunas' : (bccomp($paid, '0', 2) > 0 ? 'sebagian' : 'belum');
         $r['due'] = null;
-        if ($open && !empty($r['due_date'])) {
+        if ($open && !empty($r['due_date']) && self::hasDue((string) ($r['category'] ?? 'usaha'))) {
             $left = ReminderService::daysLeft((string) $r['due_date'], $today);
             $r['due'] = ReminderService::classify($left) + ['days_left' => $left];
         }
@@ -187,7 +196,7 @@ final class DebtService
                 'category' => isset(self::CATEGORIES[$d['category'] ?? '']) ? $d['category'] : 'usaha',
                 'seq_no' => $seq, 'ref_no' => ($d['ref_no'] ?? '') !== '' ? $d['ref_no'] : null, 'supplier' => $d['supplier'], 'supplier_id' => $supplierId,
                 'source_account_id' => $d['source_account_id'] ?? null,
-                'description' => ($d['description'] ?? '') !== '' ? $d['description'] : null, 'debt_date' => $d['debt_date'] ?? null, 'due_date' => $d['due_date'] ?? null,
+                'description' => ($d['description'] ?? '') !== '' ? $d['description'] : null, 'debt_date' => $d['debt_date'] ?? null, 'due_date' => self::hasDue((string) ($d['category'] ?? 'usaha')) ? ($d['due_date'] ?? null) : null,
                 'source_account' => ($d['source_account'] ?? '') !== '' ? $d['source_account'] : null, 'amount' => $d['amount'],
                 'note' => ($d['note'] ?? '') !== '' ? $d['note'] : null, 'forecast_item_id' => $link,
                 'source_sheet' => $d['source_sheet'] ?? null, 'source_row' => $d['source_row'] ?? null, 'import_batch_id' => $batchId, 'created_by' => $userId,
@@ -258,6 +267,10 @@ final class DebtService
         $loan = self::isLoan($cat);
         foreach (['due_date' => 'Tanggal jatuh tempo', 'debt_date' => $loan ? 'Tanggal setoran' : 'Tanggal transaksi'] as $k => $label) {
             $raw = trim((string) ($in[$k] ?? ''));
+            if ($k === 'due_date' && !self::hasDue($cat)) {
+                $d[$k] = null;   // Hutang Direksi / Lain-lain: tanpa jatuh tempo (isian diabaikan)
+                continue;
+            }
             $d[$k] = $raw === '' ? null : Filters::date($raw);
             if ($raw !== '' && $d[$k] === null) {
                 $e[$k] = $label . ' tidak valid.';

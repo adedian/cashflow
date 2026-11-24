@@ -33,7 +33,7 @@ $swap = static fn(string $std, string $loan) => '<span data-std="' . e($std) . '
       </div>
       <div class="field full"><label for="description">Keterangan</label><input class="input" id="description" name="description" maxlength="500" value="<?= e($v('description')) ?>"><?= $fe('description') ?></div>
       <div class="field"><label for="amount">Nominal hutang (Rp) <span class="req">*</span></label><input class="input num" id="amount" name="amount" inputmode="decimal" value="<?= e($v('amount')) ?>" required><?= $fe('amount') ?></div>
-      <div class="field"><label for="due_date">Tanggal jatuh tempo<?= $swap('', ' (opsional)') ?></label><input class="input" type="date" id="due_date" name="due_date" value="<?= e($v('due_date')) ?>"><?= $fe('due_date') ?></div>
+      <div class="field" data-due-only<?= \App\Services\DebtService::hasDue($curCat) ? '' : ' hidden' ?>><label for="due_date">Tanggal jatuh tempo <span class="help">(opsional; hanya Hutang Usaha)</span></label><input class="input" type="date" id="due_date" name="due_date" value="<?= e($v('due_date')) ?>"><?= $fe('due_date') ?></div>
       <div class="field"><label for="debt_date"><?= $swap('Tanggal transaksi', 'Tanggal setoran (awal pinjaman)') ?> <span class="req" data-loan-only<?= $isLoan ? '' : ' hidden' ?>>*</span></label><input class="input" type="date" id="debt_date" name="debt_date" value="<?= e($v('debt_date')) ?>"><?= $fe('debt_date') ?></div>
       <div class="field"><label for="ref_no">Nomor transaksi / dokumen</label><input class="input" id="ref_no" name="ref_no" maxlength="80" value="<?= e($v('ref_no')) ?>"><?= $fe('ref_no') ?></div>
       <div class="field full">
@@ -48,7 +48,7 @@ $swap = static fn(string $std, string $loan) => '<span data-std="' . e($std) . '
       </div>
       <div class="field full"><label for="note">Catatan</label><input class="input" id="note" name="note" maxlength="255" value="<?= e($v('note')) ?>"></div>
     </div>
-    <p class="help mt-1">Hutang tidak memengaruhi saldo, laporan, maupun proyeksi sampai pembayarannya dicatat di menu Transaksi (Mutasi Keluar). Tanpa tanggal jatuh tempo, hutang tidak muncul di Pengingat Pembayaran. No. urut dibuat otomatis.<span data-loan-only<?= $isLoan ? '' : ' hidden' ?>> Hutang Direksi: <b>lama pinjaman</b> dihitung otomatis dari tanggal setoran sampai hari ini.</span></p>
+    <p class="help mt-1">Hutang tidak memengaruhi saldo, laporan, maupun proyeksi sampai pembayarannya dicatat di menu Transaksi (Mutasi Keluar). Hutang tanpa tanggal jatuh tempo tidak muncul di Pengingat Pembayaran; Hutang Direksi dan Hutang Lain-lain memang tidak memakai jatuh tempo (tidak masuk Pengingat). No. urut dibuat otomatis.<span data-loan-only<?= $isLoan ? '' : ' hidden' ?>> Hutang Direksi: <b>lama pinjaman</b> dihitung otomatis dari tanggal setoran sampai hari ini.</span></p>
     <div class="mt-3" style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" type="submit">Simpan</button><a class="btn btn-ghost" href="<?= e(url($id ? '/debts/' . $id : '/debts?category=' . $curCat)) ?>">Batal</a></div>
   </form>
 </section>

@@ -92,7 +92,7 @@ final class ReminderService
         $debts = Db::all(
             "SELECT d.id, d.category, d.supplier, d.description, d.ref_no, d.source_account, d.due_date, d.amount AS total, COALESCE(p.paid, 0) AS paid, d.amount - COALESCE(p.paid, 0) AS remaining
              FROM debts d LEFT JOIN (" . TxLinkService::DEBT_PAID_SUB . ") p ON p.debt_id = d.id
-             WHERE d.voided_at IS NULL AND d.due_date IS NOT NULL AND d.due_date <= ? AND d.amount - COALESCE(p.paid, 0) > 0.004
+             WHERE d.voided_at IS NULL AND d.category = 'usaha' AND d.due_date IS NOT NULL AND d.due_date <= ? AND d.amount - COALESCE(p.paid, 0) > 0.004
              ORDER BY d.due_date, d.id",
             [$until]
         );
@@ -130,7 +130,8 @@ final class ReminderService
      */
     public static function categories(array $items): array
     {
-        $labels = DebtService::CATEGORIES + ['estimasi' => self::FORECAST_LABEL];
+        // hanya kategori yang punya jatuh tempo: Hutang Usaha dan Estimasi (Proyeksi); Hutang Direksi / Lain-lain tidak memakai jatuh tempo
+        $labels = array_filter(DebtService::CATEGORIES, static fn($k) => DebtService::hasDue($k), ARRAY_FILTER_USE_KEY) + ['estimasi' => self::FORECAST_LABEL];
         $cats = [];
         foreach ($labels as $k => $label) {
             $cats[$k] = ['key' => $k, 'label' => $label, 'dir' => 'out', 'count' => 0, 'total' => '0.00', 'late' => 0, 'today' => 0, 'soon' => 0, 'urgent' => 0, 'next_due' => null];

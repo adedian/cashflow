@@ -31,7 +31,7 @@ $pct = bccomp((string) $d['amount'], '0', 2) > 0 ? (int) min(100, floor((float) 
     <dt>Rekening penerima</dt><dd><?= e($d['source_account'] ?: '-') ?></dd>
     <?php else: ?>
     <dt>Tanggal transaksi</dt><dd><?= $d['debt_date'] ? e(fmt_date($d['debt_date'], 'd/m/Y')) : '<span class="muted">Tidak tersedia</span>' ?></dd>
-    <dt>Jatuh tempo</dt><dd><?= $d['due_date'] ? e(fmt_date($d['due_date'], 'd/m/Y')) : '<span class="muted">Belum ditentukan (tidak muncul di pengingat)</span>' ?></dd>
+    <dt>Jatuh tempo</dt><dd><?= $d['category'] !== 'usaha' ? '<span class="muted">Tidak memakai jatuh tempo (tidak muncul di pengingat)</span>' : ($d['due_date'] ? e(fmt_date($d['due_date'], 'd/m/Y')) : '<span class="muted">Belum ditentukan (tidak muncul di pengingat)</span>') ?></dd>
     <dt>Rekening sumber (rencana)</dt><dd><?= e($d['source_account'] ?: '-') ?></dd>
     <?php endif; ?>
     <dt>Nominal hutang</dt><dd class="num"><b><?= e(money($d['amount'])) ?></b></dd>

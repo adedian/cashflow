@@ -13,6 +13,8 @@
       document.querySelectorAll('[data-loan]').forEach(function (el) { el.textContent = el.getAttribute(loan ? 'data-loan' : 'data-std'); });
       document.querySelectorAll('[data-loan-only]').forEach(function (el) { el.hidden = !loan; });
       document.querySelectorAll('[data-std-only]').forEach(function (el) { el.hidden = loan; });
+      var due = document.querySelector('[data-due-only]');   // jatuh tempo hanya untuk Hutang Usaha
+      if (due) { due.hidden = cat.value !== 'usaha'; if (due.hidden) { var di = due.querySelector('input'); if (di) di.value = ''; } }
     });
   }
 
