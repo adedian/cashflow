@@ -13,7 +13,7 @@ namespace App\Export;
  *    lebar = kertas - 34 mm. Baris nama rekening perusahaan (miring, di LUAR kotak, seperti lembar Excel) mulai 5 mm dari tepi atas
  *    (TOP_MM, atas permintaan pengguna; stok memakai 3 mm yang membuat garis atas terpotong di printer pengguna, 10 mm dinilai
  *    terlalu turun); kotak voucher turun TITLE_MM (4,5 mm) di bawahnya => kotak mulai 9,5 mm dari tepi atas;
- *  - kolom URAIAN memuat CATATAN tiap baris (Keterangan dan proyek tidak dicetak); kotak CATATAN hanya memuat catatan tingkat transaksi (data lama);
+ *  - kolom URAIAN memuat KETERANGAN tiap baris (baris teratas), kotak CATATAN memuat kolom Catatan, No. Invoice di baris ke-4 dari bawah;
  *  - voucher mengisi SETENGAH bagian ATAS kertas (tinggi kotak ±138 mm dari y = 5 mm; kaki ±6 mm di bawahnya;
  *    berhenti > 1 cm sebelum garis tengah kertas Folio 165 mm supaya aman dipotong), sisanya kosong;
  *  - font isi 12 px (9 pt), judul 18 px (13,5 pt) tebal, spasi huruf judul kolom 2 px, "KEPERLUAN INTERN" 3 px;

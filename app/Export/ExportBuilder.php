@@ -57,11 +57,7 @@ final class ExportBuilder
         $vouchers = [];
         foreach ($rows as $t) {
             $lines = \App\Services\TransactionService::lines($t);
-            foreach ($lines as &$l) {
-                // kolom URAIAN pada bukti memuat CATATAN tiap baris; Keterangan (uraian) dan proyek tidak dicetak (permintaan pengguna 24 Nov 2026)
-                $l['description'] = trim((string) ($l['note'] ?? ''));
-            }
-            unset($l);
+            // kolom URAIAN pada bukti memuat KETERANGAN tiap baris (baris-baris teratas); proyek tidak dicetak
             // No. Invoice / PO (kolom "No. Invoice" tiap baris; data lama: ref_no transaksi) -> dicetak di baris ke-4 dari bawah kotak URAIAN
             $refList = [];
             foreach ($lines as $l) {
@@ -73,10 +69,14 @@ final class ExportBuilder
             if (!$refList && trim((string) ($t['ref_no'] ?? '')) !== '') {
                 $refList[] = trim((string) $t['ref_no']);
             }
-            // kotak CATATAN: hanya catatan tingkat transaksi (data lama); catatan per baris sudah tampil di URAIAN
+            // kotak CATATAN: catatan tingkat transaksi (data lama) + kolom Catatan tiap baris (diawali potongan keterangannya bila baris > 1)
             $noteParts = [];
             if (trim((string) ($t['note'] ?? '')) !== '') {
                 $noteParts[] = trim((string) $t['note']);
+            }
+            $withNote = array_values(array_filter($lines, static fn($l) => trim((string) ($l['note'] ?? '')) !== ''));
+            foreach ($withNote as $l) {
+                $noteParts[] = (count($lines) > 1 ? mb_substr(trim((string) $l['description']), 0, 40) . ': ' : '') . trim((string) $l['note']);
             }
             $net = bcsub((string) $t['debit'], (string) $t['credit'], 2);
             $total = '0.00';
