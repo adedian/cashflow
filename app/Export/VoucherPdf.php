@@ -10,8 +10,10 @@ namespace App\Export;
  *  - halaman POTRET; kertas Legal (215,9 x 355,6 mm; default, kertas yang dipakai pengguna), Folio (215 x 330 mm,
  *    dasar desain stok) atau A4 (pilihan);
  *  - margin kanan/kiri 10 mm; voucher berpadding kiri 14 mm (kanan 0) => kotak voucher mulai 24 mm dari tepi kiri,
- *    lebar = kertas - 34 mm. Sisi ATAS = 5 mm (TOP_MM, atas permintaan pengguna; stok memakai 3 mm yang membuat garis
- *    atas terpotong di printer pengguna, 10 mm dinilai terlalu turun);
+ *    lebar = kertas - 34 mm. Baris nama rekening perusahaan (miring, di LUAR kotak, seperti lembar Excel) mulai 5 mm dari tepi atas
+ *    (TOP_MM, atas permintaan pengguna; stok memakai 3 mm yang membuat garis atas terpotong di printer pengguna, 10 mm dinilai
+ *    terlalu turun); kotak voucher turun TITLE_MM (4,5 mm) di bawahnya => kotak mulai 9,5 mm dari tepi atas;
+ *  - kolom URAIAN memuat CATATAN tiap baris (Keterangan dan proyek tidak dicetak); kotak CATATAN hanya memuat catatan tingkat transaksi (data lama);
  *  - voucher mengisi SETENGAH bagian ATAS kertas (tinggi kotak ±138 mm dari y = 5 mm; kaki ±6 mm di bawahnya;
  *    berhenti > 1 cm sebelum garis tengah kertas Folio 165 mm supaya aman dipotong), sisanya kosong;
  *  - font isi 12 px (9 pt), judul 18 px (13,5 pt) tebal, spasi huruf judul kolom 2 px, "KEPERLUAN INTERN" 3 px;
@@ -33,7 +35,8 @@ final class VoucherPdf
     public const PAPER_LABEL = ['legal' => 'Legal (215,9 × 355,6 mm)', 'folio' => 'Folio (215 × 330 mm)', 'a4' => 'A4 (210 × 297 mm)'];
     public const DEFAULT_PAPER = 'legal';
     private const MIN_ROWS = 14;
-    private const TOP_MM = 5.0;       // jarak kotak voucher dari tepi atas kertas (permintaan pengguna: 0,5 cm lebih naik dari 10 mm)
+    private const TOP_MM = 5.0;       // jarak tepi atas kertas ke baris teks di atas kotak (permintaan pengguna: 0,5 cm lebih naik dari 10 mm)
+    private const TITLE_MM = 4.5;     // tinggi baris "nama rekening perusahaan" di atas kotak (di luar kotak, seperti lembar Excel)
     private const KIND = [
         'BK' => ['accent' => 'FF0000', 'fill' => 'EDE1E0', 'title' => 'BUKTI BANK KELUAR', 'who' => 'Dibayarkan Kepada :', 'last' => 'Penerima'],
         'BM' => ['accent' => '00A651', 'fill' => 'E2EFDA', 'title' => 'BUKTI BANK MASUK', 'who' => 'Diterima dari :', 'last' => 'Penyetor'],
@@ -182,7 +185,7 @@ final class VoucherPdf
         $pw = $pwMm * $mm;
         $ph = $phMm * $mm;
         $ox = (10 + 14) * $mm;               // margin kiri @page 10 mm + padding kiri voucher 14 mm
-        $oy = self::TOP_MM * $mm;            // jarak kotak dari tepi atas kertas (di atas area tak-tercetak printer)
+        $oy = (self::TOP_MM + self::TITLE_MM) * $mm;   // kotak turun setinggi baris judul perusahaan (di luar kotak); teks mulai ±TOP_MM dari tepi atas
         $W = $pw - $ox - 10 * $mm;           // kanan: margin @page 10 mm, padding kanan 0
         $p = static fn(float $pct): float => $W * $pct / 100;
 
@@ -303,8 +306,11 @@ final class VoucherPdf
         }
         $this->text($hp, self::mid($half, $half, $pz), $party, $pz, 'r', '1A1A1A');
         $midX = $p(29.25 + 21);
-        $this->text($midX, 3 * 0.75 + $fs * 0.9, $doc->company, $fs, 'i', $acc, 'c');
-        $this->text($midX, 3 * 0.75 + $fs * 1.2 + ($hdrH - 3 * 0.75 - $fs * 1.2) / 2 + 13.5 * 0.34, $K['title'], 13.5, 'b', $acc, 'c', 0.75);
+        // nama rekening perusahaan (mis. "PT. Hexa Multi Energi - BCA Loan"): miring, warna aksen, di LUAR kotak tepat di atas garis atas
+        $co = trim((string) ($v['account'] ?? '')) !== '' ? trim((string) $v['account']) : (string) $doc->company;
+        $cz = self::fitSize($co, false, $fs, 5.0, $p(42) - 2 * $hp) ?? 5.0;
+        $this->text($midX, -3.0, $co, $cz, 'i', $acc, 'c');
+        $this->text($midX, self::mid(0, $hdrH, 13.5), $K['title'], 13.5, 'b', $acc, 'c', 0.75);   // judul di tengah sel header
         $rx = $p(71.25);
         $vw = $W - ($rx + $hp + 56 * 0.75 + 14 * 0.75) - $hp;
         foreach ([[0.0, 'Nomor', $v['number']], [$half, 'Tanggal', $v['date']]] as [$top, $lbl, $val]) {

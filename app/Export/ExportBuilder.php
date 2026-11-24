@@ -52,26 +52,20 @@ final class ExportBuilder
         if (!$rows) {
             throw new HttpException('Transaksi yang dipilih tidak ditemukan atau sudah dibatalkan.', 422);
         }
-        $projName = array_column(Db::all('SELECT id, name FROM projects'), 'name', 'id');
+        $accName = array_column(Db::all('SELECT id, name FROM accounts'), 'name', 'id');
         $isAdmin = ($user['role'] ?? '') === 'super_admin';
         $vouchers = [];
         foreach ($rows as $t) {
             $lines = \App\Services\TransactionService::lines($t);
             foreach ($lines as &$l) {
-                // proyek ditulis setelah uraian: "uraian - proyek"
-                $pn = $l['project_id'] !== null ? trim((string) ($projName[$l['project_id']] ?? '')) : '';
-                if ($pn !== '') {
-                    $l['description'] = rtrim((string) $l['description']) . ' - ' . $pn;
-                }
+                // kolom URAIAN pada bukti memuat CATATAN tiap baris; Keterangan (uraian) dan proyek tidak dicetak (permintaan pengguna 24 Nov 2026)
+                $l['description'] = trim((string) ($l['note'] ?? ''));
             }
             unset($l);
+            // kotak CATATAN: hanya catatan tingkat transaksi (data lama); catatan per baris sudah tampil di URAIAN
             $noteParts = [];
             if (trim((string) ($t['note'] ?? '')) !== '') {
                 $noteParts[] = trim((string) $t['note']);
-            }
-            $withNote = array_values(array_filter($lines, static fn($l) => trim((string) ($l['note'] ?? '')) !== ''));
-            foreach ($withNote as $l) {
-                $noteParts[] = (count($lines) > 1 ? mb_substr(trim((string) $l['description']), 0, 40) . ': ' : '') . trim((string) $l['note']);
             }
             $net = bcsub((string) $t['debit'], (string) $t['credit'], 2);
             $total = '0.00';
@@ -82,12 +76,13 @@ final class ExportBuilder
                 'kind' => bccomp($net, '0', 2) > 0 ? 'BM' : 'BK',
                 'number' => (string) ($t['voucher_code'] ?? ''),
                 'date' => self::longDate($t['tx_date']),
+                'account' => trim((string) ($accName[$t['account_id']] ?? '')),   // rekening perusahaan: dicetak di atas kotak (di luar kotak)
                 // bukti memuat REKENING pihak (mis. "BCA 123 a.n. PT X") bila ada; rekening hanya terlihat Super Admin, selain itu / bila kosong tetap nama pihak
                 'party' => $isAdmin && trim((string) ($t['counterparty_detail'] ?? '')) !== '' ? cp_label($t['counterparty_detail']) : (string) ($t['counterparty'] ?? ''),
                 'by' => (string) ($t['created_name'] ?? ''),   // "Dibuat oleh" = pembuat transaksi (seperti Sistem Stok), bukan pencetak
                 'lines' => $lines,
                 'total' => $total,
-                'note' => implode("\n", $noteParts),   // catatan transaksi (lama) + catatan tiap uraian -> kotak CATATAN pada bukti (hanya bila ada)
+                'note' => implode("\n", $noteParts),   // catatan tingkat transaksi (data lama) -> kotak CATATAN pada bukti (hanya bila ada)
             ];
         }
         $d = new Document(self::DOCS['bukti'], 'cashflow-bukti-bank', setting('company_name', 'PT Hexa Multi Energi'), (string) ($user['full_name'] ?? ''));
