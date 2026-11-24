@@ -53,6 +53,7 @@ final class ExportBuilder
             throw new HttpException('Transaksi yang dipilih tidak ditemukan atau sudah dibatalkan.', 422);
         }
         $projName = array_column(Db::all('SELECT id, name FROM projects'), 'name', 'id');
+        $isAdmin = ($user['role'] ?? '') === 'super_admin';
         $vouchers = [];
         foreach ($rows as $t) {
             $lines = \App\Services\TransactionService::lines($t);
@@ -81,7 +82,8 @@ final class ExportBuilder
                 'kind' => bccomp($net, '0', 2) > 0 ? 'BM' : 'BK',
                 'number' => (string) ($t['voucher_code'] ?? ''),
                 'date' => self::longDate($t['tx_date']),
-                'party' => (string) ($t['counterparty'] ?? ''),
+                // bukti memuat REKENING pihak (mis. "BCA 123 a.n. PT X") bila ada; rekening hanya terlihat Super Admin, selain itu / bila kosong tetap nama pihak
+                'party' => $isAdmin && trim((string) ($t['counterparty_detail'] ?? '')) !== '' ? cp_label($t['counterparty_detail']) : (string) ($t['counterparty'] ?? ''),
                 'by' => (string) ($t['created_name'] ?? ''),   // "Dibuat oleh" = pembuat transaksi (seperti Sistem Stok), bukan pencetak
                 'lines' => $lines,
                 'total' => $total,
@@ -248,7 +250,7 @@ final class ExportBuilder
             }
             $party = (string) ($t['counterparty'] ?? '');
             if ($isAdmin && !empty($t['counterparty_detail'])) {
-                $party .= ($party !== '' ? ' - ' : '') . $t['counterparty_detail'];
+                $party .= ($party !== '' ? ' - ' : '') . cp_label($t['counterparty_detail']);
             }
             // baris uraian punya kategori sendiri; teks kategori impor (category_raw) hanya untuk transaksi tanpa rincian
             $cat = (int) ($t['line_no'] ?? 0) === 0 && trim((string) ($t['category_raw'] ?? '')) !== '' ? $t['category_raw'] : (string) ($t['category_name'] ?? '');

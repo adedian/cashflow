@@ -61,7 +61,7 @@ $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
         <td data-label="Nomor Bukti" class="nowrap c-code"><?= e($t['voucher_code'] ?? '') ?></td>
         <td data-label="Rekening Lawan" class="c-party">
           <?= e($t['counterparty'] ?? '') ?>
-          <?php if ($isAdmin && !empty($t['counterparty_detail'])): ?><div class="sub"><?= e($t['counterparty_detail']) ?></div><?php endif; ?>
+          <?php if ($isAdmin && !empty($t['counterparty_detail'])): ?><div class="sub"><?= e(cp_label($t['counterparty_detail'])) ?></div><?php endif; ?>
         </td>
         <td data-label="Keterangan" class="desc">
           <a href="<?= e(url('/transactions/' . (int) $t['id'])) ?>" style="color:inherit;font-weight:600"><?= e($t['description'] ?: '(tanpa keterangan)') ?></a>

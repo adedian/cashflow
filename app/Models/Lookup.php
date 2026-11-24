@@ -26,7 +26,8 @@ final class Lookup
     /** Master rekening lawan (dropdown "Bank / rekening pihak"). */
     public static function counterpartyAccounts(bool $all = false): array
     {
-        return Db::all('SELECT id, label, is_active FROM counterparty_accounts' . ($all ? '' : ' WHERE is_active = 1') . ' ORDER BY label');
+        // party_name: pemilik rekening (master Customer) — dipakai formulir Transaksi untuk menautkan Pihak ↔ Bank/rekening
+        return Db::all('SELECT c.id, c.label, c.is_active, c.party_id, p.name AS party_name FROM counterparty_accounts c LEFT JOIN parties p ON p.id = c.party_id' . ($all ? '' : ' WHERE c.is_active = 1') . ' ORDER BY c.label');
     }
 
     public const KIND_LABEL = [

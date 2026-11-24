@@ -25,7 +25,7 @@ $void = $t['voided_at'] !== null;
       <dt>Kode bukti</dt><dd><?= e($t['voucher_code'] ?: '-') ?></dd>
       <dt>Rekening</dt><dd><?= e($t['account_name']) ?></dd>
       <dt>Pihak</dt><dd><?= e($t['counterparty'] ?: '-') ?></dd>
-      <?php if ($isAdmin): ?><dt>Detail rekening pihak</dt><dd><?= e($t['counterparty_detail'] ?: '-') ?></dd><?php endif; ?>
+      <?php if ($isAdmin): ?><dt>Detail rekening pihak</dt><dd><?= e(cp_label($t['counterparty_detail']) ?: '-') ?></dd><?php endif; ?>
       <?php if (!$itemRows): ?>
       <dt>Kategori</dt><dd><?= e($t['category_name'] ?: 'Belum dikategorikan') ?><?php if ($t['category_kind']): ?> <span class="pill pill-blue"><?= e($t['category_kind']) ?></span><?php endif; ?></dd>
       <dt>Proyek</dt><dd><?= e($t['project_name'] ?: '-') ?></dd>

@@ -187,6 +187,47 @@
     });
   }
 
+  /* --- Pihak ↔ Bank/rekening pihak saling terhubung: memilih Pihak mengisi rekening miliknya (rekening pertama bila beberapa);
+         memilih rekening mengisi Pihak pemiliknya. Pemilik rekening dibaca dari data-party pada opsi (master Rekening Lawan). --- */
+  (function () {
+    var party = document.getElementById('counterparty'), bank = document.getElementById('counterparty_detail');
+    if (!party || !bank) return;
+    var syncing = false;
+    var low = function (s) { return String(s || '').trim().toLowerCase(); };
+    var ownerOf = function (label) {
+      var o = Array.prototype.filter.call(bank.options, function (x) { return x.value === label; })[0];
+      return o ? (o.dataset.party || '') : '';
+    };
+    var accountsOf = function (name) {
+      return Array.prototype.filter.call(bank.options, function (x) { return x.value !== '' && low(x.dataset.party) === low(name); });
+    };
+    var change = function (sel, val) {   // setel nilai (tambah opsinya bila belum ada) lalu beri tahu combo.js lewat event change
+      syncing = true;
+      try {
+        if (val !== '' && !Array.prototype.some.call(sel.options, function (o) { return o.value === val; })) sel.appendChild(new Option(val, val));
+        sel.value = val; delete sel.dataset.auto;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      } finally { syncing = false; }
+    };
+    party.addEventListener('change', function () {
+      if (syncing) return;
+      var p = party.value, accs = p ? accountsOf(p) : [], cur = bank.value, curOwner = ownerOf(cur);
+      if (accs.length) {
+        if (!accs.some(function (o) { return o.value === cur; })) change(bank, accs[0].value);
+      } else if (cur !== '' && curOwner !== '' && low(curOwner) !== low(p)) {
+        change(bank, '');   // rekening milik pihak lain tidak boleh tersisa di pihak yang baru
+      }
+    });
+    bank.addEventListener('change', function () {
+      if (syncing) return;
+      var owner = ownerOf(bank.value);
+      if (owner !== '' && low(owner) !== low(party.value)) {
+        var canon = Array.prototype.filter.call(party.options, function (o) { return low(o.value) === low(owner); })[0];
+        change(party, canon ? canon.value : owner);
+      }
+    });
+  })();
+
   /* --- Bank/rekening pihak: pilihan "Tambah “…” sebagai baru" membuka dialog ringkas, simpan ke master lalu langsung dipilih. --- */
   (function () {
     var party = document.getElementById('counterparty'), bank = document.getElementById('counterparty_detail');
@@ -196,9 +237,9 @@
     var show = function (box, m) { box.hidden = !m; box.textContent = m || ''; };
     var hasOpt = function (s, v) { return Array.prototype.some.call(s.options, function (o) { return o.value.toLowerCase() === v.toLowerCase(); }); };
     // sisipkan opsi (bila belum ada) ke dropdown asli lalu pilih; combo.js menyinkronkan tampilannya lewat event change
-    var pickIn = function (sel, value) {
+    var pickIn = function (sel, value, owner) {
       Array.prototype.forEach.call(sel.options, function (o) { if (o.value.toLowerCase() === value.toLowerCase()) value = o.value; });
-      if (!hasOpt(sel, value)) sel.appendChild(new Option(value, value));
+      if (!hasOpt(sel, value)) { var no = new Option(value.replace(/\s+a\.n\.\s.*$/i, '').trim() || value, value); if (owner) no.dataset.party = owner; sel.appendChild(no); }
       sel.value = value; delete sel.dataset.auto;
       sel.dispatchEvent(new Event('change', { bubbles: true }));
     };
@@ -234,7 +275,7 @@
         if (j.party) {   // pihak baru (dibuat bersama rekening) tersedia di dropdown Pihak juga
           [party, bParty].forEach(function (s) { if (!hasOpt(s, j.party)) s.appendChild(new Option(j.party, j.party)); });
         }
-        pickIn(bank, j.label);
+        pickIn(bank, j.label, j.party || bParty.value || '');
         done(j.created ? '“' + j.label + '” ditambahkan ke master.' : '“' + j.label + '” sudah ada — dipilih.');
         H.closeModal(qb);
       }).catch(function () { show(bErr, 'Koneksi terputus — gagal menambahkan.'); })

@@ -126,10 +126,11 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
         <div class="field-pick"><select class="input" id="counterparty_detail" name="counterparty_detail" data-combo-create-event data-combo-placeholder="Ketik untuk mencari bank / rekening…">
           <option value="">— pilih rekening lawan —</option>
           <?php $curCp = trim((string) $v('counterparty_detail')); $cpLabels = array_column($counterpartyAccounts, 'label'); ?>
-          <?php if ($curCp !== '' && !in_array($curCp, $cpLabels, true)): ?><option value="<?= e($curCp) ?>" selected><?= e($curCp) ?> (belum di master)</option><?php endif; ?>
-          <?php foreach ($cpLabels as $lbl): ?><option value="<?= e($lbl) ?>" <?= $lbl === $curCp ? 'selected' : '' ?>><?= e($lbl) ?></option><?php endforeach; ?>
+          <?php if ($curCp !== '' && !in_array($curCp, $cpLabels, true)): ?><option value="<?= e($curCp) ?>" selected><?= e(cp_label($curCp)) ?> (belum di master)</option><?php endif; ?>
+          <?php /* data-party = pemilik rekening; transactions.js menautkan Pihak ↔ Bank/rekening lewat atribut ini */ ?>
+          <?php foreach ($counterpartyAccounts as $ca): ?><option value="<?= e($ca['label']) ?>" data-party="<?= e((string) ($ca['party_name'] ?? '')) ?>" <?= $ca['label'] === $curCp ? 'selected' : '' ?>><?= e(cp_label($ca['label'])) ?></option><?php endforeach; ?>
         </select></div><?= $fe('counterparty_detail') ?>
-        <span class="help">Rekening baru: ketik bank dan nomornya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=counterparties')) ?>">Master Data → Rekening Lawan</a>.</span>
+        <span class="help">Terisi otomatis dari Pihak yang dipilih (dan sebaliknya); bagian ini yang tercetak di bukti BK/BM. Rekening baru: ketik bank dan nomornya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=counterparties')) ?>">Master Data → Rekening Lawan</a>.</span>
       </div>
     </div>
     <div class="mt-3" style="display:flex;gap:10px;flex-wrap:wrap">

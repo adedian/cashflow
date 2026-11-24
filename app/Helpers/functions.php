@@ -14,6 +14,14 @@ function e($value): string
     return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+/** Label rekening pihak untuk tampilan/cetak: tanpa akhiran " a.n. <nama pemilik>" (nilai tersimpan tetap label lengkap). */
+function cp_label($label): string
+{
+    $s = trim((string) ($label ?? ''));
+    $t = trim((string) preg_replace('/\s+a\.n\.\s.*$/iu', '', $s));
+    return $t !== '' ? $t : $s;
+}
+
 function base_path(): string
 {
     return rtrim((string) env('APP_BASE', ''), '/');
