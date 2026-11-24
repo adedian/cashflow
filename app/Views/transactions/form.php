@@ -202,7 +202,7 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
             <option value="">— tanpa pihak —</option>
             <?php foreach ($partyNames as $pn): ?><option value="<?= e($pn) ?>"><?= e($pn) ?></option><?php endforeach; ?>
           </select>
-          <span class="help">Otomatis mengikuti kolom Pihak di formulir. Bila dipilih, rekening dihubungkan dengan pihak tersebut (“a.n. …”).</span>
+          <span class="help">Otomatis mengikuti kolom Pihak di formulir. Bila dipilih, rekening dihubungkan dengan pihak tersebut.</span>
         </div>
         <div class="err" id="qbErr" hidden role="alert"></div>
         <span class="help">Tersimpan ke Master Data → Rekening Lawan dan langsung dipilih. Rekening dengan bank &amp; nomor yang sama tidak dibuat ganda — yang sudah ada langsung dipilih.</span>

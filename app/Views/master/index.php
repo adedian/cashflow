@@ -163,7 +163,7 @@ $showLimit = $isEdit && ($edit['kind'] === 'facility' || $edit['credit_limit'] !
   <div class="card-head"><h2>Tambah rekening lawan</h2></div>
   <form method="post" action="<?= e(url('/master/counterparties')) ?>" class="filters">
     <?= csrf_field() ?>
-    <div class="field grow"><label for="ncl">Bank / rekening pihak</label><input class="input" id="ncl" name="label" maxlength="255" required placeholder="mis. BCA 0490393030 a.n. PT Contoh" autocomplete="off"></div>
+    <div class="field grow"><label for="ncl">Bank / rekening pihak</label><input class="input" id="ncl" name="label" maxlength="255" required placeholder="mis. PT Contoh - BCA ac. 0490393030" autocomplete="off"></div>
     <div class="field" style="flex:0 0 auto"><button class="btn" type="submit">Tambah</button></div>
   </form>
   <p class="help mt-1 mb-0">Daftar ini menjadi pilihan dropdown <b>Bank / rekening pihak</b> di formulir transaksi (hanya terlihat Super Admin). Teks yang dipilih disalin ke transaksi; mengubah teks di sini ikut memperbarui transaksi yang memakainya. Rekening yang dinonaktifkan tidak muncul lagi di dropdown, tetapi transaksi lama tetap utuh.</p>

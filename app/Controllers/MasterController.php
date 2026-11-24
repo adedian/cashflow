@@ -374,7 +374,7 @@ final class MasterController extends Controller
 
     /**
      * Tambah cepat Bank / rekening pihak dari formulir Transaksi (JSON). Isian: bank, account_no (6–30 digit), party (opsional, nama pihak di master).
-     * Label = "<Bank> <No> [a.n. <Pihak>]". Tidak membuat data ganda: label yang sama, atau bank + nomor yang sama (juga pada rekening lama
+     * Label = "<Bank> <No>"; pemilik disimpan di party_id. Tidak membuat data ganda: label yang sama, atau bank + nomor yang sama (juga pada rekening lama
      * yang hanya berupa teks label), mengembalikan rekening yang sudah ada.
      */
     public function createCounterpartyApi(): Response
@@ -396,7 +396,7 @@ final class MasterController extends Controller
                 $partyId = (int) Db::val('SELECT id FROM parties WHERE name = ?', [$partyName]);
             }
         }
-        $label = mb_substr($bank . ' ' . $digits . ($partyIn !== '' ? ' a.n. ' . ($partyName ?? $partyIn) : ''), 0, 255);
+        $label = mb_substr($bank . ' ' . $digits, 0, 255);   // pemilik tersimpan di party_id (kolom Pihak), tidak lagi ditulis "a.n. …" di label
         $esc = static fn(string $s): string => addcslashes($s, '%_\\');
         // 1) rekening yang sama (bank + nomor) — juga mengenali label lama bebas-teks yang memuat bank & nomor tsb
         $same = Db::all(
