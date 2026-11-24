@@ -4,7 +4,7 @@ $dis = !empty($locked) ? ' disabled' : '';
 $v = static fn(string $k, $d = '') => $t[$k] ?? $d;
 $fe = static fn(string $k) => isset($errors[$k]) ? '<div class="err">' . e($errors[$k]) . '</div>' : '';
 ?>
-<section class="card" style="max-width:820px">
+<section class="card form-wide">
   <?php if ($errors): ?><div class="alert alert-danger mb-2" role="alert">Periksa kembali isian yang ditandai.</div><?php endif; ?>
   <?php if (!empty($locked)): ?><div class="alert alert-info mb-2">Item ini tertaut ke Hutang/Piutang: <b>nominal, tanggal, bulan, dan jenis</b> diatur otomatis dari sana (nominal = sisa, tanggal = jatuh tempo) dan tidak dapat diubah di sini. Uraian, rekening, dan status aktif tetap dapat diubah.</div><?php endif; ?>
   <form method="post" action="<?= e($id ? url('/forecast/' . $id) : url('/forecast')) ?>" novalidate>

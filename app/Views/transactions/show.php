@@ -32,11 +32,12 @@ $void = $t['voided_at'] !== null;
       <?php endif; ?>
       <?php if ($itemRows): ?>
       <dt>Uraian</dt><dd>
-        <table class="tbl tx-lines"><thead><tr><th>#</th><th>Uraian</th><th>Kategori</th><th>Proyek</th><th class="r">Jumlah</th></tr></thead><tbody>
+        <?php $hasRef = (bool) array_filter($itemRows, static fn($l) => trim((string) ($l['ref_no'] ?? '')) !== ''); $hasNote = (bool) array_filter($itemRows, static fn($l) => trim((string) ($l['note'] ?? '')) !== ''); ?>
+        <table class="tbl tx-lines"><thead><tr><th>#</th><th>Uraian</th><?php if ($hasRef): ?><th>No. Invoice / PO</th><?php endif; ?><th>Kategori</th><th>Proyek</th><th class="r">Jumlah</th><?php if ($hasNote): ?><th>Catatan</th><?php endif; ?></tr></thead><tbody>
           <?php foreach ($itemRows as $l): $neg = bccomp((string) $l['amount'], '0', 2) < 0; ?>
-          <tr><td><?= (int) $l['line_no'] ?>.</td><td><?= e($l['description']) ?></td><td><?= e($l['category_name'] ?? 'Belum dikategorikan') ?></td><td><?= e($l['project_name'] ?? '-') ?></td><td class="r num <?= $neg ? 'neg' : '' ?>"><?= e(money($l['amount'])) ?></td></tr>
+          <tr><td><?= (int) $l['line_no'] ?>.</td><td><?= e($l['description']) ?></td><?php if ($hasRef): ?><td><?= e($l['ref_no'] ?? '') ?></td><?php endif; ?><td><?= e($l['category_name'] ?? 'Belum dikategorikan') ?></td><td><?= e($l['project_name'] ?? '-') ?></td><td class="r num <?= $neg ? 'neg' : '' ?>"><?= e(money($l['amount'])) ?></td><?php if ($hasNote): ?><td><?= e($l['note'] ?? '') ?></td><?php endif; ?></tr>
           <?php endforeach; ?>
-          <tr class="tot"><td></td><td colspan="3"><b>Total</b></td><td class="r num"><b><?= e(money($amount)) ?></b></td></tr>
+          <tr class="tot"><td></td><td colspan="<?= 1 + ($hasRef ? 1 : 0) + 2 ?>"><b>Total</b></td><td class="r num"><b><?= e(money($amount)) ?></b></td><?php if ($hasNote): ?><td></td><?php endif; ?></tr>
         </tbody></table>
       </dd>
       <?php elseif (count($lines) > 1): ?>
@@ -52,13 +53,13 @@ $void = $t['voided_at'] !== null;
       <dt>Uraian</dt><dd><?= e($t['description'] ?: '-') ?></dd>
       <?php endif; ?>
       <dt>No. referensi (invoice/PO)</dt><dd><?= e($t['ref_no'] ?: '-') ?></dd>
-      <dt>Catatan</dt><dd style="white-space:pre-wrap"><?= e($t['note'] ?: '-') ?></dd>
+      <?php if (trim((string) ($t['note'] ?? '')) !== '' || !$itemRows): ?><dt>Catatan</dt><dd style="white-space:pre-wrap"><?= e($t['note'] ?: '-') ?></dd><?php endif; ?>
       <?php if ($isAdmin && !empty($t['flag'])): ?><dt>Perlu ditinjau</dt><dd><span class="pill pill-yellow"><?= e($t['flag']) ?></span></dd><?php endif; ?>
       <?php if ($isAdmin && !empty($t['source_sheet'])): ?><dt>Sumber Excel</dt><dd><?= e($t['source_sheet']) ?> baris <?= (int) $t['source_row'] ?></dd><?php endif; ?>
-      <?php if ($related['link'] || $related['legacy']): ?><dt>Terhubung ke</dt><dd>
-        <?php if ($rl = $related['link']): $path = ['debt' => '/debts/', 'invoice' => '/invoices/', 'forecast' => '/forecast/'][$rl['type']]; $nm = ['debt' => 'Hutang', 'invoice' => 'Piutang', 'forecast' => 'Proyeksi'][$rl['type']]; ?>
+      <?php if ($related['links'] || $related['legacy']): ?><dt>Terhubung ke</dt><dd>
+        <?php foreach ($related['links'] as $rl): $path = ['debt' => '/debts/', 'invoice' => '/invoices/', 'forecast' => '/forecast/'][$rl['type']]; $nm = ['debt' => 'Hutang', 'invoice' => 'Piutang', 'forecast' => 'Proyeksi'][$rl['type']]; ?>
           <div><a class="pill pill-blue" href="<?= e(url($path . (int) $rl['sid'])) ?>"><?= e($rl['tag'] ?? $nm) ?></a> <?= e(trim(($rl['party'] ?? '') . ' · ' . ($rl['title'] ?? ''), ' ·')) ?> — <?= $rl['type'] === 'debt' ? 'pembayaran' : ($rl['type'] === 'invoice' ? 'penerimaan' : 'realisasi') ?> <b><?= e(money($rl['link_amount'])) ?></b><?= $void ? ' <span class="pill pill-gray">tidak dihitung (transaksi dibatalkan)</span>' : '' ?></div>
-        <?php endif; ?>
+        <?php endforeach; ?>
         <?php foreach ($related['legacy'] as $ri): ?><div><a class="pill pill-green" href="<?= e(url('/invoices/' . (int) $ri['id'])) ?>">Piutang <?= $ri['kind'] === 'lampu' ? 'Lampu' : 'Proyek' ?></a> <?= e($ri['customer']) ?><?= $ri['invoice_no'] ? ' · ' . e($ri['invoice_no']) : '' ?> — bukti penerimaan historis (dibayar <?= e(money($ri['paid'])) ?>)</div><?php endforeach; ?>
       </dd><?php endif; ?>
       <dt>Dibuat</dt><dd><?= e(fmt_date($t['created_at'], 'd/m/Y H:i')) ?> <?= $t['created_name'] ? 'oleh ' . e($t['created_name']) : '' ?></dd>

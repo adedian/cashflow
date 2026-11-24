@@ -17,7 +17,6 @@ final class TransactionService
     {
         $err = [];
         $d = [];
-        $src = null;
 
         $acc = Db::one('SELECT * FROM accounts WHERE id = ? AND is_active = 1', [(int) ($in['account_id'] ?? 0)]);
         if (!$acc) {
@@ -47,7 +46,6 @@ final class TransactionService
         [$lines, $amount, $lineErr, $summary] = self::parseLines($in);
         $err += $lineErr;
         $d['items'] = null;          // JSON lama (Revisi 10) tidak ditulis lagi; baris disimpan di tabel transaction_items
-        $d['_lines'] = $lines;       // dipisahkan oleh create()/update() sebelum menulis ke transactions
         $d['debit'] = ($dir === 'in' && $amount !== null) ? $amount : '0.00';
         $d['credit'] = ($dir === 'out' && $amount !== null) ? $amount : '0.00';
 
@@ -78,24 +76,81 @@ final class TransactionService
         $d['voucher_code'] = $lim('voucher_code', 30) ?: null;
         $d['counterparty'] = PartyService::clean((string) ($in['counterparty'] ?? '')) ?: null;
         $d['description'] = $summary !== '' ? $summary : null;   // ringkasan (daftar/pencarian): uraian pertama, atau semua uraian digabung
-        $d['note'] = trim((string) ($in['note'] ?? '')) !== '' ? mb_substr(trim((string) $in['note']), 0, 5000) : null;
-        if (array_key_exists('source_ref', $in)) {
-            // No. Invoice/PO = pilihan sumber (Piutang | Hutang | Proyeksi): nomor dokumen diturunkan dari sumber, bukan diketik
-            $ref = trim((string) $in['source_ref']);
-            if ($ref !== '') {
+        // catatan kini per baris uraian (line_note[]); kolom catatan transaksi hanya diisi bentuk lama (field "note"), formulir baru mengosongkannya
+        if (array_key_exists('note', $in)) {
+            $d['note'] = trim((string) $in['note']) !== '' ? mb_substr(trim((string) $in['note']), 0, 5000) : null;
+        } else {
+            $d['note'] = is_array($in['line_note'] ?? null) ? null : ($existing['note'] ?? null);
+        }
+        // No. Invoice/PO = pilihan sumber PER BARIS uraian (line_ref[]: Piutang | Hutang | Proyeksi); nomor dokumen diturunkan dari sumber,
+        // bukan diketik. Bentuk lama (satu source_ref untuk seluruh transaksi) tetap diterima dan berlaku untuk semua baris.
+        $refsProvided = is_array($in['line_ref'] ?? null) || array_key_exists('source_ref', $in);
+        $existingId = $existing ? (int) $existing['id'] : null;
+        $refAmt = [];       // "debt:12" => jumlah semua baris yang memilih sumber itu
+        $refNos = [];
+        $srcParties = [];   // pihak dari sumber terpilih: boleh dipakai sebagai Pihak walau belum ada di master
+        $srcCache = [];
+        $resolve = static function (string $ref) use (&$srcCache, $existingId) {
+            if (!array_key_exists($ref, $srcCache)) {
                 $p = TxLinkService::parseRef($ref);
-                $src = $p ? TxLinkService::source($p[0], $p[1], $existing ? (int) $existing['id'] : null) : null;
-                if (!$src) {
-                    $err['source_ref'] = 'Referensi Invoice/PO tidak ditemukan. Pilih ulang dari daftar.';
+                $srcCache[$ref] = $p ? TxLinkService::source($p[0], $p[1], $existingId) : null;
+            }
+            return $srcCache[$ref];
+        };
+        if ($lines !== null) {
+            foreach ($lines as $k => $l) {
+                $ref = (string) ($l['source_ref'] ?? '');
+                if ($ref === '') {
+                    continue;
                 }
-                $d['ref_no'] = $src && ($src['ref_no'] ?? '') !== '' ? mb_substr((string) $src['ref_no'], 0, 190) : null;
+                $src = $resolve($ref);
+                if (!$src) {
+                    $err['items'] ??= 'Referensi Invoice/PO baris ' . ($l['_row'] ?? $k + 1) . ' tidak ditemukan. Pilih ulang dari daftar.';
+                    continue;
+                }
+                $refAmt[$ref] = bcadd($refAmt[$ref] ?? '0', (string) $l['amount'], 2);
+                if (($src['ref_no'] ?? '') !== '') {
+                    $lines[$k]['ref_no'] = mb_substr((string) $src['ref_no'], 0, 190);
+                    $refNos[] = $lines[$k]['ref_no'];
+                }
+                if (($src['party'] ?? null) !== null) {
+                    $srcParties[] = mb_strtolower((string) $src['party']);
+                }
+            }
+        } elseif ($refsProvided && trim((string) ($in['source_ref'] ?? '')) !== '') {
+            // bentuk lama: satu uraian, satu referensi
+            $ref = trim((string) $in['source_ref']);
+            $src = $resolve($ref);
+            if (!$src) {
+                $err['source_ref'] = 'Referensi Invoice/PO tidak ditemukan. Pilih ulang dari daftar.';
+            } else {
+                $refAmt[$ref] = $amount ?? '0.00';
+                if (($src['ref_no'] ?? '') !== '') {
+                    $refNos[] = mb_substr((string) $src['ref_no'], 0, 190);
+                }
+                if (($src['party'] ?? null) !== null) {
+                    $srcParties[] = mb_strtolower((string) $src['party']);
+                }
+            }
+        }
+        $d['_lines'] = $lines;
+        $d['_refs'] = $refsProvided ? $refAmt : null;   // null = formulir tidak membawa referensi: tautan tersimpan tidak diubah
+        if ($refsProvided) {
+            if ($refAmt) {
+                $d['ref_no'] = $refNos ? mb_substr(implode(', ', array_values(array_unique($refNos))), 0, 190) : null;
             } else {
                 // tanpa referensi: teks lama (data impor) dipertahankan kecuali dihapus pengguna / tautan sebelumnya dilepas
-                $hadLink = $existing && ($l = TxLinkService::linkOf((int) $existing['id'])) && !$l['legacy'];
+                $hadLink = $existing && array_filter(TxLinkService::linksOf((int) $existing['id']), static fn($x) => !$x['legacy']);
                 $d['ref_no'] = ($existing && empty($in['ref_clear']) && !$hadLink) ? ($existing['ref_no'] ?? null) : null;
             }
         } else {
             $d['ref_no'] = $lim('ref_no', 190) ?: null;
+        }
+        if (!$refAmt && $lines && ($d['ref_no'] ?? null) !== null) {
+            foreach ($lines as $k => $l) {
+                $lines[$k]['ref_no'] = $d['ref_no'];   // teks lama tampil pada setiap barisnya
+            }
+            $d['_lines'] = $lines;
         }
         // Pihak = pilihan dari master (nama baku dipakai). Boleh: nilai lama transaksi yang sama (data impor), atau pihak dari sumber
         // yang dipilih (supplier/customer) — dimasukkan ke master saat disimpan.
@@ -104,7 +159,7 @@ final class TransactionService
             if ($canon !== null) {
                 $d['counterparty'] = $canon;
             } elseif (!(($existing['counterparty'] ?? null) !== null && mb_strtolower((string) $existing['counterparty']) === mb_strtolower($d['counterparty']))
-                && !(isset($src) && $src && isset($src['party']) && mb_strtolower((string) $src['party']) === mb_strtolower($d['counterparty']))) {
+                && !in_array(mb_strtolower($d['counterparty']), $srcParties, true)) {
                 $err['counterparty'] = 'Pilih pihak dari daftar, atau tambahkan lewat tombol “Tambah” di dropdown (atau Master Data → Customer).';
             }
         }
@@ -150,6 +205,9 @@ final class TransactionService
         $amts = is_array($in['line_amount'] ?? null) ? array_values($in['line_amount']) : [];
         $cats = is_array($in['line_cat'] ?? null) ? array_values($in['line_cat']) : [];
         $projs = is_array($in['line_proj'] ?? null) ? array_values($in['line_proj']) : [];
+        $notes = is_array($in['line_note'] ?? null) ? array_values($in['line_note']) : [];
+        $refsIn = is_array($in['line_ref'] ?? null) ? array_values($in['line_ref']) : null;
+        $globalRef = trim((string) ($in['source_ref'] ?? ''));   // bentuk lama: satu referensi untuk semua baris
         $okCat = array_flip(array_map('intval', array_column(Db::all('SELECT id FROM categories WHERE is_active = 1'), 'id')));
         $okProj = array_flip(array_map('intval', array_column(Db::all('SELECT id FROM projects WHERE is_active = 1'), 'id')));
         $lines = [];
@@ -160,7 +218,9 @@ final class TransactionService
             $rawAmt = is_scalar($rawAmt) ? trim((string) $rawAmt) : '';
             $cid = is_scalar($cats[$i] ?? null) ? (int) $cats[$i] : 0;
             $pid = is_scalar($projs[$i] ?? null) ? (int) $projs[$i] : 0;
-            if ($desc === '' && $rawAmt === '' && $cid === 0 && $pid === 0) {
+            $rawRef = $refsIn !== null ? (is_scalar($refsIn[$i] ?? null) ? trim((string) $refsIn[$i]) : '') : $globalRef;
+            $note = is_scalar($notes[$i] ?? null) ? trim((string) $notes[$i]) : '';
+            if ($desc === '' && $rawAmt === '' && $cid === 0 && $pid === 0 && $note === '' && ($refsIn === null || $rawRef === '')) {
                 continue;   // baris kosong diabaikan
             }
             $row = $i + 1;
@@ -183,10 +243,15 @@ final class TransactionService
             if ($pid > 0 && !isset($okProj[$pid])) {
                 $err['items'] ??= 'Proyek baris ' . $row . ' tidak valid.';
             }
+            if ($rawRef !== '' && TxLinkService::parseRef($rawRef) === null) {
+                $err['items'] ??= 'Referensi Invoice/PO baris ' . $row . ' tidak valid. Pilih ulang dari daftar.';
+                $rawRef = '';
+            }
             if ($a !== null) {
                 $total = bcadd($total, $a, 2);
             }
-            $lines[] = ['description' => mb_substr($desc, 0, 500), 'category_id' => $cid > 0 ? $cid : null, 'project_id' => $pid > 0 ? $pid : null, 'amount' => $a ?? '0.00'];
+            $lines[] = ['description' => mb_substr($desc, 0, 500), 'category_id' => $cid > 0 ? $cid : null, 'project_id' => $pid > 0 ? $pid : null, 'amount' => $a ?? '0.00',
+                'source_ref' => $rawRef !== '' ? $rawRef : null, 'ref_no' => null, 'note' => $note !== '' ? mb_substr($note, 0, 500) : null, '_row' => $row];
         }
         if (!$lines) {
             $err['items'] = 'Isi minimal satu uraian beserta jumlahnya.';
@@ -202,18 +267,21 @@ final class TransactionService
     /**
      * Rincian uraian suatu transaksi untuk tampilan/cetak/ubah. Sumber berurutan: tabel transaction_items; JSON lama
      * (kolom items, Revisi 10); lalu satu baris dari description + nominal + kategori/proyek pada transaksi (data lama/impor).
-     * @return array<int,array{description:string,amount:string,category_id:?int,project_id:?int}>
+     * @return array<int,array{description:string,amount:string,category_id:?int,project_id:?int,source_ref?:?string,ref_no?:?string,note?:?string}>
      */
     public static function lines(array $tx): array
     {
         if (!empty($tx['id'])) {
-            $rows = Db::all('SELECT description, category_id, project_id, amount FROM transaction_items WHERE transaction_id = ? ORDER BY line_no', [(int) $tx['id']]);
+            $rows = Db::all('SELECT description, category_id, project_id, source_ref, ref_no, note, amount FROM transaction_items WHERE transaction_id = ? ORDER BY line_no', [(int) $tx['id']]);
             if ($rows) {
                 return array_map(static fn($r) => [
                     'description' => (string) $r['description'],
                     'amount' => bcadd((string) $r['amount'], '0', 2),
                     'category_id' => $r['category_id'] !== null ? (int) $r['category_id'] : null,
                     'project_id' => $r['project_id'] !== null ? (int) $r['project_id'] : null,
+                    'source_ref' => $r['source_ref'] !== null && $r['source_ref'] !== '' ? (string) $r['source_ref'] : null,
+                    'ref_no' => $r['ref_no'] !== null && $r['ref_no'] !== '' ? (string) $r['ref_no'] : null,
+                    'note' => $r['note'] !== null && $r['note'] !== '' ? (string) $r['note'] : null,
                 ], $rows);
             }
         }
@@ -240,7 +308,7 @@ final class TransactionService
     public static function itemRows(int $txId): array
     {
         return Db::all(
-            'SELECT i.line_no, i.description, i.amount, i.category_id, i.project_id, c.name AS category_name, p.name AS project_name
+            'SELECT i.line_no, i.description, i.amount, i.category_id, i.project_id, i.source_ref, i.ref_no, i.note, c.name AS category_name, p.name AS project_name
              FROM transaction_items i LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN projects p ON p.id = i.project_id
              WHERE i.transaction_id = ? ORDER BY i.line_no',
             [$txId]
@@ -255,6 +323,7 @@ final class TransactionService
             Db::insert('transaction_items', [
                 'transaction_id' => $txId, 'line_no' => $i + 1, 'description' => $l['description'],
                 'category_id' => $l['category_id'] ?? null, 'project_id' => $l['project_id'] ?? null, 'amount' => $l['amount'],
+                'source_ref' => $l['source_ref'] ?? null, 'ref_no' => $l['ref_no'] ?? null, 'note' => $l['note'] ?? null,
             ]);
         }
     }
@@ -262,7 +331,8 @@ final class TransactionService
     /** Ringkasan teks baris untuk jejak audit. */
     private static function linesText(array $lines): string
     {
-        return implode(' | ', array_map(static fn($l) => $l['description'] . ' [kat=' . ($l['category_id'] ?? '-') . ', proy=' . ($l['project_id'] ?? '-') . '] ' . $l['amount'], $lines));
+        return implode(' | ', array_map(static fn($l) => $l['description'] . ' [kat=' . ($l['category_id'] ?? '-') . ', proy=' . ($l['project_id'] ?? '-')
+            . (($l['source_ref'] ?? null) !== null ? ', ref=' . $l['source_ref'] : '') . (($l['note'] ?? null) !== null ? ', cat=' . mb_substr((string) $l['note'], 0, 60) : '') . '] ' . $l['amount'], $lines));
     }
 
     public static function create(array $d, int $userId, ?string $idemKey, ?string $ref = null, bool $confirmDup = false): int
@@ -277,8 +347,12 @@ final class TransactionService
             }
         }
         $lines = $d['_lines'] ?? null;
-        unset($d['_lines']);
-        return (int) Db::tx(function () use ($d, $lines, $userId, $idemKey, $ref, $confirmDup) {
+        $refs = array_key_exists('_refs', $d) ? $d['_refs'] : null;   // peta referensi per baris uraian; null = tidak dibawa formulir
+        unset($d['_lines'], $d['_refs']);
+        if ($refs === null && $ref !== null) {
+            $refs = $ref;   // pemanggil lama: satu referensi (string) untuk seluruh transaksi
+        }
+        return (int) Db::tx(function () use ($d, $lines, $userId, $idemKey, $refs, $confirmDup) {
             $seq = (int) Db::val('SELECT COALESCE(MAX(seq), 0) + 1 FROM transactions WHERE account_id = ?', [$d['account_id']]);
             if (($d['counterparty'] ?? null) !== null) {
                 PartyService::ensure($d['counterparty']);
@@ -288,8 +362,8 @@ final class TransactionService
                 self::saveLines($id, $lines);
             }
             Audit::log('tx_create', 'transaction', (string) $id, self::summaryLine($d), null, $d + ($lines !== null ? ['uraian' => self::linesText($lines)] : []));
-            if ($ref !== null) {
-                TxLinkService::sync($id, $d, $ref, $userId, $confirmDup);   // LinkError -> seluruh penyimpanan dibatalkan
+            if ($refs !== null && $refs !== []) {
+                TxLinkService::sync($id, $d, $refs, $userId, $confirmDup);   // LinkError -> seluruh penyimpanan dibatalkan
             }
             Version::bump('transactions');
             return $id;
@@ -299,8 +373,12 @@ final class TransactionService
     public static function update(int $id, array $d, int $userId, ?int $expectedVersion, ?string $ref = null, bool $confirmDup = false): void
     {
         $lines = $d['_lines'] ?? null;
-        unset($d['_lines']);
-        Db::tx(function () use ($id, $d, $lines, $userId, $expectedVersion, $ref, $confirmDup) {
+        $refs = array_key_exists('_refs', $d) ? $d['_refs'] : null;
+        unset($d['_lines'], $d['_refs']);
+        if ($refs === null && $ref !== null) {
+            $refs = $ref;
+        }
+        Db::tx(function () use ($id, $d, $lines, $userId, $expectedVersion, $refs, $confirmDup) {
             $old = Db::one('SELECT * FROM transactions WHERE id = ? FOR UPDATE', [$id]);
             if (!$old) {
                 throw new RuntimeException('Transaksi tidak ditemukan.');
@@ -326,11 +404,11 @@ final class TransactionService
             $new = Db::one('SELECT * FROM transactions WHERE id = ?', [$id]);
             Audit::log('tx_update', 'transaction', (string) $id, 'Ubah: ' . self::summaryLine($d),
                 self::pick($old) + ['uraian' => self::linesText($oldLines)], self::pick($new) + ['uraian' => self::linesText(self::lines($new))]);
-            if ($ref !== null) {
-                TxLinkService::sync($id, $d, $ref, $userId, $confirmDup);
-            } elseif (($link = TxLinkService::linkOf($id)) && !$link['legacy']) {
+            if ($refs !== null) {
+                TxLinkService::sync($id, $d, $refs, $userId, $confirmDup);
+            } elseif (count($links = TxLinkService::linksOf($id)) === 1 && !$links[0]['legacy']) {
                 // form lama tanpa kolom referensi: tautan dipertahankan, tetapi arah/nominal baru harus tetap muat pada sumbernya
-                TxLinkService::sync($id, $d, $link['type'] . ':' . $link['id'], $userId, true);
+                TxLinkService::sync($id, $d, $links[0]['type'] . ':' . $links[0]['id'], $userId, true);
             }
             Version::bump('transactions');
         });

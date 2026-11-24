@@ -40,17 +40,30 @@ final class TxLinkService
         return self::NAMES[$type] ?? $type;
     }
 
-    /** Tautan transaksi: ['type','id'(sumber),'row'(id baris tautan),'amount','legacy'(true = data historis invoices.pay_tx_id)] */
-    public static function linkOf(int $txId): ?array
+    /**
+     * Semua tautan transaksi (satu per sumber; satu transaksi boleh memuat beberapa baris uraian dengan sumber berbeda).
+     * Tiap tautan: ['type','id'(sumber),'row'(id baris tautan),'amount','legacy'(true = data historis invoices.pay_tx_id)].
+     * Rujukan historis (invoices.pay_tx_id) hanya dimuat bila transaksi tidak punya tautan baru.
+     * @return list<array{type:string,id:int,row:int,amount:string,legacy:bool}>
+     */
+    public static function linksOf(int $txId): array
     {
+        $out = [];
         foreach (self::TABLES as $type => [$tbl, $fk]) {
-            $r = Db::one("SELECT id, $fk AS sid, amount FROM $tbl WHERE transaction_id = ?", [$txId]);
-            if ($r) {
-                return ['type' => $type, 'id' => (int) $r['sid'], 'row' => (int) $r['id'], 'amount' => (string) $r['amount'], 'legacy' => false];
+            foreach (Db::all("SELECT id, $fk AS sid, amount FROM $tbl WHERE transaction_id = ? ORDER BY id", [$txId]) as $r) {
+                $out[] = ['type' => $type, 'id' => (int) $r['sid'], 'row' => (int) $r['id'], 'amount' => (string) $r['amount'], 'legacy' => false];
             }
         }
-        $i = Db::one('SELECT id FROM invoices WHERE pay_tx_id = ? ORDER BY id LIMIT 1', [$txId]);
-        return $i ? ['type' => 'invoice', 'id' => (int) $i['id'], 'row' => 0, 'amount' => '0.00', 'legacy' => true] : null;
+        if (!$out && ($i = Db::val('SELECT id FROM invoices WHERE pay_tx_id = ? ORDER BY id LIMIT 1', [$txId]))) {
+            $out[] = ['type' => 'invoice', 'id' => (int) $i, 'row' => 0, 'amount' => '0.00', 'legacy' => true];
+        }
+        return $out;
+    }
+
+    /** Tautan pertama transaksi (untuk pemeriksaan "sudah terhubung"), atau null. */
+    public static function linkOf(int $txId): ?array
+    {
+        return self::linksOf($txId)[0] ?? null;
     }
 
     /**
@@ -119,87 +132,105 @@ final class TxLinkService
     /* ------------------------------------------------------------------ simpan / sinkron ------------------------------------------------------------------ */
 
     /**
-     * Dipanggil DI DALAM transaksi DB yang menyimpan transaksi (create/update). Menyesuaikan tautan dengan pilihan $refRaw
-     * ("debt:12" | "invoice:3" | "forecast:7" | kosong = tanpa tautan). Melempar LinkError -> seluruh penyimpanan di-rollback.
+     * Dipanggil DI DALAM transaksi DB yang menyimpan transaksi (create/update). Menyesuaikan tautan dengan $refs:
+     * peta "debt:12" | "invoice:3" | "forecast:7" => nominal (jumlah semua baris uraian yang memilih sumber itu). Sumber yang tidak
+     * lagi disebut dilepas. Bentuk lama (string satu referensi / kosong) tetap diterima: nominal = seluruh transaksi.
+     * Melempar LinkError -> seluruh penyimpanan di-rollback.
      * @param array $tx account_id, tx_date, debit, credit (nilai yang disimpan)
+     * @param array<string,string>|string|null $refs
      */
-    public static function sync(int $txId, array $tx, ?string $refRaw, int $userId, bool $confirmDup): void
+    public static function sync(int $txId, array $tx, array|string|null $refs, int $userId, bool $confirmDup): void
     {
         Db::val('SELECT id FROM transactions WHERE id = ? FOR UPDATE', [$txId]);
-        $refRaw = trim((string) $refRaw);
-        $want = $refRaw === '' ? null : self::parseRef($refRaw);
-        if ($refRaw !== '' && $want === null) {
-            throw new LinkError('Referensi Invoice/PO tidak valid. Pilih ulang dari daftar.');
+        $in = bccomp((string) $tx['debit'], '0', 2) !== 0;
+        $dir = $in ? 'in' : 'out';
+        $total = $in ? (string) $tx['debit'] : (string) $tx['credit'];
+        if (!is_array($refs)) {
+            $one = trim((string) $refs);
+            $refs = $one === '' ? [] : [$one => $total];
         }
-        $cur = self::linkOf($txId);
-        if ($cur && $cur['legacy']) {
+        $want = [];
+        foreach ($refs as $raw => $amt) {
+            $p = self::parseRef((string) $raw);
+            if ($p === null) {
+                throw new LinkError('Referensi Invoice/PO tidak valid. Pilih ulang dari daftar.');
+            }
+            $want[$p[0] . ':' . $p[1]] = ['type' => $p[0], 'id' => $p[1], 'amount' => bcadd((string) $amt, '0', 2)];
+        }
+        $curAll = self::linksOf($txId);
+        if ($curAll && $curAll[0]['legacy']) {
             if ($want) {
                 throw new LinkError('Transaksi ini sudah tercatat sebagai bukti penerimaan Piutang (data historis). Lepaskan tautannya di halaman Piutang terlebih dahulu.');
             }
             return;
         }
-        if (!$want && !$cur) {
-            return;
+        $cur = [];
+        foreach ($curAll as $c) {
+            $cur[$c['type'] . ':' . $c['id']] = $c;
         }
-        $in = bccomp((string) $tx['debit'], '0', 2) !== 0;
-        $dir = $in ? 'in' : 'out';
-        $amt = $in ? (string) $tx['debit'] : (string) $tx['credit'];
-        $same = $want && $cur && $want[0] === $cur['type'] && $want[1] === $cur['id'];
-        if ($cur && !$same) {
-            self::detach($txId, $cur, $userId);
-            $cur = null;
+        // lepas sumber yang tidak lagi dipilih dulu (membebaskan sisanya sebelum sumber lain diperiksa)
+        foreach ($cur as $k => $c) {
+            if (!isset($want[$k])) {
+                self::detach($txId, $c, $userId);
+            }
         }
-        if (!$want) {
-            return;
+        foreach ($want as $k => $w) {
+            self::link($txId, $tx, $w, $cur[$k] ?? null, $dir, $userId, $confirmDup);
         }
+    }
+
+    /** Hubungkan (atau perbarui nominal) satu sumber. Semua pemeriksaan sisa/arah/duplikat ada di sini. */
+    private static function link(int $txId, array $tx, array $w, ?array $cur, string $dir, int $userId, bool $confirmDup): void
+    {
+        [$type, $sid, $amt] = [$w['type'], $w['id'], $w['amount']];
         if (bccomp($amt, '0', 2) <= 0) {
-            throw new LinkError('Nominal transaksi harus lebih dari nol agar dapat dihubungkan ke ' . self::name($want[0]) . '.');
+            throw new LinkError('Jumlah uraian yang memilih ' . self::name($type) . ' ini harus lebih dari nol agar dapat dihubungkan.');
         }
-        $src = self::source($want[0], $want[1], $txId, true);
+        $src = self::source($type, $sid, $txId, true);
         if (!$src) {
             throw new LinkError('Referensi Invoice/PO tidak ditemukan (mungkin sudah dihapus). Pilih ulang dari daftar.');
         }
+        $label = ' (' . $src['title'] . ')';
         if ($src['block']) {
             throw new LinkError($src['block']);
         }
         if ($src['direction'] !== $dir) {
             throw new LinkError($src['direction'] === 'out'
-                ? ($want[0] === 'debt' ? 'Hutang hanya dapat dibayar dengan Mutasi Keluar.' : 'Item Proyeksi pengeluaran hanya dapat direalisasikan dengan Mutasi Keluar.')
-                : ($want[0] === 'invoice' ? 'Piutang hanya dapat diterima dengan Mutasi Masuk.' : 'Item Proyeksi penerimaan hanya dapat direalisasikan dengan Mutasi Masuk.'));
+                ? ($type === 'debt' ? 'Hutang hanya dapat dibayar dengan Mutasi Keluar.' : 'Item Proyeksi pengeluaran hanya dapat direalisasikan dengan Mutasi Keluar.')
+                : ($type === 'invoice' ? 'Piutang hanya dapat diterima dengan Mutasi Masuk.' : 'Item Proyeksi penerimaan hanya dapat direalisasikan dengan Mutasi Masuk.'));
         }
         if (bccomp($amt, $src['remaining'], 2) > 0) {
-            throw new LinkError('Nominal ' . money($amt) . ' melebihi sisa ' . self::name($want[0]) . ' (' . money(bccomp($src['remaining'], '0', 2) > 0 ? $src['remaining'] : '0') . '). Untuk pembayaran sebagian, isi nominal sesuai yang benar-benar ' . ($dir === 'out' ? 'dibayar' : 'diterima') . '.');
+            throw new LinkError('Nominal ' . money($amt) . ' melebihi sisa ' . self::name($type) . $label . ' (' . money(bccomp($src['remaining'], '0', 2) > 0 ? $src['remaining'] : '0') . '). Untuk pembayaran sebagian, isi nominal sesuai yang benar-benar ' . ($dir === 'out' ? 'dibayar' : 'diterima') . '.');
         }
-        [$tbl, $fk] = self::TABLES[$want[0]];
-        if (!$same) {
+        [$tbl, $fk] = self::TABLES[$type];
+        if ($cur === null) {
             // peringatan pembayaran identik (sumber, nominal, tanggal sama) yang sudah tercatat
-            $dup = Db::val("SELECT t.id FROM $tbl l JOIN transactions t ON t.id = l.transaction_id WHERE l.$fk = ? AND l.amount = ? AND t.tx_date = ? AND t.voided_at IS NULL AND t.id <> ? LIMIT 1", [$want[1], $amt, $tx['tx_date'], $txId]);
+            $dup = Db::val("SELECT t.id FROM $tbl l JOIN transactions t ON t.id = l.transaction_id WHERE l.$fk = ? AND l.amount = ? AND t.tx_date = ? AND t.voided_at IS NULL AND t.id <> ? LIMIT 1", [$sid, $amt, $tx['tx_date'], $txId]);
             if ($dup && !$confirmDup) {
-                $e = new LinkError('Pembayaran yang sama (' . self::name($want[0]) . ' ini, ' . money($amt) . ', tanggal ' . fmt_date($tx['tx_date']) . ') sudah tercatat pada transaksi #' . $dup . '. Bila ini memang pembayaran terpisah, centang konfirmasi di bawah lalu simpan lagi.');
+                $e = new LinkError('Pembayaran yang sama (' . self::name($type) . $label . ', ' . money($amt) . ', tanggal ' . fmt_date($tx['tx_date']) . ') sudah tercatat pada transaksi #' . $dup . '. Bila ini memang pembayaran terpisah, centang konfirmasi di bawah lalu simpan lagi.');
                 $e->duplicate = true;
                 throw $e;
             }
-            // satu transaksi hanya boleh terhubung ke satu sumber (pemeriksaan lintas tabel; UNIQUE per tabel menjaga di tingkat DB)
-            Db::insert($tbl, self::row($want[0], $want[1], $txId, $tx['tx_date'], $amt, $userId));
-            if ($want[0] === 'invoice') {
-                Db::q('UPDATE invoices SET paid = paid + ?, paid_date = CASE WHEN paid_date IS NULL OR paid_date < ? THEN ? ELSE paid_date END WHERE id = ?', [$amt, $tx['tx_date'], $tx['tx_date'], $want[1]]);
+            Db::insert($tbl, self::row($type, $sid, $txId, $tx['tx_date'], $amt, $userId));
+            if ($type === 'invoice') {
+                Db::q('UPDATE invoices SET paid = paid + ?, paid_date = CASE WHEN paid_date IS NULL OR paid_date < ? THEN ? ELSE paid_date END WHERE id = ?', [$amt, $tx['tx_date'], $tx['tx_date'], $sid]);
             }
-            Audit::log('tx_link', 'transaction', (string) $txId, 'Transaksi #' . $txId . ' dihubungkan ke ' . self::name($want[0]) . ' #' . $want[1] . ' (' . $amt . ')', null, ['type' => $want[0], 'source_id' => $want[1], 'amount' => $amt]);
+            Audit::log('tx_link', 'transaction', (string) $txId, 'Transaksi #' . $txId . ' dihubungkan ke ' . self::name($type) . ' #' . $sid . ' (' . $amt . ')', null, ['type' => $type, 'source_id' => $sid, 'amount' => $amt]);
         } else {
             $old = $cur['amount'];
             $upd = ['amount' => $amt];
-            if ($want[0] !== 'forecast') {
+            if ($type !== 'forecast') {
                 $upd['pay_date'] = $tx['tx_date'];
             }
             Db::update($tbl, $cur['row'], $upd);
-            if ($want[0] === 'invoice' && bccomp($old, $amt, 2) !== 0) {
-                Db::q('UPDATE invoices SET paid = paid - ? + ? WHERE id = ?', [$old, $amt, $want[1]]);
+            if ($type === 'invoice' && bccomp($old, $amt, 2) !== 0) {
+                Db::q('UPDATE invoices SET paid = paid - ? + ? WHERE id = ?', [$old, $amt, $sid]);
             }
             if (bccomp($old, $amt, 2) !== 0) {
-                Audit::log('tx_link', 'transaction', (string) $txId, 'Nominal tautan transaksi #' . $txId . ' ke ' . self::name($want[0]) . ' #' . $want[1] . ' diubah', ['amount' => $old], ['amount' => $amt]);
+                Audit::log('tx_link', 'transaction', (string) $txId, 'Nominal tautan transaksi #' . $txId . ' ke ' . self::name($type) . ' #' . $sid . ' diubah', ['amount' => $old], ['amount' => $amt]);
             }
         }
-        self::afterChange($want[0], $want[1]);
+        self::afterChange($type, $sid);
     }
 
     private static function row(string $type, int $sid, int $txId, string $date, string $amt, int $userId): array
@@ -242,41 +273,40 @@ final class TxLinkService
     /** Transaksi dibatalkan (void). Dipanggil setelah voided_at diisi, di dalam transaksi DB yang sama. */
     public static function onVoid(int $txId): void
     {
-        $cur = self::linkOf($txId);
-        if (!$cur) {
-            return;
+        foreach (self::linksOf($txId) as $cur) {
+            if ($cur['legacy']) {
+                // data historis: lepas rujukan transaksi saja (nominal "dibayar" historis di Excel tidak diubah)
+                Db::q('UPDATE invoices SET pay_tx_id = NULL WHERE pay_tx_id = ?', [$txId]);
+                Audit::log('unlink', 'transaction', (string) $txId, 'Transaksi dibatalkan: rujukan Piutang historis dilepas');
+                Version::bump('invoices');
+                continue;
+            }
+            if ($cur['type'] === 'invoice') {
+                Db::q('UPDATE invoices SET paid = GREATEST(paid - ?, 0) WHERE id = ?', [$cur['amount'], $cur['id']]);
+            }
+            Audit::log('tx_link', 'transaction', (string) $txId, 'Transaksi dibatalkan: pembayaran/penerimaan ' . self::name($cur['type']) . ' #' . $cur['id'] . ' tidak lagi dihitung', ['amount' => $cur['amount']], null);
+            self::afterChange($cur['type'], $cur['id']);
         }
-        if ($cur['legacy']) {
-            // data historis: lepas rujukan transaksi saja (nominal "dibayar" historis di Excel tidak diubah)
-            Db::q('UPDATE invoices SET pay_tx_id = NULL WHERE pay_tx_id = ?', [$txId]);
-            Audit::log('unlink', 'transaction', (string) $txId, 'Transaksi dibatalkan: rujukan Piutang historis dilepas');
-            Version::bump('invoices');
-            return;
-        }
-        if ($cur['type'] === 'invoice') {
-            Db::q('UPDATE invoices SET paid = GREATEST(paid - ?, 0) WHERE id = ?', [$cur['amount'], $cur['id']]);
-        }
-        Audit::log('tx_link', 'transaction', (string) $txId, 'Transaksi dibatalkan: pembayaran/penerimaan ' . self::name($cur['type']) . ' #' . $cur['id'] . ' tidak lagi dihitung', ['amount' => $cur['amount']], null);
-        self::afterChange($cur['type'], $cur['id']);
     }
 
     /** Transaksi dipulihkan: pembayaran dihitung lagi bila masih muat dalam sisa (kalau tidak, pemulihan ditolak). */
     public static function onRestore(int $txId): void
     {
-        $cur = self::linkOf($txId);
-        if (!$cur || $cur['legacy']) {
-            return;
+        foreach (self::linksOf($txId) as $cur) {
+            if ($cur['legacy']) {
+                continue;
+            }
+            $src = self::source($cur['type'], $cur['id'], $txId, true);
+            // piutang: paid tersimpan belum memuat penerimaan ini (dikurangkan saat void), jadi sisa = nominal − paid tersimpan
+            $rem = !$src ? '0.00' : ($cur['type'] === 'invoice' ? bcsub($src['amount'], bcadd($src['paid'], (string) Db::val('SELECT amount FROM invoice_payments WHERE id = ?', [$cur['row']]), 2), 2) : $src['remaining']);
+            if (!$src || bccomp($cur['amount'], $rem, 2) > 0) {
+                throw new LinkError('Transaksi tidak dapat dipulihkan: nominalnya (' . money($cur['amount']) . ') kini melebihi sisa ' . self::name($cur['type']) . ' (' . money(bccomp($rem, '0', 2) > 0 ? $rem : '0') . ') karena sudah ada pembayaran lain. Ubah transaksi lain terlebih dahulu.');
+            }
+            if ($cur['type'] === 'invoice') {
+                Db::q('UPDATE invoices SET paid = paid + ? WHERE id = ?', [$cur['amount'], $cur['id']]);
+            }
+            self::afterChange($cur['type'], $cur['id']);
         }
-        $src = self::source($cur['type'], $cur['id'], $txId, true);
-        // piutang: paid tersimpan belum memuat penerimaan ini (dikurangkan saat void), jadi sisa = nominal − paid tersimpan
-        $rem = !$src ? '0.00' : ($cur['type'] === 'invoice' ? bcsub($src['amount'], bcadd($src['paid'], (string) Db::val('SELECT amount FROM invoice_payments WHERE id = ?', [$cur['row']]), 2), 2) : $src['remaining']);
-        if (!$src || bccomp($cur['amount'], $rem, 2) > 0) {
-            throw new LinkError('Transaksi tidak dapat dipulihkan: nominalnya (' . money($cur['amount']) . ') kini melebihi sisa ' . self::name($cur['type']) . ' (' . money(bccomp($rem, '0', 2) > 0 ? $rem : '0') . ') karena sudah ada pembayaran lain. Ubah transaksi lain terlebih dahulu.');
-        }
-        if ($cur['type'] === 'invoice') {
-            Db::q('UPDATE invoices SET paid = paid + ? WHERE id = ?', [$cur['amount'], $cur['id']]);
-        }
-        self::afterChange($cur['type'], $cur['id']);
     }
 
     /**
@@ -320,7 +350,8 @@ final class TxLinkService
         }
         $in = implode(',', array_fill(0, count($ids), '?'));
         return self::groupProofs(Db::all(
-            "SELECT DISTINCT i.id AS src, t.id, t.tx_date, t.voucher_code, t.debit AS amt, t.debit, a.name AS account
+            "SELECT DISTINCT i.id AS src, t.id, t.tx_date, t.voucher_code,
+                    COALESCE((SELECT SUM(p.amount) FROM invoice_payments p WHERE p.invoice_id = i.id AND p.transaction_id = t.id), t.debit) AS amt, t.debit, a.name AS account
              FROM invoices i
              JOIN transactions t ON t.voided_at IS NULL AND t.debit <> 0
               AND ((t.ref_no IS NOT NULL AND t.ref_no <> '' AND LOWER(TRIM(t.ref_no)) = LOWER(TRIM(i.invoice_no)))
@@ -345,7 +376,8 @@ final class TxLinkService
         }
         $in = implode(',', array_fill(0, count($ids), '?'));
         return self::groupProofs(Db::all(
-            "SELECT DISTINCT d.id AS src, t.id, t.tx_date, t.voucher_code, t.credit AS amt, t.credit, a.name AS account
+            "SELECT DISTINCT d.id AS src, t.id, t.tx_date, t.voucher_code,
+                    COALESCE((SELECT SUM(p.amount) FROM debt_payments p WHERE p.debt_id = d.id AND p.transaction_id = t.id), t.credit) AS amt, t.credit, a.name AS account
              FROM debts d
              JOIN transactions t ON t.voided_at IS NULL AND t.credit <> 0
               AND ((d.ref_no IS NOT NULL AND d.ref_no <> '' AND t.ref_no IS NOT NULL AND LOWER(TRIM(t.ref_no)) = LOWER(TRIM(d.ref_no)))

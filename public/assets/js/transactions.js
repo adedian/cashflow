@@ -125,8 +125,10 @@
       var row = del.closest('.line-row');
       if (lineBox.querySelectorAll('.line-row').length > 1) { row.parentNode.removeChild(row); }
       else {
-        Array.prototype.forEach.call(row.querySelectorAll('input'), function (i) { i.value = ''; delete i.dataset.auto; });
+        Array.prototype.forEach.call(row.querySelectorAll('input'), function (i) { if (i.closest('.line-ref')) return; i.value = ''; delete i.dataset.auto; });
         Array.prototype.forEach.call(row.querySelectorAll('select'), function (s) { s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); });
+        var rr = row.querySelector('.line-ref'); if (rr && rr.comboApi) rr.comboApi.clear();
+        var hh = row.querySelector('.line-hint'); if (hh) { hh.hidden = true; hh.textContent = ''; }
       }
       refresh();
     });
@@ -136,7 +138,8 @@
       if (window.HMECombo) window.HMECombo.scan(lineBox.lastElementChild);   // dropdown kategori/proyek baris baru = kotak pencarian juga
       refresh();
       var rows = lineBox.querySelectorAll('.line-row');
-      rows[rows.length - 1].querySelector('.line-desc').focus();
+      var nr = rows[rows.length - 1]; nr.__hintOwn = false;
+      nr.querySelector('.line-desc').focus();
     });
     refreshLines = refresh;
     refresh();
@@ -177,7 +180,7 @@
     };
     lineBox.addEventListener('combo:create', function (e) {
       var s = e.target, row = s.closest ? s.closest('.line-row') : null;
-      var what = s.classList.contains('line-cat') ? 'category' : s.classList.contains('line-proj') ? 'project' : '';
+      var what = s.classList && s.classList.contains('line-cat') ? 'category' : s.classList && s.classList.contains('line-proj') ? 'project' : '';
       var name = String((e.detail && e.detail.name) || '').replace(/\s+/g, ' ').trim();
       if (!what || !row || !name) return;
       createLine(what, row, name).then(function (err) { if (err && HME.toast) HME.toast(err, 'error', 4000); });
@@ -241,61 +244,155 @@
     [bBank, bNo].forEach(function (i) { i.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveBank(); } }); });
   })();
 
-  /* --- formulir: No. Invoice/PO (dropdown dinamis) — isi otomatis & ganti jenis transaksi --- */
-  var refBox = document.getElementById('ref_combo');
-  if (refBox) {
-    var hint = document.getElementById('refHint');
-    // description/amount = baris uraian pertama (id-nya selalu menempel di baris pertama; dicari saat dipakai)
-    var fld = { counterparty: document.getElementById('counterparty'), account: document.getElementById('account_id'),
-      get description() { return document.getElementById('description'); }, get amount() { return document.getElementById('amount'); } };
-    var picked = null;
+  /* --- formulir: No. Invoice/PO PER BARIS uraian (dropdown dinamis) — isi otomatis, cek sisa, ganti jenis transaksi, tambah cepat --- */
+  if (lineBox && document.querySelector('.line-ref')) {
+    var fld = { counterparty: document.getElementById('counterparty'), account: document.getElementById('account_id') };
     (function () { var n = fld.counterparty; if (n) { n.addEventListener('input', function () { delete n.dataset.auto; }); n.addEventListener('change', function () { delete n.dataset.auto; }); } })();
     if (fld.account) fld.account.addEventListener('change', function () { delete fld.account.dataset.auto; });
     var fmt = function (n) { return 'Rp ' + n.toLocaleString('id-ID', { maximumFractionDigits: 2 }); };
-    function setHint(text, warn) { if (!hint) return; hint.hidden = !text; hint.textContent = text || ''; hint.classList.toggle('warn', !!warn); }
-    function checkAmount() {
-      if (!picked || !lineBox) return;
-      var a = totalNum(), rem = parseFloat(picked.remaining);
-      var base = 'Sisa ' + picked.remaining_fmt + ' dari ' + picked.amount_fmt + '. Isi nominal sesuai yang benar-benar ' + (picked.direction === 'out' ? 'dibayar' : 'diterima') + ' (boleh sebagian).';
-      if (a > rem + 0.004) setHint('Nominal ' + fmt(a) + ' melebihi sisa ' + picked.remaining_fmt + ' — akan ditolak saat disimpan.', true);
-      else setHint(base, false);
-    }
-    function setVal(n, val) {
+    var rowRoot = function (row) { return row.querySelector('.line-ref'); };
+    var pickedOf = function (row) { var r = rowRoot(row); return r && r.__picked ? r.__picked : null; };
+    var setHint = function (row, text, warn) {
+      var h = row.querySelector('.line-hint'); if (!h) return;
+      h.hidden = !text; h.textContent = text || ''; h.classList.toggle('warn', !!warn);
+    };
+    // sisa tiap sumber dibandingkan dengan JUMLAH SEMUA baris yang memilih sumber yang sama
+    var checkAll = function () {
+      var sums = {}, rows = lineBox.querySelectorAll('.line-row');
+      Array.prototype.forEach.call(rows, function (row) {
+        var it = pickedOf(row); if (!it) return;
+        var n = num(row.querySelector('.line-amt').value);
+        sums[it.value] = (sums[it.value] || 0) + (n === null ? 0 : n);
+      });
+      Array.prototype.forEach.call(rows, function (row) {
+        var it = pickedOf(row);
+        if (!it) { if (!row.__hintOwn) setHint(row, '', false); return; }
+        var a = sums[it.value] || 0, rem = parseFloat(it.remaining);
+        if (a > rem + 0.004) setHint(row, 'Jumlah ' + fmt(a) + ' melebihi sisa ' + it.remaining_fmt + ' — akan ditolak saat disimpan.', true);
+        else setHint(row, 'Sisa ' + it.remaining_fmt + ' dari ' + it.amount_fmt + '. Isi jumlah sesuai yang benar-benar ' + (it.direction === 'out' ? 'dibayar' : 'diterima') + ' (boleh sebagian).', false);
+        row.__hintOwn = false;
+      });
+    };
+    onLinesChange = checkAll;
+    var setVal = function (n, val) {
       if (n.tagName === 'SELECT') {
         var has = false;
         Array.prototype.forEach.call(n.options, function (o) { if (o.value.toLowerCase() === String(val).toLowerCase()) { n.value = o.value; has = true; } });
         if (!has) { n.appendChild(new Option(val, val)); n.value = val; }
         n.dispatchEvent(new Event('change', { bubbles: true }));
       } else { n.value = val; }
-    }
-    function fill(n, val) { if (!n || val == null || val === '') return; if (n.value.trim() === '' || n.dataset.auto === '1') { setVal(n, val); n.dataset.auto = '1'; } }
-    function unfill() { ['counterparty', 'description', 'amount', 'account'].forEach(function (k) { var n = fld[k]; if (n && n.dataset.auto === '1') { if (n.tagName === 'SELECT') { n.value = ''; n.dispatchEvent(new Event('change', { bubbles: true })); } else { n.value = ''; } delete n.dataset.auto; } }); }
-    document.addEventListener('combo:pick', function (e) {
-      if (e.target !== refBox) return;
-      var it = e.detail;
-      unfill();
-      picked = it;
-      if (!it) { setHint('', false); refreshLines(); return; }
-      fill(fld.counterparty, it.party, 'counterparty');
+    };
+    var fill = function (n, val) { if (!n || val == null || val === '') return; if (n.value.trim() === '' || n.dataset.auto === '1') { setVal(n, val); n.dataset.auto = '1'; } };
+    var unfillNode = function (n) {
+      if (!n || n.dataset.auto !== '1') return;
+      if (n.tagName === 'SELECT') { n.value = ''; n.dispatchEvent(new Event('change', { bubbles: true })); } else { n.value = ''; }
+      delete n.dataset.auto;
+    };
+    var anyPicked = function () { return Array.prototype.some.call(lineBox.querySelectorAll('.line-row'), function (r) { return !!pickedOf(r); }); };
+
+    lineBox.addEventListener('combo:pick', function (e) {
+      var root = e.target && e.target.closest ? e.target.closest('.line-ref') : null;
+      if (!root) return;
+      var row = root.closest('.line-row'), it = e.detail;
+      unfillNode(row.querySelector('.line-desc')); unfillNode(row.querySelector('.line-amt'));
+      root.__picked = it;
+      if (!it) { if (!anyPicked()) { unfillNode(fld.counterparty); unfillNode(fld.account); } refreshLines(); return; }
+      fill(fld.counterparty, it.party);
       var d = it.group === 'Hutang' ? 'Pembayaran hutang ' + (it.party || '') + (it.description ? ' — ' + it.description : '') : it.group === 'Piutang' ? 'Penerimaan piutang ' + (it.party || '') + (it.ref_no ? ' — ' + it.ref_no : '') : (it.title || '');
-      fill(fld.description, d.slice(0, 500), 'description');
-      fill(fld.amount, it.remaining_fmt.replace(/^Rp\s*/, ''), 'amount');
-      if (it.account_id) fill(fld.account, String(it.account_id), 'account');
-      refreshLines();   // total + cek sisa (checkAmount dipanggil lewat onLinesChange)
-      checkAmount();
+      fill(row.querySelector('.line-desc'), d.slice(0, 500));
+      fill(row.querySelector('.line-amt'), it.remaining_fmt.replace(/^Rp\s*/, ''));
+      if (it.account_id) fill(fld.account, String(it.account_id));
+      refreshLines();   // total + cek sisa (checkAll dipanggil lewat onLinesChange)
     });
-    onLinesChange = checkAmount;
     // nilai awal (form ubah / tombol Bayar·Terima·Realisasikan): tampilkan info sisa tanpa mengubah isian
-    try { var init = JSON.parse(refBox.getAttribute('data-selected') || 'null'); if (init) { picked = init; checkAmount(); } } catch (x) { /* abaikan */ }
-    // ganti jenis transaksi: referensi lama tidak lagi sesuai -> kosongkan, daftar dimuat ulang dari sumber yang relevan
+    Array.prototype.forEach.call(lineBox.querySelectorAll('.line-ref'), function (r) {
+      try { r.__picked = JSON.parse(r.getAttribute('data-selected') || 'null'); } catch (x) { r.__picked = null; }
+    });
+    checkAll();
+    // ganti jenis transaksi: referensi lama tidak lagi sesuai -> kosongkan semua baris, daftar dimuat ulang dari sumber yang relevan
     Array.prototype.forEach.call(document.querySelectorAll('input[name="direction"]'), function (r) {
       r.addEventListener('change', function () {
-        if (refBox.comboApi && refBox.comboApi.value()) {
-          refBox.comboApi.clear();
-          setHint('Jenis transaksi diubah — referensi sebelumnya dikosongkan. Pilih ulang sesuai jenis yang baru.', true);
+        var cleared = false;
+        Array.prototype.forEach.call(lineBox.querySelectorAll('.line-ref'), function (root) {
+          if (root.comboApi && root.comboApi.value()) { root.comboApi.clear(); cleared = true; }
+          if (root.comboApi) root.comboApi.reload();
+        });
+        if (cleared) {
+          var first = lineBox.querySelector('.line-row');
+          if (first) { setHint(first, 'Jenis transaksi diubah — No. invoice / PO sebelumnya dikosongkan. Pilih ulang sesuai jenis yang baru.', true); first.__hintOwn = true; }
         }
-        if (refBox.comboApi) refBox.comboApi.reload();
       });
     });
+
+    /* --- ketik No. invoice/PO yang belum ada → "+ Tambah “…” sebagai baru": dialog ringkas, simpan sebagai Hutang/Piutang, langsung dipilih --- */
+    var qr = document.getElementById('quickRef');
+    if (qr) {
+      var $ = function (id) { return document.getElementById(id); };
+      var qNo = $('qrNo'), qParty = $('qrParty'), qAmt = $('qrAmt'), qDue = $('qrDue'), qDesc = $('qrDesc'), qErr = $('qrErr'), qSave = $('qrSave'), qBusy = false, qRoot = null, qDir = 'out';
+      var qShow = function (m) { qErr.hidden = !m; qErr.textContent = m || ''; };
+      var curDir = function () { var d = document.querySelector('input[name="direction"]:checked'); return d && d.value === 'in' ? 'in' : 'out'; };
+      var hasOpt = function (s, v) { return Array.prototype.some.call(s.options, function (o) { return o.value.toLowerCase() === v.toLowerCase(); }); };
+      var fillParties = function (names, cur) {
+        while (qParty.options.length > 1) qParty.remove(1);
+        names.forEach(function (n) { qParty.appendChild(new Option(n, n)); });
+        if (cur && !hasOpt(qParty, cur)) qParty.appendChild(new Option(cur, cur));
+        Array.prototype.forEach.call(qParty.options, function (o) { if (cur && o.value.toLowerCase() === cur.toLowerCase()) qParty.value = o.value; });
+        if (!cur) qParty.value = '';
+        qParty.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      var openRef = function (root, typed) {
+        qRoot = root; qDir = curDir(); qShow('');
+        var row = root.closest('.line-row'), a = row ? num(row.querySelector('.line-amt').value) : null;
+        var out = qDir === 'out';
+        $('qrTitle').textContent = out ? 'Tambah Hutang baru' : 'Tambah Piutang baru';
+        $('qrKind').textContent = out ? 'Mutasi Keluar → dicatat sebagai Hutang (jenis Usaha). Pembayarannya dicatat lewat transaksi ini.' : 'Mutasi Masuk → dicatat sebagai Piutang Proyek. Penerimaannya dicatat lewat transaksi ini.';
+        $('qrKindName').textContent = out ? 'Hutang' : 'Piutang Proyek'; $('qrMenu').textContent = out ? 'Hutang' : 'Piutang';
+        $('qrPartyLbl').textContent = out ? 'Supplier' : 'Customer';
+        $('qrDueReq').hidden = out;
+        var names = []; try { names = JSON.parse(qParty.getAttribute(out ? 'data-suppliers' : 'data-parties') || '[]'); } catch (x) { names = []; }
+        fillParties(names, fld.counterparty ? fld.counterparty.value : '');
+        qNo.value = typed || ''; qAmt.value = a !== null && a > 0 ? a.toLocaleString('id-ID', { maximumFractionDigits: 2 }) : '';
+        qDue.value = ''; qDesc.value = row ? row.querySelector('.line-desc').value.trim().slice(0, 255) : '';
+        H.openModal('quickRef'); setTimeout(function () { (qNo.value ? (qParty.value ? qAmt : qParty.parentNode.querySelector('.combo-input') || qParty) : qNo).focus(); }, 60);
+      };
+      lineBox.addEventListener('combo:create', function (e) {
+        var root = e.target && e.target.hasAttribute && e.target.hasAttribute('data-combo-remote') ? e.target : null;
+        if (root) openRef(root, String((e.detail && e.detail.name) || '').replace(/\s+/g, ' ').trim());
+      });
+      // Supplier / Customer baru: ketik namanya di dialog → "Tambah" menyimpannya ke master lebih dulu, lalu dipilih
+      qParty.addEventListener('combo:create', function (e) {
+        var name = String((e.detail && e.detail.name) || '').replace(/\s+/g, ' ').trim();
+        if (!name) return;
+        H.api(qDir === 'out' ? '/api/suppliers' : '/api/parties', { method: 'POST', form: new URLSearchParams({ name: name }) }).then(function (j) {
+          if (!j || !j.ok) { qShow((j && j.error) || 'Gagal menambahkan.'); return; }
+          if (!hasOpt(qParty, j.name)) qParty.appendChild(new Option(j.name, j.name));
+          qParty.value = Array.prototype.filter.call(qParty.options, function (o) { return o.value.toLowerCase() === j.name.toLowerCase(); })[0].value;
+          qParty.dispatchEvent(new Event('change', { bubbles: true }));
+          if (fld.counterparty && !hasOpt(fld.counterparty, j.name)) fld.counterparty.appendChild(new Option(j.name, j.name));
+          qShow('');
+        }).catch(function () { qShow('Koneksi terputus — gagal menambahkan.'); });
+      });
+      var saveRef = function () {
+        if (qBusy || !qRoot) return;
+        var no = qNo.value.replace(/\s+/g, ' ').trim();
+        if (!no) { qShow('No. invoice / PO wajib diisi.'); qNo.focus(); return; }
+        if (!qParty.value) { qShow((qDir === 'out' ? 'Supplier' : 'Customer') + ' wajib dipilih.'); return; }
+        var n = num(qAmt.value);
+        if (n === null || n <= 0) { qShow('Nominal harus berupa angka lebih dari nol.'); qAmt.focus(); return; }
+        if (qDir === 'in' && !qDue.value) { qShow('Tgl. jatuh tempo wajib diisi untuk Piutang.'); qDue.focus(); return; }
+        qBusy = true; qSave.disabled = true; qShow('');
+        H.api('/api/refs', { method: 'POST', form: new URLSearchParams({ dir: qDir, ref_no: no, party: qParty.value, amount: qAmt.value, due_date: qDue.value, description: qDesc.value }) }).then(function (j) {
+          if (!j || !j.ok) { qShow((j && j.error) || 'Gagal menambahkan.'); return; }
+          if (fld.counterparty && j.item && j.item.party && !hasOpt(fld.counterparty, j.item.party)) fld.counterparty.appendChild(new Option(j.item.party, j.item.party));
+          qRoot.comboApi.set(j.item);
+          if (H.toast) H.toast(j.created ? '“' + no + '” ditambahkan sebagai ' + (qDir === 'out' ? 'Hutang' : 'Piutang') + ' baru.' : '“' + no + '” sudah ada — dipilih.', 'success', 3000);
+          H.closeModal(qr);
+        }).catch(function () { qShow('Koneksi terputus — gagal menambahkan.'); })
+          .then(function () { qBusy = false; qSave.disabled = false; });
+      };
+      qSave.addEventListener('click', saveRef);
+      [qNo, qAmt, qDue, qDesc].forEach(function (i) { i.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveRef(); } }); });
+      qAmt.addEventListener('blur', function () { var v = num(qAmt.value); if (v !== null) qAmt.value = v.toLocaleString('id-ID', { maximumFractionDigits: 2 }); });
+    }
   }
 })();

@@ -171,7 +171,9 @@ final class LedgerService
      * debit/credit/category_id/project_id = milik baris; tx_debit/tx_credit = milik transaksi (arah masuk/keluar).
      */
     public const LINE_ROWS = '(SELECT t0.id, COALESCE(i.line_no, 0) AS line_no, t0.account_id, t0.tx_date, t0.seq, t0.voided_at,
-        t0.voucher_code, t0.counterparty, t0.ref_no, t0.category_raw, t0.note, t0.flag, t0.debit AS tx_debit, t0.credit AS tx_credit,
+        t0.voucher_code, t0.counterparty, t0.category_raw, t0.flag, t0.debit AS tx_debit, t0.credit AS tx_credit,
+        IF(i.id IS NULL, t0.ref_no, i.ref_no) AS ref_no,
+        IF(i.id IS NULL OR i.note IS NULL OR i.note = \'\', t0.note, i.note) AS note,
         IF(i.id IS NULL, t0.description, i.description) AS line_desc,
         IF(i.id IS NULL, t0.category_id, i.category_id) AS category_id,
         IF(i.id IS NULL, t0.project_id, i.project_id) AS project_id,
@@ -431,7 +433,7 @@ final class LedgerService
                 // satu baris daftar per uraian: salin data transaksi, timpa dengan uraian/kategori/proyek/jumlah baris itu
                 $items = [];
                 foreach (Db::all(
-                    "SELECT i.transaction_id AS tid, i.line_no, i.description, i.amount, c.name AS cn, c.kind AS ck, p.name AS pn
+                    "SELECT i.transaction_id AS tid, i.line_no, i.description, i.amount, i.ref_no, i.note, c.name AS cn, c.kind AS ck, p.name AS pn
                      FROM transaction_items i LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN projects p ON p.id = i.project_id
                      WHERE i.transaction_id IN ($in)"
                 ) as $r) {
@@ -453,6 +455,8 @@ final class LedgerService
                         $row['category_name'] = $it['cn'];
                         $row['category_kind'] = $it['ck'];
                         $row['project_name'] = $it['pn'];
+                        $row['ref_no'] = $it['ref_no'];   // No. Invoice/PO & catatan milik baris (catatan kosong → catatan transaksi)
+                        $row['note'] = ($it['note'] ?? '') !== '' ? $it['note'] : $row['note'];
                         $row['debit'] = $isIn ? bcadd((string) $it['amount'], '0', 2) : '0.00';
                         $row['credit'] = $isIn ? '0.00' : bcadd((string) $it['amount'], '0', 2);
                     }

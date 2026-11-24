@@ -1,12 +1,13 @@
 <?php
-/** @var array $t @var array $errors @var ?int $id @var ?string $warn @var array $accounts @var array $categories @var array $projects @var array $counterpartyAccounts @var string $idem @var array $lineRows */
+/** @var array $t @var array $errors @var ?int $id @var ?string $warn @var array $accounts @var array $categories @var array $projects @var array $counterpartyAccounts @var string $idem @var array $lineRows @var array $refInfos @var array $suppliers */
 $kinds = \App\Models\Lookup::KIND_LABEL;
 $v = static fn(string $k, $d = '') => $t[$k] ?? $d;
 $fe = static fn(string $k) => isset($errors[$k]) ? '<div class="err">' . e($errors[$k]) . '</div>' : '';
 $action = $id ? url('/transactions/' . $id) : url('/transactions');
 $auto = (!$id && $v('source_ref') && !$errors) ? ' data-auto="1"' : '';   // isian dari tombol Bayar/Terima/Realisasikan: ikut dikosongkan bila referensi diganti
 // baris uraian: [{description, category_id, project_id, amount}] — dari kiriman (saat galat), rincian tersimpan (ubah), atau satu baris (baru / tombol Bayar·Terima)
-$lineRows = $lineRows ?: [['description' => '', 'category_id' => '', 'project_id' => '', 'amount' => '']];
+$lineRows = $lineRows ?: [['description' => '', 'category_id' => '', 'project_id' => '', 'amount' => '', 'source_ref' => '', 'note' => '']];
+$legacyLink = !empty($t['legacy_link']);   // bukti penerimaan Piutang historis: tidak dapat dihubungkan ke sumber lain
 $lineTotal = '0.00';
 foreach ($lineRows as $lr) {
     $pa = parse_amount($lr['amount'] ?? '', true);
@@ -27,23 +28,32 @@ $projHtml = '';
 foreach ($projects as $p) {
     $projHtml .= '<option value="' . (int) $p['id'] . '">' . e($p['name']) . '</option>';
 }
-$renderLine = static function (array $r, bool $first, string $auto) use ($catHtml, $projHtml): string {
+$renderLine = static function (array $r, bool $first, string $auto) use ($catHtml, $projHtml, $refInfos, $legacyLink, $id): string {
     $idD = $first ? ' id="description"' : '';
     $idA = $first ? ' id="amount"' : '';
     $cid = (int) ($r['category_id'] ?? 0);
     $pid = (int) ($r['project_id'] ?? 0);
     $cats = $cid > 0 ? str_replace('value="' . $cid . '">', 'value="' . $cid . '" selected>', $catHtml) : $catHtml;
     $projs = $pid > 0 ? str_replace('value="' . $pid . '">', 'value="' . $pid . '" selected>', $projHtml) : $projHtml;
+    $ref = trim((string) ($r['source_ref'] ?? ''));
+    $info = $ref !== '' ? ($refInfos[$ref] ?? null) : null;
+    $refHtml = $legacyLink
+        ? '<div class="line-pick line-pick-ref"><input type="hidden" name="line_ref[]" value=""><span class="help">—</span></div>'
+        : '<div class="line-pick line-pick-ref"><div class="line-ref" data-combo-remote="/api/refs" data-dir-name="direction" data-combo-create-event data-placeholder="Cari / ketik No. invoice / PO…" data-tx="' . ($id ? (int) $id : '') . '" data-selected="' . e($info ? json_encode($info, JSON_UNESCAPED_UNICODE) : 'null') . '">'
+            . '<input type="hidden" class="combo-value" name="line_ref[]" value="' . e($ref) . '"></div></div>';
     return '<div class="line-row">'
         . '<input class="input line-desc" name="line_desc[]"' . $idD . ' maxlength="500" value="' . e((string) ($r['description'] ?? '')) . '" placeholder="Uraian" aria-label="Uraian"' . ($first ? $auto : '') . '>'
+        . $refHtml
         . '<div class="line-pick line-pick-cat"><select class="input line-cat" name="line_cat[]" aria-label="Kategori" data-combo-create-event data-combo-placeholder="Ketik untuk mencari kategori…"><option value="">— belum dikategorikan —</option>' . $cats . '</select></div>'
         . '<div class="line-pick line-pick-proj"><select class="input line-proj" name="line_proj[]" aria-label="Proyek" data-combo-create-event data-combo-placeholder="Ketik untuk mencari proyek…"><option value="">— tanpa proyek —</option>' . $projs . '</select></div>'
         . '<input class="input num line-amt" name="line_amount[]"' . $idA . ' type="text" inputmode="decimal" value="' . e((string) ($r['amount'] ?? '')) . '" placeholder="Jumlah (Rp)" aria-label="Jumlah (Rp)" autocomplete="off"' . ($first ? $auto : '') . '>'
+        . '<input class="input line-note" name="line_note[]" maxlength="500" value="' . e((string) ($r['note'] ?? '')) . '" placeholder="Catatan" aria-label="Catatan">'
         . '<button type="button" class="btn btn-ghost btn-sm btn-icon line-del" data-line-del title="Hapus baris" aria-label="Hapus baris"><svg class="i i-sm" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>'
+        . '<div class="ref-hint line-hint" hidden aria-live="polite"></div>'
         . '</div>';
 };
 ?>
-<section class="card" style="max-width:860px">
+<section class="card form-wide">
   <?php if (!empty($errors['_'])): ?><div class="alert alert-danger mb-2" role="alert"><?= e($errors['_']) ?></div><?php endif; ?>
   <?php if (!empty($warn)): ?><div class="alert alert-warn mb-2"><?= e($warn) ?></div><?php endif; ?>
   <?php if ($errors && empty($errors['_'])): ?><div class="alert alert-danger mb-2" role="alert">Periksa kembali isian yang ditandai.</div><?php endif; ?>
@@ -93,32 +103,22 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
       <div class="field full">
         <label for="description">Uraian <span class="req">*</span></label>
         <div class="lines" id="lines" data-max="<?= (int) \App\Services\TransactionService::MAX_LINES ?>">
-          <div class="line-head" aria-hidden="true"><span>Uraian</span><span>Kategori</span><span>Proyek</span><span class="r">Jumlah (Rp)</span><span></span></div>
+          <div class="line-head" aria-hidden="true"><span>Uraian</span><span>No. Invoice / PO</span><span>Kategori</span><span>Proyek</span><span class="r">Jumlah (Rp)</span><span>Catatan</span><span></span></div>
           <div id="lineRows">
             <?php foreach ($lineRows as $i => $lr): ?><?= $renderLine($lr, $i === 0, $auto) ?><?php endforeach; ?>
           </div>
-          <template id="lineTpl"><?= $renderLine(['description' => '', 'category_id' => '', 'project_id' => '', 'amount' => ''], false, '') ?></template>
+          <template id="lineTpl"><?= $renderLine(['description' => '', 'category_id' => '', 'project_id' => '', 'amount' => '', 'source_ref' => '', 'note' => ''], false, '') ?></template>
         </div>
         <div><button type="button" class="btn btn-ghost btn-sm" id="lineAdd"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah uraian</button></div>
-        <span class="help">Setiap uraian punya kategori, proyek, dan jumlahnya sendiri (mis. tagihan dan potongan PPh). Jumlah boleh bernilai negatif untuk potongan: awali dengan tanda −. Total dijumlahkan otomatis; laporan per kategori dan per proyek dihitung dari tiap uraian.</span>
-        <?= $fe('items') ?><?= $fe('description') ?><?= $fe('category_id') ?><?= $fe('project_id') ?>
-      </div>
-      <div class="field">
-        <label for="ref_combo">No. invoice / PO</label>
-        <?php if (!empty($t['legacy_link'])): ?>
-          <input type="hidden" name="ref_no" value="<?= e($v('ref_no')) ?>">
-          <div class="ref-hint">Transaksi ini tercatat sebagai bukti penerimaan <a href="<?= e(url('/invoices/' . (int) $t['legacy_link'])) ?>">Piutang #<?= (int) $t['legacy_link'] ?></a> (data historis). Lepaskan tautannya di halaman Piutang bila perlu diubah.</div>
-        <?php else: ?>
-          <div id="ref_combo" data-combo-remote="/api/refs" data-dir-name="direction" data-tx="<?= $id ? (int) $id : '' ?>" data-selected="<?= e($refInfo ? json_encode($refInfo, JSON_UNESCAPED_UNICODE) : 'null') ?>">
-            <input type="hidden" class="combo-value" name="source_ref" value="<?= e($v('source_ref')) ?>">
-          </div>
-          <?php $legacyRef = trim((string) $v('ref_no')); if ($legacyRef !== '' && !$v('source_ref') && $id): ?>
-            <label class="check help"><input type="checkbox" name="ref_clear" value="1">Hapus teks lama “<?= e($legacyRef) ?>” (bukan referensi terhubung)</label>
-          <?php endif; ?>
-          <div id="refHint" class="ref-hint" hidden aria-live="polite"></div>
-          <?= $fe('source_ref') ?>
-          <?php if (!empty($errors['_dup'])): ?><label class="check"><input type="checkbox" name="confirm_dup" value="1">Ini pembayaran terpisah — tetap catat</label><?php endif; ?>
-          <span class="help">Pilihan mengikuti jenis transaksi: Mutasi Masuk → Piutang / Proyeksi penerimaan; Mutasi Keluar → Hutang / Proyeksi pengeluaran. Kosongkan bila tanpa referensi.</span>
+        <?php if ($legacyLink): ?>
+          <div class="ref-hint mt-1">Transaksi ini tercatat sebagai bukti penerimaan <a href="<?= e(url('/invoices/' . (int) $t['legacy_link'])) ?>">Piutang #<?= (int) $t['legacy_link'] ?></a> (data historis), sehingga kolom No. Invoice / PO tidak dapat diubah. Lepaskan tautannya di halaman Piutang bila perlu.</div>
+        <?php endif; ?>
+        <span class="help">Setiap uraian punya No. invoice / PO, kategori, proyek, jumlah, dan catatannya sendiri (mis. tagihan dan potongan PPh). Jumlah boleh bernilai negatif untuk potongan: awali dengan tanda −. Total dijumlahkan otomatis; laporan per kategori dan per proyek dihitung dari tiap uraian.</span>
+        <span class="help">No. invoice / PO: pilihan mengikuti jenis transaksi — Mutasi Masuk → Piutang / Proyeksi penerimaan; Mutasi Keluar → Hutang / Proyeksi pengeluaran. Kosongkan bila tanpa referensi. Belum ada di daftar? Ketik nomornya lalu pilih “Tambah”. Beberapa uraian boleh memilih invoice yang sama (jumlahnya dijumlahkan).</span>
+        <?= $fe('items') ?><?= $fe('description') ?><?= $fe('category_id') ?><?= $fe('project_id') ?><?= $fe('source_ref') ?>
+        <?php if (!empty($errors['_dup'])): ?><label class="check"><input type="checkbox" name="confirm_dup" value="1">Ini pembayaran terpisah — tetap catat</label><?php endif; ?>
+        <?php $legacyRef = trim((string) $v('ref_no')); if ($legacyRef !== '' && $id && !array_filter($lineRows, static fn($lr) => trim((string) ($lr['source_ref'] ?? '')) !== '')): ?>
+          <label class="check help"><input type="checkbox" name="ref_clear" value="1">Hapus teks No. referensi lama “<?= e($legacyRef) ?>” (bukan referensi terhubung)</label>
         <?php endif; ?>
       </div>
       <div class="field">
@@ -131,10 +131,6 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
         </select></div><?= $fe('counterparty_detail') ?>
         <span class="help">Rekening baru: ketik bank dan nomornya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=counterparties')) ?>">Master Data → Rekening Lawan</a>.</span>
       </div>
-      <div class="field full">
-        <label for="note">Catatan tambahan</label>
-        <textarea class="input" id="note" name="note" maxlength="5000" rows="3"><?= e($v('note')) ?></textarea>
-      </div>
     </div>
     <div class="mt-3" style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn" type="submit">Simpan</button>
@@ -142,6 +138,48 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
     </div>
   </form>
 </section>
+
+<?php /* dialog tambah cepat No. Invoice/PO (Hutang bila Mutasi Keluar, Piutang bila Mutasi Masuk) — dibuka dari pilihan “Tambah” di kolom No. Invoice / PO */ ?>
+<div class="modal-back" id="quickRef" aria-hidden="true">
+  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="qrTitle">
+    <div class="modal-head"><h3 id="qrTitle">Tambah invoice / PO baru</h3><button type="button" class="icon-btn" style="background:#eef1f8;color:#3b4566" data-close-modal aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="alert alert-info" id="qrKind" style="margin:0"></div>
+        <div class="field">
+          <label for="qrNo">No. invoice / PO <span class="req">*</span></label>
+          <input class="input" id="qrNo" maxlength="80" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="qrParty"><span id="qrPartyLbl">Supplier</span> <span class="req">*</span></label>
+          <select class="input" id="qrParty" data-combo-create-event data-combo-placeholder="Ketik untuk mencari…"
+            data-suppliers="<?= e(json_encode(array_column($suppliers, 'name'), JSON_UNESCAPED_UNICODE)) ?>" data-parties="<?= e(json_encode(array_values($partyNames), JSON_UNESCAPED_UNICODE)) ?>">
+            <option value="">— pilih —</option>
+          </select>
+          <span class="help">Otomatis mengikuti kolom Pihak di formulir. Tidak ada di daftar? Ketik namanya lalu pilih “Tambah”.</span>
+        </div>
+        <div class="field">
+          <label for="qrAmt">Nominal tagihan (Rp) <span class="req">*</span></label>
+          <input class="input num" id="qrAmt" inputmode="decimal" autocomplete="off" placeholder="Total tagihan">
+        </div>
+        <div class="field">
+          <label for="qrDue">Tgl. jatuh tempo <span class="req" id="qrDueReq" hidden>*</span></label>
+          <input class="input" type="date" id="qrDue">
+        </div>
+        <div class="field">
+          <label for="qrDesc">Keterangan</label>
+          <input class="input" id="qrDesc" maxlength="255" autocomplete="off">
+        </div>
+        <div class="err" id="qrErr" hidden role="alert"></div>
+        <span class="help">Tersimpan sebagai <b id="qrKindName">Hutang</b> baru dan langsung dipilih di baris uraian. Nomor + pihak yang sama tidak dibuat ganda — yang sudah ada langsung dipilih. Lengkapi datanya kemudian di menu <span id="qrMenu">Hutang</span>.</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" data-close-modal>Batal</button>
+      <button type="button" class="btn" id="qrSave">Simpan &amp; pilih</button>
+    </div>
+  </div>
+</div>
 
 <?php /* dialog tambah Bank/rekening pihak (master: Rekening Lawan) — dibuka dari pilihan “Tambah” di dropdown Bank/rekening */ ?>
 <div class="modal-back" id="quickBank" aria-hidden="true">

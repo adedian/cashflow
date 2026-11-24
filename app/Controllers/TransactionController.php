@@ -8,11 +8,15 @@ use App\Core\Db;
 use App\Core\Page;
 use App\Core\Response;
 use App\Models\Lookup;
+use App\Services\Audit;
+use App\Services\DebtService;
 use App\Services\Filters;
 use App\Services\LedgerService;
 use App\Services\LinkError;
 use App\Services\LinkService;
+use App\Services\PartyService;
 use App\Services\TxLinkService;
+use App\Services\Version;
 use App\Services\TransactionService;
 use RuntimeException;
 
@@ -72,16 +76,21 @@ final class TransactionController extends Controller
             $actions .= '<a class="btn btn-orange" href="' . e(url('/transactions/' . $t['id'] . '/edit')) . '"><svg class="i i-sm"><use href="#i-edit"/></svg>Ubah</a>';
         }
         Page::set(['title' => 'Detail transaksi', 'subtitle' => ($t['voucher_code'] ?: 'Tanpa kode bukti') . ' · ' . fmt_date($t['tx_date']), 'actions' => $actions]);
-        // keterhubungan: sumber yang dibayar/diterima/direalisasikan lewat transaksi ini (satu transaksi = satu sumber) + rujukan historis
-        $link = TxLinkService::linkOf((int) $t['id']);
-        $related = ['link' => null, 'legacy' => Db::all('SELECT id, kind, customer, invoice_no, paid, pay_ref FROM invoices WHERE pay_tx_id = ? ORDER BY id', [(int) $t['id']])];
-        if ($link && !$link['legacy']) {
-            $related['link'] = (TxLinkService::label($link['type'], $link['id'], (int) $t['id']) ?? []) + ['type' => $link['type'], 'sid' => $link['id'], 'link_amount' => $link['amount']];
+        // keterhubungan: sumber yang dibayar/diterima/direalisasikan lewat transaksi ini (satu sumber per baris uraian) + rujukan historis
+        $related = ['links' => [], 'legacy' => Db::all('SELECT id, kind, customer, invoice_no, paid, pay_ref FROM invoices WHERE pay_tx_id = ? ORDER BY id', [(int) $t['id']])];
+        foreach (TxLinkService::linksOf((int) $t['id']) as $link) {
+            if (!$link['legacy']) {
+                $related['links'][] = (TxLinkService::label($link['type'], $link['id'], (int) $t['id']) ?? []) + ['type' => $link['type'], 'sid' => $link['id'], 'link_amount' => $link['amount']];
+            }
         }
         $fcDecision = null;
-        if ($this->isAdmin() && $t['voided_at'] === null && $related['link'] && $related['link']['type'] === 'forecast') {
-            $fi = Db::one('SELECT * FROM forecast_items WHERE id = ?', [(int) $related['link']['sid']]);
-            $fcDecision = $fi ? ['it' => $fi, 'sum' => \App\Services\ForecastService::summary($fi), 'isAdmin' => true] : null;
+        if ($this->isAdmin() && $t['voided_at'] === null) {
+            foreach ($related['links'] as $rl) {
+                if ($rl['type'] === 'forecast' && ($fi = Db::one('SELECT * FROM forecast_items WHERE id = ?', [(int) $rl['sid']]))) {
+                    $fcDecision = ['it' => $fi, 'sum' => \App\Services\ForecastService::summary($fi), 'isAdmin' => true];
+                    break;
+                }
+            }
         }
         return $this->view('transactions/show', ['t' => $t, 'lines' => TransactionService::lines($t), 'itemRows' => TransactionService::itemRows((int) $t['id']), 'hist' => $hist, 'isAdmin' => $this->isAdmin(), 'related' => $related, 'fcDecision' => $fcDecision]);
     }
@@ -140,7 +149,7 @@ final class TransactionController extends Controller
             return $this->form($this->req->post, $err, null, 422);
         }
         try {
-            $id = TransactionService::create($d, (int) $this->user()['id'], (string) $this->req->str('idem_key'), $this->refInput(), $this->req->bool('confirm_dup'));
+            $id = TransactionService::create($d, (int) $this->user()['id'], (string) $this->req->str('idem_key'), null, $this->req->bool('confirm_dup'));
         } catch (LinkError $e) {
             return $this->form($this->req->post, ['source_ref' => $e->getMessage()] + ($e->duplicate ? ['_dup' => '1'] : []), null, 422);
         } catch (\Throwable $e) {
@@ -163,11 +172,17 @@ final class TransactionController extends Controller
         $t['direction'] = bccomp((string) $t['debit'], '0', 2) !== 0 ? 'in' : 'out';
         $t['amount'] = $t['direction'] === 'in' ? $t['debit'] : $t['credit'];
         $t['lines'] = TransactionService::lines($t);
-        $link = TxLinkService::linkOf((int) $id);
-        if ($link && !$link['legacy']) {
-            $t['source_ref'] = $link['type'] . ':' . $link['id'];
-        } elseif ($link) {
-            $t['legacy_link'] = (int) $link['id'];
+        if (trim((string) ($t['note'] ?? '')) !== '' && $t['lines'] && !array_filter($t['lines'], static fn($l) => ($l['note'] ?? null) !== null)) {
+            $t['lines'][0]['note'] = mb_substr(trim((string) $t['note']), 0, 500);   // catatan lama tingkat transaksi → catatan uraian pertama
+        }
+        $links = TxLinkService::linksOf((int) $id);
+        if ($links && $links[0]['legacy']) {
+            $t['legacy_link'] = (int) $links[0]['id'];
+        } elseif ($links && !array_filter($t['lines'], static fn($l) => ($l['source_ref'] ?? null) !== null)) {
+            // transaksi lama (satu sumber untuk seluruh transaksi): setiap barisnya mengikuti sumber itu
+            foreach ($t['lines'] as $k => $l) {
+                $t['lines'][$k]['source_ref'] = $links[0]['type'] . ':' . $links[0]['id'];
+            }
         }
         $warn = $both ? 'Baris ini punya nilai masuk DAN keluar sekaligus (dari Excel). Menyimpan akan memakai jenis dan nominal di bawah saja.' : null;
         return $this->form($t, [], (int) $id, 200, $warn);
@@ -181,7 +196,7 @@ final class TransactionController extends Controller
             return $this->form($this->req->post, $err, (int) $id, 422);
         }
         try {
-            TransactionService::update((int) $id, $d, (int) $this->user()['id'], $this->req->str('row_version') === '' ? null : $this->req->int('row_version'), $this->refInput(), $this->req->bool('confirm_dup'));
+            TransactionService::update((int) $id, $d, (int) $this->user()['id'], $this->req->str('row_version') === '' ? null : $this->req->int('row_version'), null, $this->req->bool('confirm_dup'));
         } catch (LinkError $e) {
             return $this->form($this->req->post, ['source_ref' => $e->getMessage()] + ($e->duplicate ? ['_dup' => '1'] : []), (int) $id, 422);
         } catch (RuntimeException $e) {
@@ -218,12 +233,6 @@ final class TransactionController extends Controller
         return $this->redirect('/transactions/' . (int) $id);
     }
 
-    /** Nilai kolom referensi dari formulir; null = formulir lama tanpa kolom itu (tautan tidak diubah). */
-    private function refInput(): ?string
-    {
-        return array_key_exists('source_ref', $this->req->post) ? trim((string) $this->req->post['source_ref']) : null;
-    }
-
     /** Daftar pilihan No. Invoice/PO menurut jenis transaksi (JSON; hanya Super Admin). */
     public function refs(): Response
     {
@@ -238,6 +247,94 @@ final class TransactionController extends Controller
         }
     }
 
+    /**
+     * Tambah cepat No. Invoice/PO dari sebuah baris uraian (JSON, hanya Super Admin): Mutasi Keluar → Hutang (jenis Usaha),
+     * Mutasi Masuk → Piutang Proyek. Isian: dir, ref_no, party (supplier/customer; dibuat di master bila belum ada), amount,
+     * due_date (wajib untuk Piutang), description. Dokumen yang sama (nomor + pihak) tidak dibuat ganda — yang sudah ada dikembalikan.
+     * Hasil: item pilihan yang sama bentuknya dengan daftar /api/refs, siap dipilih di kotak No. Invoice/PO.
+     */
+    public function createRef(): Response
+    {
+        $dir = $this->req->str('dir') === 'in' ? 'in' : 'out';
+        $no = mb_substr(trim((string) preg_replace('/\s+/', ' ', $this->req->str('ref_no'))), 0, 80);
+        $partyRaw = trim((string) preg_replace('/\s+/', ' ', $this->req->str('party')));
+        $party = PartyService::clean($partyRaw);
+        $desc = mb_substr(trim($this->req->str('description')), 0, 255);
+        $amount = parse_amount($this->req->str('amount'));
+        $dueRaw = $this->req->str('due_date');
+        $due = $dueRaw === '' ? null : Filters::date($dueRaw);
+        $who = $dir === 'out' ? 'Supplier' : 'Customer';
+        if ($no === '') {
+            return $this->fail('No. invoice / PO wajib diisi.');
+        }
+        if ($party === '' || mb_strlen($partyRaw) > ($dir === 'out' ? 160 : 255)) {
+            return $this->fail($who . ' wajib diisi (pilih dari daftar atau ketik nama baru).');
+        }
+        if ($amount === null || bccomp($amount, '0', 2) <= 0) {
+            return $this->fail('Nominal harus berupa angka lebih dari nol.');
+        }
+        if ($dueRaw !== '' && $due === null) {
+            return $this->fail('Tgl. jatuh tempo tidak valid.');
+        }
+        if ($dir === 'in' && $due === null) {
+            return $this->fail('Tgl. jatuh tempo wajib diisi untuk Piutang (agar masuk Proyeksi).');
+        }
+        try {
+            if ($dir === 'out') {
+                $ex = Db::val("SELECT id FROM debts WHERE voided_at IS NULL AND LOWER(TRIM(ref_no)) = LOWER(?) AND LOWER(TRIM(supplier)) = LOWER(?) ORDER BY id LIMIT 1", [$no, $party]);
+                if ($ex) {
+                    return $this->ok(['created' => false, 'item' => TxLinkService::label('debt', (int) $ex)]);
+                }
+                $sup = Db::one('SELECT id, name, is_active FROM suppliers WHERE LOWER(name) = LOWER(?)', [$party]);
+                if ($sup && !(int) $sup['is_active']) {
+                    return $this->fail('Supplier “' . $sup['name'] . '” sudah ada tetapi nonaktif. Aktifkan di Master Data → Supplier.');
+                }
+                $sid = $sup ? (int) $sup['id'] : 0;
+                if ($sid === 0) {
+                    $sid = (int) Db::tx(static function () use ($party) {
+                        $id = (int) Db::insert('suppliers', ['name' => $party]);
+                        Audit::log('supplier_create', 'supplier', (string) $id, "Tambah supplier $party (dari formulir Transaksi)", null, ['name' => $party]);
+                        Version::bump('master');
+                        return $id;
+                    });
+                }
+                [$d, $e] = DebtService::validate(['category' => 'usaha', 'supplier_id' => $sid, 'ref_no' => $no, 'description' => $desc,
+                    'amount' => $amount, 'due_date' => $due ?? '']);
+                if ($e) {
+                    return $this->fail((string) reset($e));
+                }
+                $d['paid'] = '0.00';
+                $res = DebtService::create($d, (int) $this->user()['id']);
+                LinkService::autoLink();
+                LinkService::ensureForecastForDebt((int) $res['id']);
+                return $this->ok(['created' => true, 'item' => TxLinkService::label('debt', (int) $res['id'])]);
+            }
+            $ex = Db::val("SELECT id FROM invoices WHERE kind = 'proyek' AND LOWER(TRIM(invoice_no)) = LOWER(?) AND LOWER(TRIM(customer)) = LOWER(?) ORDER BY id LIMIT 1", [$no, $party]);
+            if ($ex) {
+                return $this->ok(['created' => false, 'item' => TxLinkService::label('invoice', (int) $ex)]);
+            }
+            $cust = PartyService::canonical($party);
+            if ($cust === null) {
+                PartyService::ensure($party);   // customer baru masuk master (Master Data → Customer)
+                $cust = PartyService::canonical($party) ?? $party;
+            }
+            $newId = (int) Db::tx(function () use ($cust, $no, $desc, $due, $amount) {
+                $d = ['kind' => 'proyek', 'customer' => mb_substr($cust, 0, 160), 'invoice_no' => $no, 'description' => $desc !== '' ? $desc : null,
+                    'due_date' => $due, 'amount' => $amount, 'paid' => '0.00', 'paid_known' => 1];
+                $id = (int) Db::insert('invoices', $d + ['created_by' => $this->user()['id']]);
+                Audit::log('invoice_create', 'invoice', (string) $id, 'Tambah invoice ' . $no . ' ' . $cust . ' (dari formulir Transaksi)', null, $d);
+                Version::bump('invoices');
+                return $id;
+            });
+            LinkService::autoLink();
+            LinkService::ensureForecastForInvoice($newId);
+            return $this->ok(['created' => true, 'item' => TxLinkService::label('invoice', $newId)]);
+        } catch (\Throwable $e) {
+            app_log('createRef gagal: ' . $e->getMessage());
+            return $this->fail('Gagal menambahkan. Tidak ada data yang berubah.', 500);
+        }
+    }
+
     private function form(array $t, array $errors, ?int $id, int $status = 200, ?string $warn = null): Response
     {
         Page::set(['title' => $id ? 'Ubah transaksi' : 'Tambah transaksi', 'subtitle' => $id ? 'Perubahan dicatat di audit log' : 'Nominal disimpan sebagai DECIMAL; saldo dihitung otomatis', 'scripts' => ['transactions.js']]);
@@ -247,24 +344,39 @@ final class TransactionController extends Controller
             $amts = is_array($t['line_amount'] ?? null) ? array_values($t['line_amount']) : [];
             $cats = is_array($t['line_cat'] ?? null) ? array_values($t['line_cat']) : [];
             $projs = is_array($t['line_proj'] ?? null) ? array_values($t['line_proj']) : [];
+            $refs = is_array($t['line_ref'] ?? null) ? array_values($t['line_ref']) : null;
+            $notes = is_array($t['line_note'] ?? null) ? array_values($t['line_note']) : [];
             foreach (array_values($t['line_desc']) as $i => $ds) {
                 $rows[] = ['description' => is_scalar($ds) ? (string) $ds : '', 'amount' => is_scalar($amts[$i] ?? null) ? (string) $amts[$i] : '',
-                    'category_id' => is_scalar($cats[$i] ?? null) ? (string) $cats[$i] : '', 'project_id' => is_scalar($projs[$i] ?? null) ? (string) $projs[$i] : ''];
+                    'category_id' => is_scalar($cats[$i] ?? null) ? (string) $cats[$i] : '', 'project_id' => is_scalar($projs[$i] ?? null) ? (string) $projs[$i] : '',
+                    'source_ref' => $refs !== null ? (is_scalar($refs[$i] ?? null) ? trim((string) $refs[$i]) : '') : trim((string) ($t['source_ref'] ?? '')),
+                    'note' => is_scalar($notes[$i] ?? null) ? (string) $notes[$i] : ''];
             }
         } elseif (!empty($t['lines'])) {
             foreach ($t['lines'] as $l) {
-                $rows[] = ['description' => $l['description'], 'amount' => money($l['amount'], false), 'category_id' => $l['category_id'] ?? '', 'project_id' => $l['project_id'] ?? ''];
+                $rows[] = ['description' => $l['description'], 'amount' => money($l['amount'], false), 'category_id' => $l['category_id'] ?? '', 'project_id' => $l['project_id'] ?? '',
+                    'source_ref' => (string) ($l['source_ref'] ?? ''), 'note' => (string) ($l['note'] ?? '')];
             }
         } elseif (($t['description'] ?? '') !== '' || ($t['amount'] ?? '') !== '') {
             $rows[] = ['description' => (string) ($t['description'] ?? ''), 'amount' => (string) ($t['amount'] ?? ''),
-                'category_id' => $t['category_id'] ?? '', 'project_id' => $t['project_id'] ?? ''];
+                'category_id' => $t['category_id'] ?? '', 'project_id' => $t['project_id'] ?? '',
+                'source_ref' => trim((string) ($t['source_ref'] ?? '')), 'note' => ''];
+        }
+        // info tiap referensi terpilih (nilai awal kotak No. Invoice/PO di tiap baris)
+        $refInfos = [];
+        foreach ($rows as $r) {
+            $rf = (string) ($r['source_ref'] ?? '');
+            if ($rf !== '' && !isset($refInfos[$rf]) && ($p = TxLinkService::parseRef($rf))) {
+                $refInfos[$rf] = TxLinkService::label($p[0], $p[1], $id);
+            }
         }
         $resp = $this->view('transactions/form', [
             't' => $t, 'errors' => $errors, 'id' => $id, 'warn' => $warn, 'lineRows' => $rows,
             'accounts' => Lookup::accounts(), 'categories' => Lookup::categories(), 'projects' => Lookup::projects(),
             'counterpartyAccounts' => Lookup::counterpartyAccounts(),
             'parties' => \App\Services\PartyService::options((string) ($t['counterparty'] ?? '')),
-            'refInfo' => ($p = TxLinkService::parseRef((string) ($t['source_ref'] ?? ''))) ? TxLinkService::label($p[0], $p[1], $id) : null,
+            'refInfos' => $refInfos,
+            'suppliers' => Db::all('SELECT name FROM suppliers WHERE is_active = 1 ORDER BY name'),
             'idem' => bin2hex(random_bytes(16)),
         ]);
         $resp->status = $status;

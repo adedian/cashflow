@@ -12,7 +12,7 @@ $curCat = (string) $v('category', 'usaha');
 $isLoan = \App\Services\DebtService::isLoan($curCat);
 $swap = static fn(string $std, string $loan) => '<span data-std="' . e($std) . '" data-loan="' . e($loan) . '">' . e($isLoan ? $loan : $std) . '</span>';
 ?>
-<section class="card" style="max-width:820px">
+<section class="card form-wide">
   <?php if ($errors): ?><div class="alert alert-danger mb-2" role="alert">Periksa kembali isian yang ditandai.</div><?php endif; ?>
   <form method="post" action="<?= e($id ? url('/debts/' . $id) : url('/debts')) ?>" novalidate>
     <?= csrf_field() ?>

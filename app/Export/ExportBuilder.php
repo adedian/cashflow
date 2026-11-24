@@ -64,6 +64,14 @@ final class ExportBuilder
                 }
             }
             unset($l);
+            $noteParts = [];
+            if (trim((string) ($t['note'] ?? '')) !== '') {
+                $noteParts[] = trim((string) $t['note']);
+            }
+            $withNote = array_values(array_filter($lines, static fn($l) => trim((string) ($l['note'] ?? '')) !== ''));
+            foreach ($withNote as $l) {
+                $noteParts[] = (count($lines) > 1 ? mb_substr(trim((string) $l['description']), 0, 40) . ': ' : '') . trim((string) $l['note']);
+            }
             $net = bcsub((string) $t['debit'], (string) $t['credit'], 2);
             $total = '0.00';
             foreach ($lines as $l) {
@@ -77,7 +85,7 @@ final class ExportBuilder
                 'by' => (string) ($t['created_name'] ?? ''),   // "Dibuat oleh" = pembuat transaksi (seperti Sistem Stok), bukan pencetak
                 'lines' => $lines,
                 'total' => $total,
-                'note' => trim((string) ($t['note'] ?? '')),   // Catatan transaksi -> kotak CATATAN pada bukti (hanya bila ada)
+                'note' => implode("\n", $noteParts),   // catatan transaksi (lama) + catatan tiap uraian -> kotak CATATAN pada bukti (hanya bila ada)
             ];
         }
         $d = new Document(self::DOCS['bukti'], 'cashflow-bukti-bank', setting('company_name', 'PT Hexa Multi Energi'), (string) ($user['full_name'] ?? ''));

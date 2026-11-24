@@ -4,7 +4,9 @@
  *  - <select data-combo-create="/api/..."> : bila ketikan tidak ada di daftar, muncul pilihan "Tambah ..." (membuat entri master lewat API).
  *  - <select data-combo-create-event> : sama, tetapi memicu event 'combo:create' {detail:{name}} pada select; halaman yang menyimpannya.
  *  - <div data-combo-remote="url"> : daftar dimuat dari server (No. Invoice/PO), mengikuti jenis transaksi. Berisi <input type="hidden" class="combo-value">.
- *    Memicu event 'combo:pick' (detail = item | null); API: el.comboApi.clear(), .reload(), .value().
+ *    Memicu event 'combo:pick' (detail = item | null); API: el.comboApi.clear(), .reload(), .value(), .set(item).
+ *    Dengan atribut data-combo-create-event: ketikan yang tidak cocok menampilkan "+ Tambah “…” sebagai baru" → event 'combo:create'
+ *    {detail:{name}} pada div itu; halaman yang menyimpan lalu memanggil el.comboApi.set(item).
  * Daftar memakai posisi 'fixed' agar tidak terpotong tabel/modal, dan otomatis naik ke atas bila ruang bawah sempit.
  */
 (function () {
@@ -207,6 +209,9 @@
 
   /* ---------- daftar dari server (No. Invoice/PO) ---------- */
   function enhanceRemote(root) {
+    if (root.__combo) return;
+    root.__combo = true;
+    var createEvt = root.hasAttribute('data-combo-create-event');
     var hidden = root.querySelector('.combo-value');
     var url = root.getAttribute('data-combo-remote');
     var dirName = root.getAttribute('data-dir-name') || 'direction';
@@ -234,7 +239,22 @@
       none.appendChild(el('div', 'combo-t', '— tanpa referensi —'));
       none.addEventListener('mousedown', function () { pick(null); pop.close(); });
       if (!q) ui.list.appendChild(none);
-      if (!items.length) { ui.list.appendChild(el('li', 'combo-empty', q ? 'Tidak ada referensi yang cocok dengan “' + q + '”.' : (dir() === 'in' ? 'Belum ada Piutang atau item Proyeksi penerimaan yang masih memiliki sisa.' : 'Belum ada Hutang atau item Proyeksi pengeluaran yang masih memiliki sisa.'))); place(ui); return; }
+      var addNew = function () {
+        // ketikan yang belum ada: tawarkan membuat Hutang/Piutang baru (ditangani halaman lewat event 'combo:create')
+        var raw = ui.input.value.trim();
+        if (!createEvt || !q || !raw) return;
+        var lq = raw.toLowerCase();
+        if (items.some(function (it) { return String(it.ref_no || '').toLowerCase() === lq || String(it.title || '').toLowerCase() === lq; })) return;
+        var add = el('li', 'combo-opt combo-add');
+        add.setAttribute('role', 'option');
+        add.appendChild(el('div', 'combo-t', '+ Tambah “' + raw + '” sebagai baru'));
+        add.addEventListener('mousedown', function () {
+          pop.close(); sync();
+          root.dispatchEvent(new CustomEvent('combo:create', { bubbles: true, detail: { name: raw } }));
+        });
+        ui.list.appendChild(add);
+      };
+      if (!items.length) { ui.list.appendChild(el('li', 'combo-empty', q ? 'Tidak ada referensi yang cocok dengan “' + q + '”.' : (dir() === 'in' ? 'Belum ada Piutang atau item Proyeksi penerimaan yang masih memiliki sisa.' : 'Belum ada Hutang atau item Proyeksi pengeluaran yang masih memiliki sisa.'))); addNew(); place(ui); return; }
       var group = null;
       items.forEach(function (it) {
         if (it.group !== group) { group = it.group; var g = el('li', 'combo-group', group); g.setAttribute('role', 'presentation'); ui.list.appendChild(g); }
@@ -253,6 +273,7 @@
         li.addEventListener('mousedown', function () { pick(it); pop.close(); });
         ui.list.appendChild(li);
       });
+      addNew();
       place(ui);
     }
     function load(q) {
@@ -274,7 +295,8 @@
     root.comboApi = {
       clear: function () { var had = !!hidden.value; current = null; hidden.value = ''; sync(); if (had) root.dispatchEvent(new CustomEvent('combo:pick', { bubbles: true, detail: null })); },
       reload: function () { if (!ui.list.hidden) load(''); },
-      value: function () { return hidden.value; }
+      value: function () { return hidden.value; },
+      set: function (item) { pick(item || null); }
     };
     sync();
   }
@@ -284,5 +306,8 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-combo-remote]'), enhanceRemote);
   });
   // halaman yang menyisipkan <select> belakangan (mis. hasil muat ulang parsial) dapat memanggil HMECombo.scan()
-  window.HMECombo = { scan: function (root) { Array.prototype.forEach.call((root || document).querySelectorAll('select'), enhanceSelect); } };
+  window.HMECombo = { scan: function (root) {
+    Array.prototype.forEach.call((root || document).querySelectorAll('select'), enhanceSelect);
+    Array.prototype.forEach.call((root || document).querySelectorAll('[data-combo-remote]'), enhanceRemote);
+  } };
 })();

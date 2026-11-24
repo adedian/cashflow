@@ -29,7 +29,7 @@ ob_start(); ?>
         <span class="help">Tidak ada di daftar? Ketik namanya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=parties')) ?>">Master Data → Customer</a>.</span></div>
 <?php $customerField = ob_get_clean();
 ?>
-<section class="card" style="max-width:<?= $lampu ? '980px' : '820px' ?>">
+<section class="card form-wide">
   <?php if ($errors): ?><div class="alert alert-danger mb-2" role="alert">Periksa kembali isian yang ditandai.</div><?php endif; ?>
   <form method="post" action="<?= e($id ? url('/invoices/' . $id) : url('/invoices')) ?>" novalidate<?= $lampu ? ' id="lampuForm"' : '' ?>>
     <?= csrf_field() ?>

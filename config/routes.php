@@ -27,6 +27,7 @@ return [
     ['GET',  '/transactions/new',          'TransactionController@create',  'admin'],
     ['POST', '/transactions',              'TransactionController@store',   'admin'],
     ['GET',  '/api/refs',                  'TransactionController@refs',    'admin'],
+    ['POST', '/api/refs',                  'TransactionController@createRef', 'admin'],
     ['GET',  '/transactions/{id}',         'TransactionController@show',    'any'],
     ['GET',  '/transactions/{id}/edit',    'TransactionController@edit',    'admin'],
     ['POST', '/transactions/{id}',         'TransactionController@update',  'admin'],
