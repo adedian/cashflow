@@ -69,14 +69,16 @@ final class ExportBuilder
             if (!$refList && trim((string) ($t['ref_no'] ?? '')) !== '') {
                 $refList[] = trim((string) $t['ref_no']);
             }
-            // kotak CATATAN: catatan tingkat transaksi (data lama) + kolom Catatan tiap baris (diawali potongan keterangannya bila baris > 1)
+            // kotak CATATAN: HANYA isi kolom Catatan (catatan tingkat transaksi data lama + kolom Catatan tiap baris); uraian/keterangan tidak ikut
             $noteParts = [];
             if (trim((string) ($t['note'] ?? '')) !== '') {
                 $noteParts[] = trim((string) $t['note']);
             }
-            $withNote = array_values(array_filter($lines, static fn($l) => trim((string) ($l['note'] ?? '')) !== ''));
-            foreach ($withNote as $l) {
-                $noteParts[] = (count($lines) > 1 ? mb_substr(trim((string) $l['description']), 0, 40) . ': ' : '') . trim((string) $l['note']);
+            foreach ($lines as $l) {
+                $ln = trim((string) ($l['note'] ?? ''));
+                if ($ln !== '' && !in_array($ln, $noteParts, true)) {
+                    $noteParts[] = $ln;
+                }
             }
             $net = bcsub((string) $t['debit'], (string) $t['credit'], 2);
             $total = '0.00';
