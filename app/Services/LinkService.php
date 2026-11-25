@@ -173,6 +173,9 @@ final class LinkService
             if (!$i) {
                 throw new RuntimeException('Piutang tidak ditemukan.');
             }
+            if (($i['issue_status'] ?? 'terbit') !== 'terbit') {
+                throw new RuntimeException('Invoice ini belum diterbitkan sehingga tidak dapat ditautkan ke Proyeksi. Terbitkan invoice lebih dulu.');
+            }
             if ($i['forecast_item_id']) {
                 throw new RuntimeException('Piutang ini sudah tertaut ke item Proyeksi. Lepas tautan lebih dulu.');
             }
@@ -300,7 +303,7 @@ final class LinkService
             }
         }
         $fIn = $free('in');
-        foreach (Db::all("SELECT * FROM invoices WHERE forecast_item_id IS NULL AND paid_known = 1 AND invoice_no IS NOT NULL AND CHAR_LENGTH(invoice_no) >= 4 AND amount - paid > 0.004 ORDER BY id") as $i) {
+        foreach (Db::all("SELECT * FROM invoices WHERE issue_status = 'terbit' AND forecast_item_id IS NULL AND paid_known = 1 AND invoice_no IS NOT NULL AND CHAR_LENGTH(invoice_no) >= 4 AND amount - paid > 0.004 ORDER BY id") as $i) {
             $no = mb_strtolower(trim((string) $i['invoice_no']));
             $tok = mb_strtolower(explode('/', $no)[0]);   // nomor urut tanpa bulan/tahun romawi (Excel kadang tak konsisten: VII vs VIII)
             $c = array_values(array_filter($fIn, static function ($f) use ($no, $tok, $claimed) {
@@ -367,7 +370,7 @@ final class LinkService
         try {
             return Db::tx(static function () use ($invoiceId) {
                 $i = Db::one('SELECT * FROM invoices WHERE id = ? FOR UPDATE', [$invoiceId]);
-                if (!$i || $i['forecast_item_id'] || !$i['due_date'] || (int) $i['paid_known'] !== 1) {
+                if (!$i || $i['forecast_item_id'] || !$i['due_date'] || (int) $i['paid_known'] !== 1 || ($i['issue_status'] ?? 'terbit') !== 'terbit') {   // invoice belum terbit tidak dibuatkan item Proyeksi
                     return null;
                 }
                 $rem = bcsub((string) $i['amount'], (string) $i['paid'], 2);
@@ -420,7 +423,7 @@ final class LinkService
         }
         $out = [];
         $used = [];
-        foreach (Db::all("SELECT * FROM invoices WHERE pay_ref IS NOT NULL AND pay_ref <> '' AND pay_tx_id IS NULL AND paid_known = 1 AND paid > 0 ORDER BY id") as $i) {
+        foreach (Db::all("SELECT * FROM invoices WHERE issue_status = 'terbit' AND pay_ref IS NOT NULL AND pay_ref <> '' AND pay_tx_id IS NULL AND paid_known = 1 AND paid > 0 ORDER BY id") as $i) {
             $best = null;
             $bestDiff = null;
             foreach ($byCode[$norm((string) $i['pay_ref'])] ?? [] as $t) {

@@ -2,6 +2,8 @@
 $v = static fn(string $k, $d = '') => $t[$k] ?? $d;
 $fe = static fn(string $k) => isset($errors[$k]) ? '<div class="err">' . e($errors[$k]) . '</div>' : '';
 $lampu = $kind === 'lampu';
+$issue = !$lampu ? (string) $v('issue_status', 'terbit') : 'terbit';   // terbit | belum_terbit (jenis dipilih saat tambah; berikutnya lewat "Terbitkan Invoice")
+$ub = $issue === 'belum_terbit';
 $num = static fn($x): string => $x === '' || $x === null ? '' : (preg_match('/^\d+(\.\d+)?$/', (string) $x) ? money((string) $x, false) : (string) $x);
 // Customer dari master Customer (dropdown + "Tambah"); nama lama yang belum di master tetap tampil terpilih
 // Nama barang dari master Barang (dropdown + "Tambah"); nama lama yang belum di master tetap tampil terpilih. Satuan & harga tampil sebagai keterangan; harga mengisi kolom harga satuan bila masih kosong.
@@ -96,6 +98,16 @@ ob_start(); ?>
     </tr></template>
     <?php else: ?>
     <div class="form-grid">
+      <?php if (!$id): ?>
+      <div class="field full"><label>Jenis <span class="req">*</span></label>
+        <div class="issue-type" style="display:flex;gap:22px;flex-wrap:wrap;padding:4px 0">
+          <label class="check"><input type="radio" name="issue_status" value="terbit" <?= $ub ? '' : 'checked' ?> data-issue-radio>Invoice</label>
+          <label class="check"><input type="radio" name="issue_status" value="belum_terbit" <?= $ub ? 'checked' : '' ?> data-issue-radio>Invoice Belum Terbit</label>
+        </div>
+        <span class="help" id="issueHelp"><?= $ub ? 'Belum diterbitkan: tanggal jatuh tempo tidak wajib, status otomatis “Belum Terbit”, tidak membuat pengingat atau item Proyeksi, dan tidak dihitung sebagai piutang. Terbitkan nanti dari daftar “Invoice Belum Terbit”.' : 'Invoice resmi: tanggal jatuh tempo wajib; masuk daftar piutang dan Proyeksi.' ?></span></div>
+      <?php elseif ($ub): ?>
+      <div class="field full"><div class="alert alert-info mb-0">Jenis: <b>Invoice Belum Terbit</b> — tanpa jatuh tempo dan belum dihitung sebagai piutang. Untuk menerbitkannya gunakan tombol <b>Terbitkan Invoice</b> di halaman detail.</div></div>
+      <?php endif; ?>
       <?= $customerField ?>
       <?php $curProj = trim((string) $v('project_name')); ?>
       <div class="field"><label for="project_name">Proyek</label>
@@ -108,11 +120,11 @@ ob_start(); ?>
       <div class="field"><label for="invoice_no">No. invoice</label><input class="input" id="invoice_no" name="invoice_no" maxlength="80" value="<?= e($v('invoice_no')) ?>"></div>
       <div class="field full"><label for="description">Keterangan</label><input class="input" id="description" name="description" maxlength="255" value="<?= e($v('description')) ?>"></div>
       <div class="field"><label for="invoice_date">Tanggal invoice</label><input class="input" type="date" id="invoice_date" name="invoice_date" value="<?= e($v('invoice_date')) ?>"><?= $fe('invoice_date') ?></div>
-      <div class="field"><label for="due_date">Tgl. jatuh tempo<?= $id && !$v('due_date') ? '' : ' <span class="req">*</span>' ?></label><input class="input" type="date" id="due_date" name="due_date" value="<?= e($v('due_date')) ?>"<?= $id && !$v('due_date') ? '' : ' required' ?>><?= $fe('due_date') ?>
+      <div class="field" id="dueField"<?= $ub ? ' hidden' : '' ?>><label for="due_date">Tgl. jatuh tempo<?= $id && !$v('due_date') ? '' : ' <span class="req">*</span>' ?></label><input class="input" type="date" id="due_date" name="due_date" value="<?= e($v('due_date')) ?>"<?= $id && !$v('due_date') ? '' : ' required' ?><?= $ub ? ' disabled' : '' ?>><?= $fe('due_date') ?>
         <span class="help">Piutang yang belum lunas otomatis muncul di Proyeksi (penerimaan) pada tanggal ini.</span></div>
       <div class="field"><label for="amount">Nominal tagihan (Rp) <span class="req">*</span></label><input class="input num" id="amount" name="amount" inputmode="decimal" value="<?= e($v('amount')) ?>" required><?= $fe('amount') ?></div>
-      <div class="field"><label for="paid">Sudah dibayar (Rp) <span class="help">— total, termasuk penerimaan lewat Transaksi</span></label><input class="input num" id="paid" name="paid" inputmode="decimal" value="<?= e($v('paid')) ?>"><?= $fe('paid') ?></div>
-      <div class="field full"><label class="check"><input type="checkbox" name="paid_known" value="1" <?= !empty($t['paid_known']) ? 'checked' : '' ?>>Pembayaran sudah dipastikan</label>
+      <div class="field" id="paidField"<?= $ub ? ' hidden' : '' ?>><label for="paid">Sudah dibayar (Rp) <span class="help">— total, termasuk penerimaan lewat Transaksi</span></label><input class="input num" id="paid" name="paid" inputmode="decimal" value="<?= e($v('paid')) ?>"<?= $ub ? ' disabled' : '' ?>><?= $fe('paid') ?></div>
+      <div class="field full" id="knownField"<?= $ub ? ' hidden' : '' ?>><label class="check"><input type="checkbox" name="paid_known" value="1" <?= !empty($t['paid_known']) ? 'checked' : '' ?><?= $ub ? ' disabled' : '' ?>>Pembayaran sudah dipastikan</label>
         <span class="help">Hilangkan centang bila nominal pembayaran belum pasti (status “Perlu konfirmasi”: tidak dihitung lunas maupun belum dibayar).</span></div>
       <div class="field full"><label for="note">Catatan</label><input class="input" id="note" name="note" maxlength="255" value="<?= e($v('note')) ?>"></div>
     </div>

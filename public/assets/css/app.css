@@ -1046,3 +1046,6 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
   #txResults { overflow: clip; }   /* menggantikan overflow:hidden (card-flush) yang membuat sticky tidak menempel ke layar; sudut tetap membulat */
   #txResults > .tx-pin-head { position: sticky; top: var(--tx-pin-top, 0px); z-index: 6; background: var(--card, #fff); margin-bottom: 0; padding-bottom: 10px; }
 }
+
+/* Invoice Belum Terbit: isian jatuh tempo/pembayaran disembunyikan di form Tambah Invoice (atribut hidden harus menang atas .field) */
+.field[hidden] { display: none !important; }

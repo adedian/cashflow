@@ -1,6 +1,7 @@
-<?php /** @var array $rows @var array $tot @var string $kind @var bool $isAdmin @var string $today @var int $page @var int $pages @var int $total @var array $links @var string $q @var string $status */
+<?php /** @var array $rows @var array $tot @var string $kind @var bool $isAdmin @var string $today @var int $page @var int $pages @var int $total @var array $links @var string $q @var string $status @var ?array $ub */
 $lampu = $kind === 'lampu';
 $pageLink = static fn(int $p) => url('/invoices') . '?' . qs_merge(['kind' => $kind, 'q' => $q, 'status' => $status, 'page' => $p > 1 ? $p : null]);
+$ub = $ub ?? null;
 $stPill = static function (array $r) use ($today): string {
     if ((int) $r['paid_known'] === 0) {
         return '<span class="pill pill-yellow" title="Pembayaran di Excel tidak terbaca (#REF!). Buka detail lalu isi pembayaran yang benar.">Perlu konfirmasi</span>';
@@ -16,6 +17,9 @@ $stPill = static function (array $r) use ($today): string {
 };
 ?>
 <div class="grid g-4 mb-2">
+  <?php if ($ub !== null): ?>
+  <div class="card stat" id="ubCard"><div class="k">Invoice Belum Terbit</div><div class="v num"><?= e(money($ub['total'])) ?></div><div class="d"><?= number_format($ub['n'], 0, ',', '.') ?> invoice belum diterbitkan · <a href="<?= e(url('/invoices?kind=proyek&issue=belum_terbit')) ?>">lihat daftar</a></div></div>
+  <?php endif; ?>
   <div class="card stat"><div class="k"><?= $lampu ? 'Total piutang' : 'Total tagihan' ?></div><div class="v num"><?= e(money($tot['a'])) ?></div><div class="d"><?= number_format($total, 0, ',', '.') ?> data pada filter ini</div></div>
   <div class="card stat"><div class="k">Sudah dibayar</div><div class="v num pos"><?= e(money($tot['p'])) ?></div></div>
   <div class="card stat"><div class="k">Sisa (pasti belum dibayar)</div><div class="v num neg"><?= e(money($tot['o'])) ?></div><div class="d"><?= (int) $tot['late_n'] ?> lewat jatuh tempo (<?= e(money($tot['late_a'])) ?>)</div></div>

@@ -48,6 +48,8 @@ return [
     ['POST', '/invoices/{id}/unlink',    'InvoiceController@unlinkForecast', 'admin'],
     ['POST', '/invoices',                'InvoiceController@store',  'admin'],
     ['GET',  '/invoices/{id}/edit',      'InvoiceController@edit',   'admin'],
+    ['GET',  '/invoices/{id}/issue',     'InvoiceController@issueForm', 'admin'],
+    ['POST', '/invoices/{id}/issue',     'InvoiceController@issue',  'admin'],
     ['POST', '/invoices/{id}',           'InvoiceController@update', 'admin'],
     ['POST', '/invoices/{id}/delete',    'InvoiceController@delete', 'admin'],
 

@@ -11,6 +11,7 @@ use App\Core\Response;
 use App\Models\Lookup;
 use App\Services\Audit;
 use App\Services\Filters;
+use App\Services\InvoiceIssueService;
 use App\Services\LinkService;
 use App\Services\PartyService;
 use App\Services\ReminderService;
@@ -46,10 +47,10 @@ final class InvoiceController extends Controller
     }
 
     /** @return array{0:string,1:array} [where, params] */
-    private function where(string $kind, string $q, string $status, string $today): array
+    private function where(string $kind, string $q, string $status, string $today, bool $unissued = false): array
     {
-        $w = ['kind = ?'];
-        $p = [$kind];
+        $w = ['kind = ?', 'issue_status = ?'];   // daftar piutang normal hanya memuat invoice terbit; invoice belum terbit punya tab sendiri
+        $p = [$kind, $unissued ? InvoiceIssueService::BELUM : InvoiceIssueService::TERBIT];
         if ($q !== '') {
             $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';
             $w[] = '(customer LIKE ? OR project_name LIKE ? OR invoice_no LIKE ? OR description LIKE ? OR note LIKE ? OR pay_ref LIKE ? OR items LIKE ?)';
@@ -67,10 +68,11 @@ final class InvoiceController extends Controller
     public function index(): Response
     {
         $kind = $this->kind();
+        $unissued = $kind === 'proyek' && $this->req->str('issue') === InvoiceIssueService::BELUM;   // tab "Invoice Belum Terbit"
         $q = mb_substr($this->req->str('q'), 0, 100);
-        $status = in_array($this->req->str('status'), ['open', 'paid', 'unknown', 'late'], true) ? $this->req->str('status') : '';
+        $status = !$unissued && in_array($this->req->str('status'), ['open', 'paid', 'unknown', 'late'], true) ? $this->req->str('status') : '';
         $today = ReminderService::today();
-        [$where, $p] = $this->where($kind, $q, $status, $today);
+        [$where, $p] = $this->where($kind, $q, $status, $today, $unissued);
         $total = (int) Db::val('SELECT COUNT(*) FROM invoices' . $where, $p);
         $pages = max(1, (int) ceil($total / self::PER_PAGE));
         $page = min(max(1, $this->req->int('page', 1)), $pages);
@@ -88,19 +90,61 @@ final class InvoiceController extends Controller
         $fids = array_filter(array_map(static fn($r) => $r['forecast_item_id'], $rows));
         $proofs = TxLinkService::bankProofs($rows);
         $data = ['proofs' => $proofs, 'rows' => $rows, 'tot' => $tot, 'q' => $q, 'status' => $status, 'kind' => $kind, 'isAdmin' => $this->isAdmin(), 'today' => $today,
-            'page' => $page, 'pages' => $pages, 'total' => $total, 'links' => LinkService::info($fids)];
+            'page' => $page, 'pages' => $pages, 'total' => $total, 'links' => LinkService::info($fids),
+            'unissued' => $unissued, 'ub' => $kind === 'proyek' ? InvoiceIssueService::summary() : null, 'issue' => $unissued ? InvoiceIssueService::BELUM : ''];
         if ($this->req->str('partial') === '1') {
             $this->releaseSession();
-            return Response::html(\App\Core\View::partial('invoices/_list', $data));
+            return Response::html(\App\Core\View::partial($unissued ? 'invoices/_unissued' : 'invoices/_list', $data));
         }
-        $actions = export_button('piutang', ['kind' => $kind, 'q' => $q, 'status' => $status], 'btn btn-light')
-            . ($this->isAdmin() ? '<a class="btn btn-orange" href="' . e(url('/invoices/new?kind=' . $kind)) . '"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah ' . ($kind === 'lampu' ? 'piutang lampu' : 'invoice') . '</a>' : '');
+        $actions = ($unissued ? '' : export_button('piutang', ['kind' => $kind, 'q' => $q, 'status' => $status], 'btn btn-light'))
+            . ($this->isAdmin() ? '<a class="btn btn-orange" href="' . e(url('/invoices/new?kind=' . $kind . ($unissued ? '&issue=' . InvoiceIssueService::BELUM : ''))) . '"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah ' . ($kind === 'lampu' ? 'piutang lampu' : 'invoice') . '</a>' : '');
         $tabs = [];
         foreach (self::KINDS as $k => $label) {
-            $tabs[] = ['href' => url('/invoices?kind=' . $k), 'label' => $label, 'active' => $k === $kind];
+            $tabs[] = ['href' => url('/invoices?kind=' . $k), 'label' => $label, 'active' => $k === $kind && !$unissued];
         }
-        Page::set(['title' => 'Piutang', 'subtitle' => $kind === 'lampu' ? 'Rekap piutang penjualan lampu (tidak memengaruhi saldo kas)' : 'Register invoice & pembayaran proyek (tidak memengaruhi saldo kas)', 'actions' => $actions, 'tabs' => $tabs, 'scripts' => ['invoices.js']]);
+        $tabs[] = ['href' => url('/invoices?kind=proyek&issue=' . InvoiceIssueService::BELUM), 'label' => 'Invoice Belum Terbit', 'active' => $unissued];
+        Page::set(['title' => 'Piutang', 'subtitle' => $unissued ? 'Invoice yang belum diterbitkan: belum menjadi piutang, tanpa jatuh tempo dan tanpa pengingat' : ($kind === 'lampu' ? 'Rekap piutang penjualan lampu (tidak memengaruhi saldo kas)' : 'Register invoice & pembayaran proyek (tidak memengaruhi saldo kas)'), 'actions' => $actions, 'tabs' => $tabs, 'scripts' => ['invoices.js']]);
         return $this->view('invoices/index', $data);
+    }
+
+    /** Formulir "Terbitkan Invoice": lengkapi No. invoice, tanggal, dan jatuh tempo. */
+    public function issueForm(string $id): Response
+    {
+        $this->requireAdmin();
+        $r = $this->find((int) $id);
+        if ($r['kind'] !== 'proyek' || $r['issue_status'] !== InvoiceIssueService::BELUM) {
+            $this->flash('warn', 'Invoice ini sudah diterbitkan.');
+            return $this->redirect('/invoices/' . (int) $id);
+        }
+        return $this->issueView($r + ['invoice_date' => $r['invoice_date'] ?: date('Y-m-d')], []);
+    }
+
+    private function issueView(array $t, array $errors, int $status = 200): Response
+    {
+        Page::set(['title' => 'Terbitkan invoice', 'subtitle' => $t['customer'], 'tabs' => [['href' => url('/invoices?kind=proyek&issue=' . InvoiceIssueService::BELUM), 'label' => '‹ Invoice Belum Terbit', 'active' => false]]]);
+        $r = $this->view('invoices/issue', ['t' => $t, 'errors' => $errors]);
+        $r->status = $status;
+        return $r;
+    }
+
+    public function issue(string $id): Response
+    {
+        $this->requireAdmin();
+        $r = $this->find((int) $id);
+        [$d, $e] = InvoiceIssueService::validateIssue($this->req->post);
+        if ($e) {
+            return $this->issueView($this->req->post + $r, $e, 422);
+        }
+        try {
+            InvoiceIssueService::issue((int) $id, $d, (int) $this->user()['id']);
+        } catch (\RuntimeException $ex) {
+            $this->flash('warn', $ex->getMessage());
+            return $this->redirect('/invoices/' . (int) $id);
+        }
+        LinkService::autoLink();
+        LinkService::ensureForecastForInvoice((int) $id);   // kini invoice resmi: masuk Proyeksi (penerimaan) pada tanggal jatuh tempo
+        $this->flash('success', 'Invoice diterbitkan. Data berpindah ke daftar Piutang Proyek dan masuk Proyeksi.');
+        return $this->redirect('/invoices/' . (int) $id);
     }
 
     public function show(string $id): Response
@@ -131,7 +175,7 @@ final class InvoiceController extends Controller
         $lampu = $kind === 'lampu';
         Page::set(['title' => $id ? 'Ubah piutang' : 'Tambah ' . ($lampu ? 'piutang lampu' : 'invoice'),
             'subtitle' => $lampu ? 'Total piutang = Σ Qty × Harga satuan; Tgl. jatuh tempo = Tgl. nota + jumlah hari' : 'Sisa dihitung otomatis: nominal − dibayar',
-            'scripts' => $lampu ? ['invoice-form.js'] : []]);
+            'scripts' => $lampu ? ['invoice-form.js'] : ['invoices.js']]);
         $r = $this->view('invoices/form', ['t' => $t, 'errors' => $errors, 'id' => $id, 'kind' => $kind,
             'parties' => PartyService::options((string) ($t['customer'] ?? '')),
             'projects' => array_column(Lookup::projects(), 'name'),
@@ -193,7 +237,7 @@ final class InvoiceController extends Controller
     {
         $this->requireAdmin();
         $kind = $this->kind();
-        $t = ['invoice_date' => date('Y-m-d'), 'paid_known' => 1];
+        $t = ['invoice_date' => date('Y-m-d'), 'paid_known' => 1, 'issue_status' => $kind === 'proyek' && $this->req->str('issue') === InvoiceIssueService::BELUM ? InvoiceIssueService::BELUM : InvoiceIssueService::TERBIT];
         if ($kind === 'lampu') {
             $t += ['invoice_no' => self::nextSj(), 'due_days' => 30];
         }
@@ -230,8 +274,17 @@ final class InvoiceController extends Controller
             $d[$k] = $raw === '' ? null : Filters::date($raw);
             if ($raw !== '' && $d[$k] === null) { $e[$k] = $label . ' tidak valid.'; }
         }
-        // Piutang Proyek: jatuh tempo wajib untuk data baru (agar masuk Proyeksi); data lama tanpa jatuh tempo boleh tetap kosong
-        if ($kind === 'proyek' && $d['due_date'] === null && !isset($e['due_date']) && ($existing === null || $existing['due_date'] !== null)) {
+        // Jenis: Invoice (terbit) | Invoice Belum Terbit. Hanya Piutang Proyek; dipilih saat tambah, sesudahnya hanya berubah lewat "Terbitkan Invoice".
+        $issue = InvoiceIssueService::TERBIT;
+        if ($kind === 'proyek') {
+            $issue = $existing !== null ? (string) $existing['issue_status'] : (($in['issue_status'] ?? '') === InvoiceIssueService::BELUM ? InvoiceIssueService::BELUM : InvoiceIssueService::TERBIT);
+        }
+        $d['issue_status'] = $issue;
+        if ($issue === InvoiceIssueService::BELUM) {
+            $d['due_date'] = null;   // belum terbit: tanpa jatuh tempo (tidak ada kewajiban bayar / pengingat)
+            unset($e['due_date']);
+        } elseif ($kind === 'proyek' && $d['due_date'] === null && !isset($e['due_date']) && ($existing === null || $existing['due_date'] !== null)) {
+            // Invoice terbit: jatuh tempo wajib untuk data baru (agar masuk Proyeksi); data lama tanpa jatuh tempo boleh tetap kosong
             $e['due_date'] = 'Tgl. jatuh tempo wajib diisi.';
         }
         $d['due_note'] = mb_substr(trim((string) ($in['due_note'] ?? '')), 0, 30) ?: null;
@@ -252,6 +305,11 @@ final class InvoiceController extends Controller
         }
 
         $d['paid_known'] = !empty($in['paid_known']) ? 1 : 0;
+        if ($issue === InvoiceIssueService::BELUM) {   // belum diterbitkan = belum bisa dibayar
+            $d['paid'] = '0.00';
+            $d['paid_known'] = 1;
+            unset($e['paid']);
+        }
         $d['note'] = mb_substr(trim((string) ($in['note'] ?? '')), 0, 255) ?: null;
         $this->validateCustomer($d, $e, $existing);
         if ($kind === 'lampu') {
@@ -396,13 +454,16 @@ final class InvoiceController extends Controller
         if ($e) { return $this->form($this->req->post, $e, null, $kind, 422); }
         $newId = (int) Db::tx(function () use ($d) {
             $id = Db::insert('invoices', $d + ['created_by' => $this->user()['id']]);
-            Audit::log('invoice_create', 'invoice', (string) $id, 'Tambah ' . ($d['kind'] === 'lampu' ? 'piutang lampu ' : 'invoice ') . ($d['invoice_no'] ?? '') . ' ' . $d['customer'], null, $d);
+            Audit::log('invoice_create', 'invoice', (string) $id, 'Tambah ' . ($d['kind'] === 'lampu' ? 'piutang lampu ' : ($d['issue_status'] === InvoiceIssueService::BELUM ? 'invoice belum terbit ' : 'invoice ')) . ($d['invoice_no'] ?? '') . ' ' . $d['customer'], null, $d);
             Version::bump('invoices');
+            if ($d['issue_status'] === InvoiceIssueService::BELUM) {
+                Version::bump('forecast');   // bagian "Piutang Belum Terbit Invoice" di Proyeksi ikut diperbarui
+            }
             return $id;
         });
         LinkService::autoLink();
-        LinkService::ensureForecastForInvoice($newId);
-        $this->flash('success', 'Piutang tersimpan.');
+        LinkService::ensureForecastForInvoice($newId);   // invoice belum terbit dilewati oleh fungsi ini
+        $this->flash('success', $d['issue_status'] === InvoiceIssueService::BELUM ? 'Invoice belum terbit tersimpan.' : 'Piutang tersimpan.');
         return $this->redirect('/invoices/' . $newId);
     }
 
@@ -411,13 +472,16 @@ final class InvoiceController extends Controller
         $this->requireAdmin();
         $old = $this->find((int) $id);
         [$d, $e] = $this->validate($this->req->post, $old['kind'], $old);
-        if ($e) { return $this->form($this->req->post + ['id' => $id, 'pay_ref' => $old['pay_ref'], 'due_note' => $old['due_note'], 'due_date' => $old['due_date']], $e, (int) $id, $old['kind'], 422); }
-        unset($d['kind']);
+        if ($e) { return $this->form($this->req->post + ['id' => $id, 'pay_ref' => $old['pay_ref'], 'due_note' => $old['due_note'], 'due_date' => $old['due_date'], 'issue_status' => $old['issue_status']], $e, (int) $id, $old['kind'], 422); }
+        unset($d['kind'], $d['issue_status']);   // jenis hanya berubah lewat "Terbitkan Invoice"
         Db::tx(function () use ($id, $d, $old) {
             Db::update('invoices', (int) $id, $d);
             Audit::log('invoice_update', 'invoice', (string) $id, 'Ubah piutang ' . ($d['invoice_no'] ?? '') . ' ' . $d['customer'], array_intersect_key($old, $d), $d);
             LinkService::syncInvoice((int) $id);
             Version::bump('invoices');
+            if ($old['issue_status'] === InvoiceIssueService::BELUM) {
+                Version::bump('forecast');
+            }
         });
         LinkService::autoLink();
         LinkService::ensureForecastForInvoice((int) $id);   // tak berbuat apa-apa bila sudah tertaut / belum memenuhi syarat
@@ -439,8 +503,8 @@ final class InvoiceController extends Controller
             Version::bump('invoices');
             Version::bump('forecast');
         });
-        $this->flash('success', 'Piutang dihapus.');
-        return $this->redirect('/invoices?kind=' . $old['kind']);
+        $this->flash('success', $old['issue_status'] === InvoiceIssueService::BELUM ? 'Invoice belum terbit dihapus.' : 'Piutang dihapus.');
+        return $this->redirect('/invoices?kind=' . $old['kind'] . ($old['issue_status'] === InvoiceIssueService::BELUM ? '&issue=' . InvoiceIssueService::BELUM : ''));
     }
 
     public function linkForecast(string $id): Response

@@ -24,6 +24,7 @@ $stTone = ['lunas' => 'pill-green', 'sebagian' => 'pill-yellow', 'belum' => 'pil
 <?php if (!$months): ?>
   <div class="card"><div class="empty"><svg class="i"><use href="#i-trend"/></svg><p>Belum ada item proyeksi.</p></div></div>
 <?php endif; ?>
+<?php $unissued = $unissued ?? []; $unissuedSum = $unissuedSum ?? ['n' => 0, 'total' => '0.00']; ?>
 <?php foreach ($months as $ym => $list): [$y, $mo] = explode('-', $ym); $c = $chain[$ym]; ?>
 <section class="card card-flush fc-month">
   <div class="card-head">
@@ -74,3 +75,35 @@ $stTone = ['lunas' => 'pill-green', 'sebagian' => 'pill-yellow', 'belum' => 'pil
   </div>
 </section>
 <?php endforeach; ?>
+
+<section class="card card-flush fc-month" id="fcUnissued">
+  <div class="card-head">
+    <h2>Piutang Belum Terbit Invoice</h2>
+    <span class="muted"><?= number_format((int) $unissuedSum['n'], 0, ',', '.') ?> invoice · <b class="num"><?= e(money($unissuedSum['total'])) ?></b></span>
+  </div>
+  <?php if (!$unissued): ?>
+  <div class="empty"><svg class="i"><use href="#i-file"/></svg><p>Tidak ada invoice yang belum terbit.</p></div>
+  <?php else: ?>
+  <div class="table-wrap">
+    <table class="tbl stack fc">
+      <thead><tr><th>No. referensi</th><th>Pelanggan</th><th>Keterangan</th><th>Tanggal transaksi</th><th class="r">Nominal</th><th>Status</th></tr></thead>
+      <tbody>
+      <?php foreach ($unissued as $u): $uh = url('/invoices/' . (int) $u['id']); ?>
+        <tr>
+          <td data-label="No. referensi"><a href="<?= e($uh) ?>"><?= $u['invoice_no'] ? e($u['invoice_no']) : '<span class="muted">#' . (int) $u['id'] . '</span>' ?></a></td>
+          <td data-label="Pelanggan"><b><?= e($u['customer']) ?></b><?= $u['project_name'] ? '<div class="sub">' . e($u['project_name']) . '</div>' : '' ?></td>
+          <td data-label="Keterangan"><?= $u['description'] ? e($u['description']) : '<span class="muted">-</span>' ?></td>
+          <td data-label="Tanggal transaksi" class="nowrap"><?= $u['invoice_date'] ? e(fmt_date($u['invoice_date'])) : '<span class="muted">-</span>' ?></td>
+          <td data-label="Nominal" class="r num"><?= e(money($u['amount'], false)) ?></td>
+          <td data-label="Status" class="nowrap"><span class="pill pill-yellow">Belum Terbit</span></td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+      <tfoot class="fc-sum">
+        <tr class="s-end"><th scope="row" colspan="4">Total piutang belum terbit invoice</th><td class="r num c-amt"><?= e(money($unissuedSum['total'], false)) ?></td><td class="blank"></td></tr>
+      </tfoot>
+    </table>
+  </div>
+  <?php endif; ?>
+  <p class="help" style="padding:10px 16px 14px;margin:0">Data langsung dari menu Piutang → Invoice Belum Terbit (bukan item proyeksi, tidak ada duplikat). Belum menjadi piutang jatuh tempo dan <b>tidak ikut saldo proyeksi</b> maupun pengingat sampai invoice diterbitkan; setelah diterbitkan baris ini hilang dan invoice masuk Proyeksi sesuai tanggal jatuh tempo.</p>
+</section>

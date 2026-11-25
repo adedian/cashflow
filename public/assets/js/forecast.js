@@ -4,7 +4,7 @@
   var res = document.getElementById('fcResults');
   if (res && H.live) {
     // proyeksi bergantung pada saldo bank (transaksi) dan item proyeksi
-    H.live.on(['forecast', 'transactions'], function () {
+    H.live.on(['forecast', 'transactions', 'invoices'], function () {
       var q = res.getAttribute('data-query') || '';
       fetch(H.url('/forecast') + '?' + q + (q ? '&' : '') + 'partial=1', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function (r) { return r.ok ? r.text() : null; })

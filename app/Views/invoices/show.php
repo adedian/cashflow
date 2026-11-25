@@ -4,7 +4,10 @@ $lampu = $r['kind'] === 'lampu';
 $known = (int) $r['paid_known'] === 1;
 $rem = bcsub((string) $r['amount'], (string) $r['paid'], 2);
 $open = bccomp($rem, '0.004', 3) > 0;
-if (!$known) {
+$unissued = ($r['issue_status'] ?? 'terbit') === 'belum_terbit';   // Invoice Belum Terbit: bukan piutang; tanpa pembayaran/Proyeksi
+if ($unissued) {
+    $stPill = '<span class="pill pill-yellow">Belum Terbit</span>';
+} elseif (!$known) {
     $stPill = '<span class="pill pill-yellow">Perlu konfirmasi</span>';
 } elseif (!$open) {
     $stPill = '<span class="pill pill-green">Lunas</span>';
@@ -19,10 +22,11 @@ if (!$known) {
     <div class="alert alert-warn mb-2">Pembayaran untuk baris ini <b>tidak terbaca</b> di Excel sumber (kolom berisi galat <code>#REF!</code>). Sistem tidak menebak: baris ini tidak dihitung lunas maupun belum dibayar. <?= $isAdmin ? 'Isi pembayaran yang benar lewat “Ubah” dan centang “Pembayaran sudah dipastikan”.' : 'Super Admin dapat mengonfirmasinya.' ?></div>
   <?php endif; ?>
   <dl class="kv">
-    <dt>Jenis</dt><dd><?= $lampu ? 'Piutang Lampu' : 'Piutang Proyek' ?></dd>
+    <dt>Jenis</dt><dd><?= $lampu ? 'Piutang Lampu' : ($unissued ? 'Invoice Belum Terbit' : 'Piutang Proyek') ?></dd>
     <dt><?= $lampu ? 'No. surat jalan' : 'No. invoice' ?></dt><dd><?= $r['invoice_no'] ? e($r['invoice_no']) : '<span class="muted">Tidak tersedia</span>' ?></dd>
     <dt>Tanggal</dt><dd><?= $r['invoice_date'] ? e(fmt_date($r['invoice_date'], 'd/m/Y')) : '<span class="muted">Tidak tersedia</span>' ?></dd>
-    <dt>Jatuh tempo</dt><dd><?= $r['due_date'] ? e(fmt_date($r['due_date'], 'd/m/Y')) : ($r['due_note'] ? e($r['due_note']) : '<span class="muted">-</span>') ?><?= $r['due_days'] !== null ? ' <span class="muted">(' . (int) $r['due_days'] . ' hari dari tgl. nota)</span>' : '' ?></dd>
+    <?php if (!$lampu && !$unissued && !empty($r['issued_at'])): ?><dt>Diterbitkan</dt><dd><?= e(fmt_date(substr((string) $r['issued_at'], 0, 10), 'd/m/Y')) ?></dd><?php endif; ?>
+    <dt>Jatuh tempo</dt><dd><?php if ($unissued): ?><span class="muted">Belum ada — diisi saat invoice diterbitkan</span><?php else: ?><?= $r['due_date'] ? e(fmt_date($r['due_date'], 'd/m/Y')) : ($r['due_note'] ? e($r['due_note']) : '<span class="muted">-</span>') ?><?= $r['due_days'] !== null ? ' <span class="muted">(' . (int) $r['due_days'] . ' hari dari tgl. nota)</span>' : '' ?><?php endif; ?></dd>
     <?php if ($lampu && $r['salesperson']): ?><dt>Sales</dt><dd><?= e($r['salesperson']) ?></dd><?php endif; ?>
     <?php if ($r['project_name']): ?><dt>Proyek</dt><dd><?= e($r['project_name']) ?></dd><?php endif; ?>
     <?php if ($r['description']): ?><dt>Keterangan</dt><dd><?= e($r['description']) ?></dd><?php endif; ?>
@@ -46,6 +50,13 @@ if (!$known) {
   <?php elseif ($lampu): ?><p class="help mt-2 mb-0">Data lama tanpa rincian barang. <?= $isAdmin ? 'Rincian dapat diisi lewat “Ubah”.' : '' ?></p><?php endif; ?>
 </section>
 
+<?php if ($unissued): ?>
+<section class="card mt-2" style="max-width:900px" id="invUnissued">
+  <div class="card-head"><h2>Belum diterbitkan</h2></div>
+  <p class="mb-0">Invoice ini <b>belum terbit</b>: belum dihitung sebagai piutang, tidak punya tanggal jatuh tempo, tidak membuat pengingat, dan belum muncul sebagai item Proyeksi (penerimaan) — hanya tercatat di bagian “Piutang Belum Terbit Invoice” pada Proyeksi.
+  <?= $isAdmin ? 'Gunakan <b>Terbitkan Invoice</b> untuk melengkapi No. invoice dan tgl. jatuh tempo; data yang sama lalu berpindah ke daftar Piutang Proyek.' : 'Super Admin dapat menerbitkannya.' ?></p>
+</section>
+<?php else: ?>
 <section class="card card-flush mt-2" style="max-width:900px" id="invPays">
   <div class="card-head"><h2>Riwayat penerimaan</h2><?php if ($isAdmin && $known && $open): ?><a class="btn btn-sm" href="<?= e(url('/transactions/new?ref=invoice:' . $id)) ?>"><svg class="i i-sm"><use href="#i-plus"/></svg>Terima Pembayaran melalui Transaksi</a><?php endif; ?></div>
   <?php if (!$pays): ?>
@@ -131,8 +142,11 @@ if (!$known) {
   <p class="help mt-2 mb-0">Tautan tidak membuat atau mengubah transaksi/saldo. Pelunasan piutang menandai item Proyeksi yang tertaut sebagai “diterima”.</p>
 </section>
 
+<?php endif; ?>
+
 <div class="mt-3" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;max-width:900px">
-  <a class="btn btn-ghost" href="<?= e(url('/invoices?kind=' . $r['kind'])) ?>">Ke daftar Piutang</a>
+  <a class="btn btn-ghost" href="<?= e(url('/invoices?kind=' . $r['kind'] . ($unissued ? '&issue=belum_terbit' : ''))) ?>"><?= $unissued ? 'Ke daftar Invoice Belum Terbit' : 'Ke daftar Piutang' ?></a>
+  <?php if ($isAdmin && $unissued): ?><a class="btn btn-orange" href="<?= e(url('/invoices/' . $id . '/issue')) ?>">Terbitkan Invoice</a><?php endif; ?>
   <?php if ($isAdmin): ?>
     <a class="btn btn-ghost" href="<?= e(url('/invoices/' . $id . '/edit')) ?>"><svg class="i i-sm"><use href="#i-edit"/></svg>Ubah</a>
     <form method="post" action="<?= e(url('/invoices/' . $id . '/delete')) ?>" data-confirm="Hapus piutang <?= e($r['invoice_no'] ?? '') ?> (<?= e($r['customer']) ?>)? Tindakan ini tercatat di audit log." data-confirm-ok="Ya, hapus"><?= csrf_field() ?><button class="btn btn-ghost" type="submit" data-no-lock>Hapus</button></form>

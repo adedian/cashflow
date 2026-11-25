@@ -100,7 +100,8 @@ final class TxLinkService
                 'title' => (string) ($i['invoice_no'] ?: ($i['description'] ?: $i['customer'])), 'description' => $i['description'] ?: $i['project_name'],
                 'amount' => (string) $i['amount'], 'paid' => $paid, 'remaining' => bcsub((string) $i['amount'], $paid, 2), 'due' => $i['due_date'],
                 'account_id' => null,
-                'block' => (int) $i['paid_known'] !== 1 ? 'Status pembayaran piutang ini “Perlu konfirmasi” (tidak terbaca di Excel). Konfirmasi dulu lewat Ubah piutang.' : null,
+                'block' => ($i['issue_status'] ?? 'terbit') !== 'terbit' ? 'Invoice ini belum diterbitkan sehingga belum dapat menerima pembayaran. Terbitkan invoice lebih dulu (menu Piutang → Invoice Belum Terbit).'
+                    : ((int) $i['paid_known'] !== 1 ? 'Status pembayaran piutang ini “Perlu konfirmasi” (tidak terbaca di Excel). Konfirmasi dulu lewat Ubah piutang.' : null),
             ];
         }
         if ($type === 'forecast') {
@@ -442,7 +443,7 @@ final class TxLinkService
         $ownId = static fn(string $t) => $own && !$own['legacy'] && $own['type'] === $t ? $own['id'] : 0;
 
         if ($dir === 'in') {
-            $w = 'i.paid_known = 1 AND (i.amount - i.paid + COALESCE((SELECT SUM(p.amount) FROM invoice_payments p JOIN transactions t ON t.id = p.transaction_id WHERE p.invoice_id = i.id AND p.transaction_id = ? AND t.voided_at IS NULL), 0) > 0.004 OR i.id = ?)';
+            $w = 'i.issue_status = "terbit" AND i.paid_known = 1 AND (i.amount - i.paid + COALESCE((SELECT SUM(p.amount) FROM invoice_payments p JOIN transactions t ON t.id = p.transaction_id WHERE p.invoice_id = i.id AND p.transaction_id = ? AND t.voided_at IS NULL), 0) > 0.004 OR i.id = ?)';
             $p = [$ex, $ownId('invoice')];
             if ($q !== '') {
                 $w .= ' AND (i.invoice_no LIKE ? OR i.customer LIKE ? OR i.description LIKE ? OR i.project_name LIKE ?)';

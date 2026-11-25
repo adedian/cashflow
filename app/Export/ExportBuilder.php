@@ -474,7 +474,7 @@ final class ExportBuilder
         $q = mb_substr($req->str('q'), 0, 100);
         $status = in_array($req->str('status'), ['open', 'paid', 'unknown', 'late'], true) ? $req->str('status') : '';
         $kind = $req->str('kind') === 'lampu' ? 'lampu' : 'proyek';
-        $w = ['kind = ?'];
+        $w = ['kind = ?', "issue_status = 'terbit'"];   // invoice belum terbit bukan piutang: tidak ikut cetak
         $p = [$kind];
         if ($q !== '') {
             $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';

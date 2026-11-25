@@ -92,7 +92,9 @@ final class ForecastController extends Controller
         }
         ksort($months);
         $links = LinkService::info(array_map(static fn($i) => (int) $i['id'], $items));
-        return ['months' => $months, 'chain' => $chain, 'startBalance' => $bank, 'asOf' => $asOf, 'isAdmin' => $this->isAdmin(), 'links' => $links,
+        // Piutang Belum Terbit Invoice: dibaca langsung dari invoices (status belum_terbit), bukan item proyeksi; tidak masuk saldo/jatuh tempo
+        $unissued = \App\Services\InvoiceIssueService::rows();
+        return ['unissued' => $unissued, 'unissuedSum' => \App\Services\InvoiceIssueService::summary(), 'months' => $months, 'chain' => $chain, 'startBalance' => $bank, 'asOf' => $asOf, 'isAdmin' => $this->isAdmin(), 'links' => $links,
             'totalItems' => count($items) - ($history ? 0 : $closedCount), 'closedCount' => $closedCount, 'history' => $history];
     }
 
@@ -125,7 +127,7 @@ final class ForecastController extends Controller
         if ($this->isAdmin() && !$link) {
             $cand = $item['direction'] === 'out'
                 ? Db::all('SELECT d.id, d.category, d.supplier, d.description, d.due_date, d.amount - COALESCE((SELECT SUM(p.amount) FROM debt_payments p LEFT JOIN transactions t ON t.id = p.transaction_id WHERE p.debt_id = d.id AND (p.transaction_id IS NULL OR t.voided_at IS NULL)), 0) AS remaining FROM debts d WHERE d.voided_at IS NULL AND d.forecast_item_id IS NULL HAVING remaining > 0.004 ORDER BY (d.due_date IS NULL), d.due_date, d.id LIMIT 100')
-                : Db::all('SELECT i.id, i.kind, i.customer, i.invoice_no, i.paid_known, i.amount - i.paid AS remaining FROM invoices i WHERE i.forecast_item_id IS NULL AND (i.paid_known = 0 OR i.amount - i.paid > 0.004) ORDER BY i.customer, i.invoice_date, i.id LIMIT 300');
+                : Db::all('SELECT i.id, i.kind, i.customer, i.invoice_no, i.paid_known, i.amount - i.paid AS remaining FROM invoices i WHERE i.issue_status = "terbit" AND i.forecast_item_id IS NULL AND (i.paid_known = 0 OR i.amount - i.paid > 0.004) ORDER BY i.customer, i.invoice_date, i.id LIMIT 300');
         }
         $reals = Db::all(
             'SELECT r.*, t.tx_date, t.voucher_code, t.voided_at AS tx_void, a.name AS tx_account, u.full_name AS by_name
