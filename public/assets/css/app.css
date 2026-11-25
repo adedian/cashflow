@@ -85,12 +85,19 @@ img, svg { max-width: 100%; }
 .sb-user .who small { color: var(--muted); font-size: 12px; }
 
 .main { margin-left: var(--sidebar-w); min-height: 100vh; transition: margin-left .2s ease; }
-body.sb-collapsed .sidebar { width: var(--sidebar-w-collapsed); }
-body.sb-collapsed .main { margin-left: var(--sidebar-w-collapsed); }
-body.sb-collapsed .sb-brand div, body.sb-collapsed .sb-link span, body.sb-collapsed .sb-group,
-body.sb-collapsed .sb-user .who { display: none; }
-body.sb-collapsed .sb-link { justify-content: center; padding: 12px 0; }
-body.sb-collapsed .sb-brand, body.sb-collapsed .sb-user { justify-content: center; padding-left: 0; padding-right: 0; }
+/* Desktop & tablet: sidebar awalnya hanya ikon (rail); tombol menu membukanya sebagai lapisan di atas konten,
+   sehingga lebar konten tidak berubah. Menciut lagi otomatis saat menu dipilih (lihat app.js). */
+@media (min-width: 768px) {
+  :root { --sidebar-w: 236px; }
+  .main { margin-left: var(--sidebar-w-collapsed); }
+  body:not(.sb-expanded) .sidebar { width: var(--sidebar-w-collapsed); }
+  body:not(.sb-expanded) .sb-brand div, body:not(.sb-expanded) .sb-link span, body:not(.sb-expanded) .sb-group,
+  body:not(.sb-expanded) .sb-user .who { display: none; }
+  body:not(.sb-expanded) .sb-link { justify-content: center; padding: 12px 0; }
+  body:not(.sb-expanded) .sb-brand, body:not(.sb-expanded) .sb-user { justify-content: center; padding-left: 0; padding-right: 0; }
+  body.sb-expanded .sidebar { width: var(--sidebar-w); box-shadow: 0 0 60px rgba(8, 20, 60, .35); }
+  body.sb-expanded .scrim { display: block; position: fixed; inset: 0; background: rgba(12, 22, 54, .4); z-index: 35; }
+}
 
 .hero {
   background: linear-gradient(135deg, #0b5cff 0%, #0a4fe0 55%, #1f6bff 100%);
@@ -435,13 +442,6 @@ body.auth-body::after { width: 420px; height: 420px; background: #9fc3ff; right:
 @media (max-width: 1180px) {
   .g-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .g-main, .g-main-r { grid-template-columns: minmax(0, 1fr); }
-  body:not(.sb-expanded) .sidebar { width: var(--sidebar-w-collapsed); }
-  body:not(.sb-expanded) .main { margin-left: var(--sidebar-w-collapsed); }
-  body:not(.sb-expanded) .sb-brand div, body:not(.sb-expanded) .sb-link span, body:not(.sb-expanded) .sb-group, body:not(.sb-expanded) .sb-user .who { display: none; }
-  body:not(.sb-expanded) .sb-link { justify-content: center; padding: 12px 0; }
-  body:not(.sb-expanded) .sb-brand, body:not(.sb-expanded) .sb-user { justify-content: center; padding-left: 0; padding-right: 0; }
-  body.sb-expanded .sidebar { box-shadow: 0 0 60px rgba(8, 20, 60, .35); }
-  body.sb-expanded .scrim { display: block; position: fixed; inset: 0; background: rgba(12, 22, 54, .4); z-index: 35; }
 }
 @media (max-width: 900px) {
   .g-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -479,7 +479,7 @@ body.auth-body::after { width: 420px; height: 420px; background: #9fc3ff; right:
   body.drawer-open .scrim { display: block; position: fixed; inset: 0; background: rgba(12, 22, 54, .45); z-index: 35; }
   body .sb-brand div, body .sb-link span, body .sb-group, body .sb-user .who { display: revert !important; }
   body .sb-link { justify-content: flex-start !important; padding: 11px 12px !important; }
-  .main, body.sb-collapsed .main { margin-left: 0 !important; }
+  .main { margin-left: 0 !important; }
   .hero { padding: 12px 16px 80px; }
   .content { padding: 0 16px 90px; margin-top: -54px; }
   .page-head h1 { font-size: 21px; }
@@ -881,6 +881,8 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
   .tbl.tx { width: max-content; min-width: 100%; }
   .tbl.tx th, .tbl.tx td { padding-left: 8px; padding-right: 8px; }
   .tbl.tx .c-code { min-width: 84px; }
+.tbl.tx a.code-print { color: var(--blue); font-weight: 600; text-decoration: none; }
+.tbl.tx a.code-print:hover { text-decoration: underline; }
   .tbl.tx .c-party { min-width: 130px; max-width: 180px; }
   .tbl.tx .desc { min-width: 200px; max-width: 290px; }
   .tbl.tx .cat { min-width: 110px; max-width: 170px; }

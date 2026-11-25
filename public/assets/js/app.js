@@ -172,17 +172,20 @@
   /* ---------- sidebar ---------- */
   var body = document.body;
   var mq = window.matchMedia('(max-width: 767px)');
-  var mid = window.matchMedia('(max-width: 1180px)');
-  function toggleMenu() {
-    if (mq.matches) { body.classList.toggle('drawer-open'); return; }
-    if (mid.matches) { body.classList.toggle('sb-expanded'); return; }
-    body.classList.toggle('sb-collapsed');
-    try { localStorage.setItem('hme.sb', body.classList.contains('sb-collapsed') ? '1' : '0'); } catch (e) { /* abaikan */ }
-  }
-  try { if (localStorage.getItem('hme.sb') === '1' && !mid.matches) body.classList.add('sb-collapsed'); } catch (e) { /* abaikan */ }
+  /* Desktop/tablet: selalu mulai sebagai rail ikon; tombol menu membuka (sb-expanded), memilih menu / klik latar / Esc menutup. */
+  function closeMenu() { body.classList.remove('drawer-open', 'sb-expanded'); }
+  function toggleMenu() { body.classList.toggle(mq.matches ? 'drawer-open' : 'sb-expanded'); }
+  try { localStorage.removeItem('hme.sb'); } catch (e) { /* abaikan */ }
   var mb = document.getElementById('menuBtn'); if (mb) mb.addEventListener('click', toggleMenu);
   var more = document.getElementById('moreBtn'); if (more) more.addEventListener('click', function () { body.classList.toggle('drawer-open'); });
-  var sc = document.getElementById('scrim'); if (sc) sc.addEventListener('click', function () { body.classList.remove('drawer-open', 'sb-expanded'); });
+  var sc = document.getElementById('scrim'); if (sc) sc.addEventListener('click', closeMenu);
+  var sbEl = document.getElementById('sidebar');
+  if (sbEl) sbEl.addEventListener('click', function (ev) {
+    var t = ev.target.closest ? ev.target.closest('a.sb-link, button.sb-link') : null;
+    if (t && t.id !== 'installBtn') closeMenu();
+  });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closeMenu(); });
+  window.addEventListener('pageshow', closeMenu);
 
   /* ---------- flash dari server ---------- */
   try {

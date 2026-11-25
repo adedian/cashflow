@@ -59,7 +59,7 @@ $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
       <tr class="<?= $void ? 'voided' : '' ?>">
         <?php if (can_export()): ?><td class="c-sel no-print" data-label="Pilih"><?php if ($firstOfTx): ?><input type="checkbox" class="tx-sel" value="<?= (int) $t['id'] ?>"<?= $void ? ' disabled title="Transaksi dibatalkan tidak dicetak"' : '' ?> aria-label="Pilih transaksi <?= e($t['voucher_code'] ?: '#' . (int) $t['id']) ?>"><?php endif; ?></td><?php endif; ?>
         <td data-label="Tgl" class="nowrap c-tgl"><?= e(fmt_date($t['tx_date'])) ?><div class="sub" title="<?= e($t['account_name']) ?>"><?= e($t['account_code']) ?></div></td>
-        <td data-label="Nomor Bukti" class="nowrap c-code"><?= e($t['voucher_code'] ?? '') ?></td>
+        <td data-label="Nomor Bukti" class="nowrap c-code"><?php if (can_export() && !$void && !empty($t['voucher_code'])): /* klik Nomor Bukti = pratinjau/cetak bukti BK/BM transaksi ini (pakai dialog Cetak Detail) */ ?><a href="#" class="code-print"data-export="bukti" data-export-title="Bukti Bank (BK/BM)" data-export-query="ids=<?= (int) $t['id'] ?>" title="Cetak bukti <?= e($t['voucher_code']) ?>"><?= e($t['voucher_code']) ?></a><?php else: ?><?= e($t['voucher_code'] ?? '') ?><?php endif; ?></td>
         <td data-label="Rekening Lawan" class="c-party">
           <?= e($t['counterparty'] ?? '') ?>
           <?php if ($isAdmin && !empty($t['counterparty_detail'])): ?><div class="sub"><?= e(cp_label($t['counterparty_detail'])) ?></div><?php endif; ?>
