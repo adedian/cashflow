@@ -1049,3 +1049,4 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
 
 /* Invoice Belum Terbit: isian jatuh tempo/pembayaran disembunyikan di form Tambah Invoice (atribut hidden harus menang atas .field) */
 .field[hidden] { display: none !important; }
+.req[hidden] { display: none !important; }

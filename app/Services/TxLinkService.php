@@ -100,7 +100,7 @@ final class TxLinkService
                 'title' => (string) ($i['invoice_no'] ?: ($i['description'] ?: $i['customer'])), 'description' => $i['description'] ?: $i['project_name'],
                 'amount' => (string) $i['amount'], 'paid' => $paid, 'remaining' => bcsub((string) $i['amount'], $paid, 2), 'due' => $i['due_date'],
                 'account_id' => null,
-                'block' => ($i['issue_status'] ?? 'terbit') !== 'terbit' ? 'Invoice ini belum diterbitkan sehingga belum dapat menerima pembayaran. Terbitkan invoice lebih dulu (menu Piutang → Invoice Belum Terbit).'
+                'block' => ($i['issue_status'] ?? 'terbit') !== 'terbit' ? 'Ini pencatatan Invoice Belum Terbit (bukan invoice) sehingga tidak dapat menerima pembayaran. Terbitkan invoicenya dulu (menu Piutang → Invoice Belum Terbit), lalu catat pembayaran pada invoice hasil penerbitan.'
                     : ((int) $i['paid_known'] !== 1 ? 'Status pembayaran piutang ini “Perlu konfirmasi” (tidak terbaca di Excel). Konfirmasi dulu lewat Ubah piutang.' : null),
             ];
         }

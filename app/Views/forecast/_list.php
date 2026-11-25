@@ -79,31 +79,43 @@ $stTone = ['lunas' => 'pill-green', 'sebagian' => 'pill-yellow', 'belum' => 'pil
 <section class="card card-flush fc-month" id="fcUnissued">
   <div class="card-head">
     <h2>Piutang Belum Terbit Invoice</h2>
-    <span class="muted"><?= number_format((int) $unissuedSum['n'], 0, ',', '.') ?> invoice · <b class="num"><?= e(money($unissuedSum['total'])) ?></b></span>
+    <span class="muted"><?= number_format((int) $unissuedSum['n'], 0, ',', '.') ?> pencatatan · <?= number_format((int) ($unissuedSum['projects'] ?? 0), 0, ',', '.') ?> project · sisa <b class="num"><?= e(money($unissuedSum['total'])) ?></b></span>
   </div>
   <?php if (!$unissued): ?>
   <div class="empty"><svg class="i"><use href="#i-file"/></svg><p>Tidak ada invoice yang belum terbit.</p></div>
   <?php else: ?>
+  <?php
+    $byProj = [];
+    foreach ($unissued as $u) { $byProj[$u['project'] !== null && $u['project'] !== '' ? (string) $u['project'] : '(tanpa project)'][] = $u; }
+  ?>
   <div class="table-wrap">
-    <table class="tbl stack fc">
-      <thead><tr><th>No. referensi</th><th>Pelanggan</th><th>Keterangan</th><th>Tanggal transaksi</th><th class="r">Nominal</th><th>Status</th></tr></thead>
+    <table class="tbl stack fc" id="fcUnissuedTbl">
+      <thead><tr><th>Project</th><th>No. referensi</th><th>Pelanggan</th><th>Keterangan</th><th>Tanggal transaksi</th><th class="r">Nominal awal</th><th class="r">Diterbitkan</th><th class="r">Sisa</th><th>Status</th></tr></thead>
+      <?php foreach ($byProj as $pn => $list): $psum = '0.00'; foreach ($list as $u) { $psum = bcadd($psum, (string) $u['remaining'], 2); } ?>
       <tbody>
-      <?php foreach ($unissued as $u): $uh = url('/invoices/' . (int) $u['id']); ?>
+      <?php foreach ($list as $k => $u): $uh = url('/invoices/' . (int) $u['id']); $part = bccomp((string) $u['issued'], '0', 2) > 0; ?>
         <tr>
+          <td data-label="Project"><?= $k === 0 ? '<b>' . e($pn) . '</b>' : '<span class="muted">' . e($pn) . '</span>' ?></td>
           <td data-label="No. referensi"><a href="<?= e($uh) ?>"><?= $u['invoice_no'] ? e($u['invoice_no']) : '<span class="muted">#' . (int) $u['id'] . '</span>' ?></a></td>
-          <td data-label="Pelanggan"><b><?= e($u['customer']) ?></b><?= $u['project_name'] ? '<div class="sub">' . e($u['project_name']) . '</div>' : '' ?></td>
+          <td data-label="Pelanggan"><?= e($u['customer']) ?></td>
           <td data-label="Keterangan"><?= $u['description'] ? e($u['description']) : '<span class="muted">-</span>' ?></td>
           <td data-label="Tanggal transaksi" class="nowrap"><?= $u['invoice_date'] ? e(fmt_date($u['invoice_date'])) : '<span class="muted">-</span>' ?></td>
-          <td data-label="Nominal" class="r num"><?= e(money($u['amount'], false)) ?></td>
-          <td data-label="Status" class="nowrap"><span class="pill pill-yellow">Belum Terbit</span></td>
+          <td data-label="Nominal awal" class="r num"><?= e(money($u['amount'], false)) ?></td>
+          <td data-label="Diterbitkan" class="r num"><?= $part ? e(money($u['issued'], false)) : '<span class="muted">0</span>' ?></td>
+          <td data-label="Sisa" class="r num"><b><?= e(money($u['remaining'], false)) ?></b></td>
+          <td data-label="Status" class="nowrap"><span class="pill pill-yellow"><?= $part ? 'Terbit Sebagian' : 'Belum Terbit' ?></span></td>
         </tr>
       <?php endforeach; ?>
+      <?php if (count($list) > 1): ?>
+        <tr class="fc-sum"><th scope="row" colspan="7" class="r">Sisa <?= e($pn) ?></th><td class="r num"><b><?= e(money($psum, false)) ?></b></td><td></td></tr>
+      <?php endif; ?>
       </tbody>
+      <?php endforeach; ?>
       <tfoot class="fc-sum">
-        <tr class="s-end"><th scope="row" colspan="4">Total piutang belum terbit invoice</th><td class="r num c-amt"><?= e(money($unissuedSum['total'], false)) ?></td><td class="blank"></td></tr>
+        <tr class="s-end"><th scope="row" colspan="7">Total sisa piutang belum terbit invoice</th><td class="r num c-amt"><?= e(money($unissuedSum['total'], false)) ?></td><td class="blank"></td></tr>
       </tfoot>
     </table>
   </div>
   <?php endif; ?>
-  <p class="help" style="padding:10px 16px 14px;margin:0">Data langsung dari menu Piutang → Invoice Belum Terbit (bukan item proyeksi, tidak ada duplikat). Belum menjadi piutang jatuh tempo dan <b>tidak ikut saldo proyeksi</b> maupun pengingat sampai invoice diterbitkan; setelah diterbitkan baris ini hilang dan invoice masuk Proyeksi sesuai tanggal jatuh tempo.</p>
+  <p class="help" style="padding:10px 16px 14px;margin:0">Data langsung dari menu Piutang → Invoice Belum Terbit (bukan item proyeksi, tidak ada duplikat): menampilkan <b>sisa</b> per project (nominal awal − yang sudah diterbitkan). Belum menjadi piutang jatuh tempo dan <b>tidak ikut saldo proyeksi</b> maupun pengingat; setiap kali sebagian diterbitkan, sisa di sini berkurang dan invoice yang terbit masuk Proyeksi sesuai tanggal jatuh tempo. Pencatatan yang sudah habis diterbitkan tidak lagi tampil di sini (histori ada di menu Piutang).</p>
 </section>

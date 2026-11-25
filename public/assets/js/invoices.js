@@ -26,10 +26,24 @@
         box.hidden = ub;
         box.querySelectorAll('input').forEach(function (i) { i.disabled = ub; });
       });
+      var pr = document.getElementById('projReq'), ps = document.getElementById('project_name'), al = document.getElementById('amountLbl');
+      if (pr) pr.hidden = !ub;
+      if (ps) ps.required = ub;
+      if (al) al.textContent = ub ? 'Nominal Invoice Belum Terbit (Rp)' : 'Nominal tagihan (Rp)';
       if (help) help.textContent = ub ? txt.belum_terbit : txt.terbit;
     };
     radios.forEach(function (r) { r.addEventListener('change', apply); });
     apply();
+  }
+  // Form Terbitkan Invoice: saldo tersedia mengikuti project yang dipilih; nominal diisi sisa project bila masih kosong
+  var ip = document.getElementById('issue_project');
+  if (ip) {
+    var sv = document.getElementById('saldoView');
+    var fmt = function (n) { return 'Rp ' + Number(n).toLocaleString('id-ID', { maximumFractionDigits: 2 }); };
+    ip.addEventListener('change', function () {
+      var o = ip.options[ip.selectedIndex];
+      if (sv && o) sv.textContent = fmt(o.getAttribute('data-remaining') || '0');
+    });
   }
   if (res && H.live) {
     H.live.on(['invoices'], function () {

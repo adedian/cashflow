@@ -191,9 +191,10 @@ CREATE TABLE IF NOT EXISTS transaction_items (
 CREATE TABLE IF NOT EXISTS invoices (
   id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
   kind         ENUM('proyek','lampu') NOT NULL DEFAULT 'proyek',
-  issue_status ENUM('terbit','belum_terbit') NOT NULL DEFAULT 'terbit' COMMENT 'belum_terbit = invoice belum diterbitkan: tanpa jatuh tempo, tanpa item Proyeksi, tidak dihitung sebagai piutang',
+  issue_status ENUM('terbit','belum_terbit','selesai') NOT NULL DEFAULT 'terbit' COMMENT 'belum_terbit = Invoice Belum Terbit (punya sisa; bukan piutang, tanpa jatuh tempo/item Proyeksi); selesai = sudah diterbitkan penuh (histori)',
   customer     VARCHAR(160) NOT NULL,
   project_name VARCHAR(200) NULL,
+  project_id   INT UNSIGNED NULL COMMENT 'relasi ID ke projects (wajib untuk Invoice Belum Terbit)',
   description  VARCHAR(255) NULL,
   items        TEXT NULL COMMENT 'JSON [{name,qty,price,subtotal}] rincian barang Piutang Lampu; amount = Σ subtotal',
   invoice_date DATE NULL,
@@ -220,6 +221,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   PRIMARY KEY (id),
   KEY ix_inv_date (invoice_date),
   KEY ix_inv_issue (kind, issue_status),
+  KEY ix_inv_project (project_id),
   KEY ix_inv_customer (customer),
   UNIQUE KEY uq_inv_forecast (forecast_item_id),
   KEY ix_inv_kind (kind, invoice_date),
@@ -357,6 +359,27 @@ CREATE TABLE IF NOT EXISTS debt_payments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- penerimaan Piutang & realisasi Proyeksi lewat Transaksi (Revisi 3)
+-- penerbitan bertahap Invoice Belum Terbit -> invoice normal (sisa sumber = invoices.amount - SUM(amount) yang belum dibatalkan)
+CREATE TABLE IF NOT EXISTS invoice_issuances (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  batch_key    CHAR(32) NOT NULL COMMENT 'kunci satu aksi Terbitkan (idempoten: klik ganda tidak memotong saldo dua kali)',
+  source_id    INT UNSIGNED NOT NULL COMMENT 'invoices.id = Invoice Belum Terbit (sumber)',
+  invoice_id   INT UNSIGNED NULL COMMENT 'invoices.id = invoice normal hasil penerbitan; NULL bila penerbitan dibatalkan',
+  invoice_no   VARCHAR(80) NULL COMMENT 'salinan No. invoice saat diterbitkan (histori)',
+  amount       DECIMAL(18,2) NOT NULL,
+  issued_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  issued_by    INT UNSIGNED NULL,
+  cancelled_at DATETIME NULL,
+  cancelled_by INT UNSIGNED NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_iss_batch_source (batch_key, source_id),
+  KEY ix_iss_source (source_id),
+  KEY ix_iss_invoice (invoice_id),
+  CONSTRAINT fk_iss_source  FOREIGN KEY (source_id)  REFERENCES invoices(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_iss_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
+  CONSTRAINT fk_iss_by      FOREIGN KEY (issued_by)  REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS invoice_payments (
   id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   invoice_id     INT UNSIGNED NOT NULL,

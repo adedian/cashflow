@@ -4,7 +4,14 @@
     <input type="hidden" name="kind" value="<?= e($kind) ?>">
     <?php if ($unissued): ?><input type="hidden" name="issue" value="<?= e($issue) ?>"><?php endif; ?>
     <div class="field grow"><label for="q">Cari</label><input class="input" type="search" id="q" name="q" value="<?= e($q) ?>" placeholder="<?= $kind === 'lampu' ? 'Customer, no. surat jalan, kode bukti, info…' : 'Customer, proyek, no. invoice…' ?>" maxlength="100"></div>
-    <?php if (!$unissued): ?>
+    <?php if ($unissued): ?>
+    <div class="field"><label for="status">Status</label>
+      <select class="input" id="status" name="status">
+        <option value="">Masih ada sisa</option>
+        <option value="done" <?= $status === 'done' ? 'selected' : '' ?>>Diterbitkan penuh (histori)</option>
+        <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>Semua</option>
+      </select></div>
+    <?php else: ?>
     <div class="field"><label for="status">Status</label>
       <select class="input" id="status" name="status">
         <option value="">Semua</option>

@@ -35,3 +35,5 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON cashflow_hme.transaction_items TO 'cashf
 GRANT SELECT, INSERT, UPDATE, DELETE ON cashflow_hme.products TO 'cashflow_hme_app'@'127.0.0.1';
 GRANT LOCK TABLES ON cashflow_hme.* TO 'cashflow_hme_app'@'127.0.0.1';
 FLUSH PRIVILEGES;
+-- Invoice Belum Terbit bertahap (Nov 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON cashflow_hme.invoice_issuances TO 'cashflow_hme_app'@'127.0.0.1';
