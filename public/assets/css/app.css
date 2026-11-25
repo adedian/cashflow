@@ -95,6 +95,19 @@ img, svg { max-width: 100%; }
   body:not(.sb-expanded) .sb-user .who { display: none; }
   body:not(.sb-expanded) .sb-link { justify-content: center; padding: 12px 0; }
   body:not(.sb-expanded) .sb-brand, body:not(.sb-expanded) .sb-user { justify-content: center; padding-left: 0; padding-right: 0; }
+  .sb-tip {
+    position: fixed; z-index: 60; transform: translateY(-50%); pointer-events: none; white-space: nowrap;
+    display: flex; align-items: center; gap: 9px;
+    background: #fff; color: #1b2447; font-size: 14px; font-weight: 600; padding: 10px 16px 10px 12px; border-radius: 12px;
+    border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(8, 20, 60, .18), 0 2px 6px rgba(8, 20, 60, .08);
+    opacity: 0; visibility: hidden; transition: opacity .12s ease;
+  }
+  .sb-tip .i { width: 20px; height: 20px; color: var(--blue); flex: none; }
+  .sb-tip::before {
+    content: ""; position: absolute; left: -6px; top: 50%; width: 10px; height: 10px; background: #fff;
+    border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: translateY(-50%) rotate(45deg); border-radius: 2px;
+  }
+  .sb-tip.on { opacity: 1; visibility: visible; }
   body.sb-expanded .sidebar { width: var(--sidebar-w); box-shadow: 0 0 60px rgba(8, 20, 60, .35); }
   body.sb-expanded .scrim { display: block; position: fixed; inset: 0; background: rgba(12, 22, 54, .4); z-index: 35; }
 }
@@ -878,21 +891,23 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
 
 /* Daftar Transaksi: kolom diberi lebar tetap; bila layar lebih sempit dari tabel, tabel digeser mendatar (tidak dipadatkan) */
 @media (min-width: 768px) {
-  .tbl.tx { width: max-content; min-width: 100%; }
+  .tbl.tx { width: 100%; }   /* muat selebar layar sampai kolom Detail; baru bergeser mendatar bila layar lebih sempit dari lebar minimum kolom */
   .tbl.tx th, .tbl.tx td { padding-left: 8px; padding-right: 8px; }
   .tbl.tx .c-code { min-width: 84px; }
 .tbl.tx a.code-print { color: var(--blue); font-weight: 600; text-decoration: none; }
 .tbl.tx a.code-print:hover { text-decoration: underline; }
-  .tbl.tx .c-party { min-width: 130px; max-width: 180px; }
-  .tbl.tx .desc { min-width: 200px; max-width: 290px; }
-  .tbl.tx .cat { min-width: 110px; max-width: 170px; }
-  .tbl.tx .proj { min-width: 90px; max-width: 130px; }
-  .tbl.tx .c-inv { min-width: 90px; }
-  .tbl.tx .c-note { min-width: 100px; max-width: 160px; }
-  .tbl.tx td.r, .tbl.tx th.r { min-width: 100px; width: 100px; }
-  .tbl.tx .c-act { min-width: 72px; }
+  .tbl.tx .c-party { min-width: 120px; }
+  .tbl.tx .desc { min-width: 140px; }
+  .tbl.tx .cat { min-width: 90px; }
+  .tbl.tx .proj { min-width: 70px; }
+  .tbl.tx .c-inv { min-width: 80px; }
+  .tbl.tx .c-note { min-width: 90px; }
+  .tbl.tx td.r, .tbl.tx th.r { min-width: 96px; width: 96px; }
+  .tbl.tx .c-act { min-width: 56px; }
   .tbl.tx td, .tbl.tx th { overflow-wrap: anywhere; }
 }
+/* Daftar Transaksi: semua teks kolom (judul, isi, sub-baris, lencana, tombol) berukuran 11px */
+table.tbl.tx, .tbl.tx th, .tbl.tx td, .tbl.tx td .sub, .tbl.tx td .pill, .tbl.tx td .btn-sm, .tbl.tx td a, table.tbl.stack.tx td::before { font-size: 11px; }
 
 .sb-link[hidden] { display: none; }
 
@@ -1022,7 +1037,7 @@ body.auth-body .watermark { position: fixed; left: 0; right: 0; bottom: 0; paddi
    digeser ke kanan (CSS sticky di dalam .table-wrap); judul kolom tetap menempel di atas layar saat halaman digulir ke bawah
    (transaksi.js menggeser baris judul — sticky CSS tidak bisa karena .table-wrap harus bergulir mendatar). */
 @media screen and (min-width: 1100px) {
-  .tbl.tx { --w-tgl: 104px; --w-code: 122px; --w-party: 190px; border-collapse: separate; border-spacing: 0; }
+  .tbl.tx { --w-tgl: 86px; --w-code: 104px; --w-party: 150px; border-collapse: separate; border-spacing: 0; }
   .tbl.tx .c-sel, .tbl.tx .c-tgl, .tbl.tx .c-code, .tbl.tx .c-party { position: sticky; z-index: 1; }
   .tbl.tx thead th { z-index: 2; }
   .tbl.tx thead th.c-sel, .tbl.tx thead th.c-tgl, .tbl.tx thead th.c-code, .tbl.tx thead th.c-party { z-index: 4; }

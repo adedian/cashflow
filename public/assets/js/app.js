@@ -184,6 +184,30 @@
     var t = ev.target.closest ? ev.target.closest('a.sb-link, button.sb-link') : null;
     if (t && t.id !== 'installBtn') closeMenu();
   });
+  /* Tooltip nama menu: saat sidebar berupa rail ikon, hanya ikon yang disentuh/difokus yang memunculkan namanya di sampingnya. */
+  var tip = null;
+  function hideTip() { if (tip) tip.classList.remove('on'); }
+  function showTip(el) {
+    if (mq.matches || body.classList.contains('sb-expanded')) { hideTip(); return; }
+    var txt = el.getAttribute('data-tip');
+    if (!txt) { hideTip(); return; }
+    if (!tip) { tip = document.createElement('div'); tip.className = 'sb-tip'; tip.setAttribute('role', 'tooltip'); body.appendChild(tip); }
+    tip.textContent = '';
+    var ic = el.querySelector('svg'); if (ic) { var c = ic.cloneNode(true); c.setAttribute('class', 'i'); tip.appendChild(c); }
+    var lb = document.createElement('span'); lb.textContent = txt; tip.appendChild(lb);
+    var r = el.getBoundingClientRect();
+    tip.style.left = Math.round(r.right + 10) + 'px';
+    tip.style.top = Math.round(r.top + r.height / 2) + 'px';
+    tip.classList.add('on');
+  }
+  if (sbEl) {
+    sbEl.addEventListener('mouseover', function (ev) { var t = ev.target.closest ? ev.target.closest('[data-tip]') : null; if (t) showTip(t); else hideTip(); });
+    sbEl.addEventListener('mouseleave', hideTip);
+    sbEl.addEventListener('focusin', function (ev) { var t = ev.target.closest ? ev.target.closest('[data-tip]') : null; if (t) showTip(t); });
+    sbEl.addEventListener('focusout', hideTip);
+    sbEl.addEventListener('click', hideTip);
+    var nv = sbEl.querySelector('.sb-nav'); if (nv) nv.addEventListener('scroll', hideTip, { passive: true });
+  }
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closeMenu(); });
   window.addEventListener('pageshow', closeMenu);
 

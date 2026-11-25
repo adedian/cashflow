@@ -61,25 +61,25 @@ $initial = mb_strtoupper(mb_substr($user['full_name'] ?? '?', 0, 1));
   <nav class="sb-nav">
     <div class="sb-group">Menu</div>
     <?php foreach ($nav as [$href, $label, $ic]): ?>
-      <a class="sb-link<?= $active($href) ?>" href="<?= e(url($href)) ?>" title="<?= e($label) ?>"><?= $icon($ic) ?><span><?= e($label) ?></span></a>
+      <a class="sb-link<?= $active($href) ?>" href="<?= e(url($href)) ?>" data-tip="<?= e($label) ?>"><?= $icon($ic) ?><span><?= e($label) ?></span></a>
     <?php endforeach; ?>
     <?php if ($isAdmin): ?>
       <div class="sb-group">Administrasi</div>
       <?php foreach ($adminNav as [$href, $label, $ic]): ?>
-        <a class="sb-link<?= $active($href) ?>" href="<?= e(url($href)) ?>" title="<?= e($label) ?>"><?= $icon($ic) ?><span><?= e($label) ?></span></a>
+        <a class="sb-link<?= $active($href) ?>" href="<?= e(url($href)) ?>" data-tip="<?= e($label) ?>"><?= $icon($ic) ?><span><?= e($label) ?></span></a>
       <?php endforeach; ?>
     <?php endif; ?>
   </nav>
   <div class="sb-foot">
-    <div class="sb-user">
+    <div class="sb-user" data-tip="<?= e(($user['full_name'] ?? '')) ?>">
       <div class="avatar"><?= e($initial) ?></div>
       <div class="who"><b><?= e($user['full_name'] ?? '') ?></b><small><?= $isAdmin ? 'Super Admin' : 'Viewer' ?></small></div>
     </div>
-    <button class="sb-link" id="installBtn" type="button" hidden title="Pasang aplikasi" style="width:100%;border:0;background:transparent;cursor:pointer;font:inherit"><?= $icon('up') ?><span>Pasang aplikasi</span></button>
-    <a class="sb-link" href="<?= e(url('/password')) ?>" title="Ganti password"><?= $icon('lock') ?><span>Ganti password</span></a>
+    <button class="sb-link" id="installBtn" type="button" hidden data-tip="Pasang aplikasi" style="width:100%;border:0;background:transparent;cursor:pointer;font:inherit"><?= $icon('up') ?><span>Pasang aplikasi</span></button>
+    <a class="sb-link" href="<?= e(url('/password')) ?>" data-tip="Ganti password"><?= $icon('lock') ?><span>Ganti password</span></a>
     <form method="post" action="<?= e(url('/logout')) ?>">
       <?= csrf_field() ?>
-      <button class="sb-link" style="width:100%;border:0;background:transparent;cursor:pointer;font:inherit" type="submit" title="Keluar"><?= $icon('logout') ?><span>Keluar</span></button>
+      <button class="sb-link" style="width:100%;border:0;background:transparent;cursor:pointer;font:inherit" type="submit" data-tip="Keluar"><?= $icon('logout') ?><span>Keluar</span></button>
     </form>
   </div>
 </aside>
