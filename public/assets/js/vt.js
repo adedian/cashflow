@@ -58,6 +58,31 @@
   }, true);
   window.addEventListener('pageshow', function () { root.classList.remove('vt-leaving'); });
 
+  // ---------- prefetch halaman tujuan (peramban Chromium) ----------
+  // Saat kursor melayang ~200 ms di atas tautan, HTML halaman tujuan sudah diambil: klik terasa instan dan
+  // transisi tidak menunggu jaringan/PHP. Hanya GET baca-saja; ekspor, API, impor, cadangan & keluar dikecualikan.
+  function speculate() {
+    try {
+      if (!window.HTMLScriptElement || !HTMLScriptElement.supports || !HTMLScriptElement.supports('speculationrules')) return;
+      var m = document.querySelector('meta[name="app-base"]');
+      var base = ((m && m.content) || '').replace(/\/$/, '');
+      var sk = document.createElement('script');
+      sk.type = 'speculationrules';
+      sk.textContent = JSON.stringify({
+        prefetch: [{
+          where: { and: [
+            { href_matches: base + '/*' },
+            { not: { href_matches: [base + '/export/*', base + '/api/*', base + '/import/*', base + '/settings/backup/*', base + '/logout', base + '/sw.js', base + '/manifest.webmanifest'] } },
+            { not: { selector_matches: '[target=_blank], [download], [data-no-prefetch]' } }
+          ] },
+          eagerness: 'moderate'
+        }]
+      });
+      document.head.appendChild(sk);
+    } catch (e) { /* abaikan */ }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', speculate); else speculate();
+
   if (!('onpageswap' in window) || !('onpagereveal' in window)) {
     root.classList.add('no-vt');
     staggerOn();
@@ -84,9 +109,11 @@
     var to, from = location.pathname;
     try { to = new URL(toUrl, location.href).pathname; } catch (e) { return 'down'; }
     if (to === from) return 'in';
+    var order = navOrder(), ea = order.indexOf(from), eb = order.indexOf(to);
+    if (ea >= 0 && eb >= 0) return eb > ea ? 'down' : 'up';                                // antar menu utama (termasuk Dashboard)
     if (from.length > 1 && to.indexOf(from.replace(/\/$/, '') + '/') === 0) return 'in';   // ke halaman detail/anak
     if (to.length > 1 && from.indexOf(to.replace(/\/$/, '') + '/') === 0) return 'out';    // kembali ke induk
-    var order = navOrder(), a = idxOf(order, from), b = idxOf(order, to);
+    var a = idxOf(order, from), b = idxOf(order, to);
     if (a >= 0 && b >= 0 && a !== b) return b > a ? 'down' : 'up';
     return 'in';
   }
@@ -102,7 +129,7 @@
     if (!e.viewTransition) return;
     var dir = load(KEY_DIR) || 'down';
     // [translateY halaman, translateX judul, skala awal halaman]
-    var vec = { down: [46, 34, .985], up: [-46, -34, .985], 'in': [18, 44, .94], out: [18, -44, 1.05] }[dir] || [40, 30, .985];
+    var vec = { down: [30, 24, .99], up: [-30, -24, .99], 'in': [14, 32, .965], out: [14, -32, 1.03] }[dir] || [26, 22, .99];
     var content = document.querySelector('.content');
     var pt = (load(KEY_PT) || '').split(',');
     var px = parseFloat(pt[0]), py = parseFloat(pt[1]);
