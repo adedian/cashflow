@@ -613,14 +613,19 @@ final class ExportBuilder
             $s->set($r, 3, $t['invoice_no'] ?? '', $base + ['wrap' => true]);
             $s->set($r, 4, $t['customer'], $base + ['wrap' => true]);
             if ($items) {
+                $anyDisc = false;
                 foreach ($items as $k => $it) {
                     $whole = bccomp((string) $it['qty'], bcadd((string) $it['qty'], '0', 0), 2) === 0;
-                    $s->set($r + $k, 5, $it['name'], $base + ['wrap' => true]);
+                    $dl = \App\Controllers\InvoiceController::discountLabel($it);
+                    if ($dl !== '') { $anyDisc = true; }
+                    // kolom Excel tetap A–P: diskon ditulis di samping nama barang
+                    $s->set($r + $k, 5, $it['name'] . ($dl !== '' ? ' (diskon ' . $dl . ')' : ''), $base + ['wrap' => true]);
                     $s->num($r + $k, 6, $it['qty'], $base + ['fmt' => $whole ? 'int' : 'acc2', 'h' => 'center']);
                     $s->num($r + $k, 7, $it['price'], $base + ['fmt' => 'acc2']);
                 }
                 $iLast = $r + count($items) - 1;
-                $s->num($r, 8, (string) $t['amount'], $base + ['fmt' => 'acc2'], 'SUMPRODUCT(ROUND(F' . $r . ':F' . $iLast . '*G' . $r . ':G' . $iLast . ',2))');
+                // tanpa diskon: total = Σ Qty × Harga (rumus Excel); dengan diskon: nilai tetap dari sistem
+                $s->num($r, 8, (string) $t['amount'], $base + ['fmt' => 'acc2'], $anyDisc ? null : 'SUMPRODUCT(ROUND(F' . $r . ':F' . $iLast . '*G' . $r . ':G' . $iLast . ',2))');
             } else {
                 $s->set($r, 5, (string) ($t['description'] ?? ''), $base + ['wrap' => true]);
                 $s->paint($r, 6, 7, $base);

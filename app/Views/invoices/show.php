@@ -47,13 +47,13 @@ if ($unissued) {
   <?php $its = $lampu ? \App\Controllers\InvoiceController::itemsOf($r) : []; if ($its): ?>
   <h3 class="mt-3 mb-1" style="font-size:15px">Uraian barang</h3>
   <div class="table-wrap"><table class="tbl stack">
-    <thead><tr><th>No</th><th>Nama barang</th><th class="r">Qty</th><th class="r">Harga satuan</th><th class="r">Jumlah</th></tr></thead>
+    <thead><tr><th>No</th><th>Nama barang</th><th class="r">Qty</th><th class="r">Harga satuan</th><th class="r">Diskon</th><th class="r">Jumlah</th></tr></thead>
     <tbody>
-    <?php foreach ($its as $i => $it): ?>
-      <tr><td data-label="No"><?= $i + 1 ?></td><td data-label="Nama barang"><?= e($it['name']) ?></td><td data-label="Qty" class="r num"><?= e(money($it['qty'], false)) ?></td><td data-label="Harga satuan" class="r num"><?= e(money($it['price'], false)) ?></td><td data-label="Jumlah" class="r num"><?= e(money($it['subtotal'], false)) ?></td></tr>
+    <?php foreach ($its as $i => $it): $dl = \App\Controllers\InvoiceController::discountLabel($it); ?>
+      <tr><td data-label="No"><?= $i + 1 ?></td><td data-label="Nama barang"><?= e($it['name']) ?></td><td data-label="Qty" class="r num"><?= e(money($it['qty'], false)) ?></td><td data-label="Harga satuan" class="r num"><?= e(money($it['price'], false)) ?></td><td data-label="Diskon" class="r num"><?= $dl === '' ? '<span class="muted">-</span>' : e($dl) . ($dl[-1] === '%' ? ' <span class="muted">(' . e(money($it['disc_amt'], false)) . ')</span>' : '') ?></td><td data-label="Jumlah" class="r num"><?= e(money($it['subtotal'], false)) ?></td></tr>
     <?php endforeach; ?>
     </tbody>
-    <tfoot><tr><td colspan="4" class="r"><b>Total piutang</b></td><td class="r num"><b><?= e(money($r['amount'], false)) ?></b></td></tr></tfoot>
+    <tfoot><tr><td colspan="5" class="r"><b>Total piutang</b></td><td class="r num"><b><?= e(money($r['amount'], false)) ?></b></td></tr></tfoot>
   </table></div>
   <?php elseif ($lampu): ?><p class="help mt-2 mb-0">Data lama tanpa rincian barang. <?= $isAdmin ? 'Rincian dapat diisi lewat “Ubah”.' : '' ?></p><?php endif; ?>
 </section>

@@ -222,15 +222,53 @@ final class InvoiceController extends Controller
     }
 
     /**
-     * Rincian barang Piutang Lampu dari baris tersimpan (kolom JSON `items`) atau dari isian formulir (item_name[]/item_qty[]/item_price[]).
-     * @return list<array{name:string,qty:string,price:string,subtotal:string}>
+     * Diskon per baris barang: "10%" (persen dari Qty × harga) atau nominal rupiah ("50.000"). Kosong = tanpa diskon.
+     * @return array{0:string,1:string,2:?string} [teks tersimpan ("10%" / "50000.00" / ""), nominal diskon (sen), pesan galat]
+     */
+    public static function parseDiscount(string $raw, string $gross): array
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return ['', '0.00', null];
+        }
+        if (substr($raw, -1) === '%') {
+            $pc = parse_amount(trim(substr($raw, 0, -1)));
+            if ($pc === null || bccomp($pc, '100', 2) > 0) {
+                return ['', '0.00', 'diskon persen harus 0–100% (mis. 10%).'];
+            }
+            $amt = bcadd(bcdiv(bcmul($gross, $pc, 6), '100', 6), '0.005', 2);
+            return [rtrim(rtrim($pc, '0'), '.') . '%', $amt, null];
+        }
+        $amt = parse_amount($raw);
+        if ($amt === null) {
+            return ['', '0.00', 'diskon tidak valid (isi nominal rupiah, atau persen seperti 10%).'];
+        }
+        if (bccomp($amt, $gross, 2) > 0) {
+            return ['', '0.00', 'diskon melebihi jumlah (Qty × harga satuan = ' . money($gross, false) . ').'];
+        }
+        return [$amt, $amt, null];
+    }
+
+    /** Teks diskon untuk tampilan: "10%" atau "Rp 50.000"; kosong bila tanpa diskon. */
+    public static function discountLabel(array $it): string
+    {
+        $d = (string) ($it['disc'] ?? '');
+        if ($d === '' || bccomp((string) ($it['disc_amt'] ?? '0'), '0', 2) <= 0) {
+            return '';
+        }
+        return substr($d, -1) === '%' ? str_replace('.', ',', $d) : 'Rp ' . money($d, false);
+    }
+
+    /**
+     * Rincian barang Piutang Lampu dari baris tersimpan (kolom JSON `items`) atau dari isian formulir (item_name[]/item_qty[]/item_price[]/item_disc[]).
+     * @return list<array{name:string,qty:string,price:string,disc?:string,disc_amt?:string,subtotal:string}>
      */
     public static function itemsOf(array $t): array
     {
         if (isset($t['item_name']) && is_array($t['item_name'])) {
             $out = [];
             foreach ($t['item_name'] as $i => $n) {
-                $out[] = ['name' => (string) $n, 'qty' => (string) ($t['item_qty'][$i] ?? ''), 'price' => (string) ($t['item_price'][$i] ?? ''), 'subtotal' => ''];
+                $out[] = ['name' => (string) $n, 'qty' => (string) ($t['item_qty'][$i] ?? ''), 'price' => (string) ($t['item_price'][$i] ?? ''), 'disc' => (string) ($t['item_disc'][$i] ?? ''), 'subtotal' => ''];
             }
             return $out;
         }
@@ -465,15 +503,22 @@ final class InvoiceController extends Controller
             }
             $qRaw = trim((string) ($in['item_qty'][$i] ?? ''));
             $pRaw = trim((string) ($in['item_price'][$i] ?? ''));
-            if ($n === '' && $qRaw === '' && $pRaw === '') { continue; }
+            $dRaw = trim((string) ($in['item_disc'][$i] ?? ''));
+            if ($n === '' && $qRaw === '' && $pRaw === '' && $dRaw === '') { continue; }
             $qty = parse_amount($qRaw);
             $price = parse_amount($pRaw);
             if ($n === '' || $qty === null || bccomp($qty, '0', 2) <= 0 || $price === null) {
                 $e['items'] = 'Baris barang ke-' . ($i + 1) . ' belum lengkap: isi nama barang, Qty (> 0), dan harga satuan.';
                 continue;
             }
-            $sub = bcadd(bcmul($qty, $price, 4), '0.005', 2);   // pembulatan ke sen terdekat
-            $items[] = ['name' => $n, 'qty' => $qty, 'price' => $price, 'subtotal' => $sub];
+            $gross = bcadd(bcmul($qty, $price, 4), '0.005', 2);   // pembulatan ke sen terdekat
+            [$disc, $dAmt, $dErr] = self::parseDiscount($dRaw, $gross);
+            if ($dErr !== null) {
+                $e['items'] = 'Baris barang ke-' . ($i + 1) . ': ' . $dErr;
+                continue;
+            }
+            $sub = bcsub($gross, $dAmt, 2);
+            $items[] = ['name' => $n, 'qty' => $qty, 'price' => $price, 'disc' => $disc, 'disc_amt' => $dAmt, 'subtotal' => $sub];
             $sum = bcadd($sum, $sub, 2);
         }
         if (count($items) > 100) { $e['items'] = 'Maksimal 100 baris barang per surat jalan.'; }

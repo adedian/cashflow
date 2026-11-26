@@ -31,6 +31,13 @@
       var q = cents(tr.querySelector('[name="item_qty[]"]').value);
       var p = cents(tr.querySelector('[name="item_price[]"]').value);
       var sub = q !== null && p !== null ? Math.round(q * p / 100) : null;
+      if (sub !== null) {
+        // diskon: "10%" (persen dari Qty × harga) atau nominal rupiah; isian tak valid dianggap 0 (server yang memvalidasi)
+        var dr = tr.querySelector('[name="item_disc[]"]').value.trim(), d = 0;
+        if (dr.slice(-1) === '%') { var pc = cents(dr.slice(0, -1)); d = pc !== null ? Math.round(sub * (pc / 100) / 100) : 0; }
+        else if (dr !== '') { d = cents(dr) || 0; }
+        sub = Math.max(sub - d, 0);
+      }
       tr.querySelector('.sub').textContent = sub === null ? '-' : fmt(sub);
       if (sub !== null) { total += sub; any = true; }
     });

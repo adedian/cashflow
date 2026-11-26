@@ -48,23 +48,24 @@ ob_start(); ?>
     <h3 class="mt-3 mb-1" style="font-size:15px">Uraian barang</h3>
     <div class="table-wrap">
       <table class="tbl inv-items" id="itemsTbl">
-        <thead><tr><th style="width:36px">No</th><th>Nama barang</th><th class="r" style="width:110px">Qty</th><th class="r" style="width:170px">Harga satuan (Rp)</th><th class="r" style="width:170px">Jumlah (Rp)</th><th style="width:56px"></th></tr></thead>
+        <thead><tr><th style="width:36px">No</th><th style="width:30%">Nama barang</th><th class="r" style="width:9%">Qty</th><th class="r" style="width:18%">Harga satuan (Rp)</th><th class="r" style="width:17%">Diskon (Rp / %)</th><th class="r" style="width:19%">Jumlah (Rp)</th><th style="width:56px"></th></tr></thead>
         <tbody>
-        <?php $rows = $items ?: ($legacy ? [] : [['name' => '', 'qty' => '', 'price' => '']]); foreach ($rows as $i => $it): ?>
+        <?php $rows = $items ?: ($legacy ? [] : [['name' => '', 'qty' => '', 'price' => '', 'disc' => '']]); foreach ($rows as $i => $it): ?>
           <tr>
             <td class="ln"><?= $i + 1 ?></td>
             <td><?= $itemSelect((string) $it['name']) ?></td>
             <td><input class="input num r" name="item_qty[]" inputmode="decimal" value="<?= e($num($it['qty'])) ?>" aria-label="Qty"></td>
             <td><input class="input num r" name="item_price[]" inputmode="decimal" value="<?= e($num($it['price'])) ?>" aria-label="Harga satuan"></td>
+            <td><input class="input num r" name="item_disc[]" inputmode="decimal" value="<?= e(substr((string) ($it['disc'] ?? ''), -1) === '%' ? str_replace('.', ',', (string) $it['disc']) : $num($it['disc'] ?? '')) ?>" placeholder="0 atau 10%" aria-label="Diskon (rupiah atau persen)"></td>
             <td class="r num sub">-</td>
             <td><button type="button" class="icon-btn" style="background:#eef1f8;color:#3b4566" data-del-item aria-label="Hapus baris"><svg class="i i-sm"><use href="#i-x"/></svg></button></td>
           </tr>
         <?php endforeach; ?>
         </tbody>
-        <tfoot><tr><td colspan="4" class="r"><b>Total piutang</b></td><td class="r num"><b id="itemsTotal">-</b></td><td></td></tr></tfoot>
+        <tfoot><tr><td colspan="5" class="r"><b>Total piutang</b></td><td class="r num"><b id="itemsTotal">-</b></td><td></td></tr></tfoot>
       </table>
     </div>
-    <div class="mt-1" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="button" class="btn btn-ghost btn-sm" id="addItem"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah barang</button><span class="help">Barang dipilih dari <a href="<?= e(url('/master?tab=products')) ?>">Master Data → Barang</a>; tidak ada? Ketik namanya lalu pilih “Tambah”. Harga satuan terisi dari master bila ada. Jumlah = Qty × Harga satuan; Total piutang = jumlah semua barang (dihitung ulang oleh server).</span></div>
+    <div class="mt-1" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="button" class="btn btn-ghost btn-sm" id="addItem"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah barang</button><span class="help">Barang dipilih dari <a href="<?= e(url('/master?tab=products')) ?>">Master Data → Barang</a>; tidak ada? Ketik namanya lalu pilih “Tambah”. Harga satuan terisi dari master bila ada. Diskon boleh nominal rupiah (50.000) atau persen (10%); kosongkan bila tidak ada. Jumlah = Qty × Harga satuan − Diskon; Total piutang = jumlah semua barang (dihitung ulang oleh server).</span></div>
     <?= $fe('items') ?>
     <?php if ($legacy): ?>
     <div class="field mt-2" id="legacyAmount" style="max-width:320px"><label for="amount">Total piutang (Rp) — data lama tanpa rincian</label><input class="input num" id="amount" name="amount" inputmode="decimal" value="<?= e($num($v('amount'))) ?>"><span class="help">Isi rincian barang di atas untuk menghitung total otomatis.</span><?= $fe('amount') ?></div>
@@ -93,6 +94,7 @@ ob_start(); ?>
       <td><?= $itemSelect('') ?></td>
       <td><input class="input num r" name="item_qty[]" inputmode="decimal" aria-label="Qty"></td>
       <td><input class="input num r" name="item_price[]" inputmode="decimal" aria-label="Harga satuan"></td>
+      <td><input class="input num r" name="item_disc[]" inputmode="decimal" placeholder="0 atau 10%" aria-label="Diskon (rupiah atau persen)"></td>
       <td class="r num sub">-</td>
       <td><button type="button" class="icon-btn" style="background:#eef1f8;color:#3b4566" data-del-item aria-label="Hapus baris"><svg class="i i-sm"><use href="#i-x"/></svg></button></td>
     </tr></template>
