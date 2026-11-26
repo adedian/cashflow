@@ -484,6 +484,57 @@ body.auth-body::after { width: 420px; height: 420px; background: #9fc3ff; right:
   .off-card, .off-icon svg, .off-icon .ring, .off-status .dot { animation: none; }
 }
 
+/* ================= Transisi antar halaman ================= */
+@view-transition { navigation: auto; }
+::view-transition-group(root) { animation-duration: .45s; }
+::view-transition-old(root) { animation: vtFadeOut .3s ease both; }
+::view-transition-new(root) { animation: vtFadeIn .45s ease both; }
+/* sidebar / bottom nav: tetap di tempat, status menu aktif berganti halus */
+::view-transition-group(vt-side), ::view-transition-group(vt-bnav) { animation-duration: .3s; }
+/* judul & isi halaman: tanpa morph ukuran, dianimasikan sendiri-sendiri */
+::view-transition-group(vt-head), ::view-transition-group(vt-page) { animation: none; }
+::view-transition-old(vt-head), ::view-transition-new(vt-head),
+::view-transition-old(vt-page), ::view-transition-new(vt-page) { mix-blend-mode: normal; }
+::view-transition-old(vt-head) { animation: vtHeadOut .24s cubic-bezier(.5, 0, .75, 0) both; }
+::view-transition-new(vt-head) { animation: vtHeadIn .7s cubic-bezier(.16, 1, .3, 1) .1s both; }
+::view-transition-old(vt-page) { animation: vtPageOut .3s cubic-bezier(.5, 0, .75, 0) both; }
+::view-transition-new(vt-page) { animation: vtPageIn .85s cubic-bezier(.16, 1, .3, 1) .04s both; }
+/* variabel --vt-* diisi vt.js: titik klik (x,y), radius, arah (dx,dy) & skala awal */
+@keyframes vtFadeOut { to { opacity: 0; } }
+@keyframes vtFadeIn { from { opacity: 0; } }
+@keyframes vtHeadOut { to { opacity: 0; transform: translateX(calc(var(--vt-dx, 30px) * -.6)); filter: blur(4px); } }
+@keyframes vtHeadIn {
+  from { opacity: 0; transform: translateX(var(--vt-dx, 30px)); filter: blur(8px); }
+  45% { opacity: 1; }
+}
+@keyframes vtPageOut { to { opacity: 0; transform: translateY(calc(var(--vt-dy, 40px) * -.4)) scale(.965); filter: blur(5px); } }
+@keyframes vtPageIn {
+  from { opacity: 0; transform: translateY(var(--vt-dy, 40px)) scale(var(--vt-s, .985)); filter: blur(9px); clip-path: circle(0px at var(--vt-x, 50%) var(--vt-y, 0px)); }
+  40% { opacity: 1; }
+  to { clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 50%) var(--vt-y, 0px)); }
+}
+/* kartu masuk berurutan (kelas .vt-in dipasang vt.js hanya saat berpindah halaman) */
+.vt-in .content > *, .vt-in .content > .grid > * { animation: vtCard .75s cubic-bezier(.16, 1, .3, 1) backwards; }
+.vt-in .content > :nth-child(1) { animation-delay: .18s; } .vt-in .content > :nth-child(2) { animation-delay: .24s; }
+.vt-in .content > :nth-child(3) { animation-delay: .30s; } .vt-in .content > :nth-child(4) { animation-delay: .36s; }
+.vt-in .content > :nth-child(5) { animation-delay: .42s; } .vt-in .content > :nth-child(n+6) { animation-delay: .48s; }
+.vt-in .content > .grid > :nth-child(1) { animation-delay: .24s; } .vt-in .content > .grid > :nth-child(2) { animation-delay: .30s; }
+.vt-in .content > .grid > :nth-child(3) { animation-delay: .36s; } .vt-in .content > .grid > :nth-child(4) { animation-delay: .42s; }
+.vt-in .content > .grid > :nth-child(n+5) { animation-delay: .48s; }
+@keyframes vtCard { from { opacity: 0; transform: translateY(24px) scale(.97); } }
+/* bilah progres saat menunggu halaman berikutnya */
+html.vt-leaving::after { content: ""; position: fixed; left: 0; top: 0; width: 100%; height: 3px; z-index: 99999; pointer-events: none; transform-origin: left; background: linear-gradient(90deg, #ff9a1f, #ffd27a 70%, #fff); box-shadow: 0 0 12px rgba(255, 170, 60, .85); animation: vtBar 6s cubic-bezier(.1, .6, .2, 1) forwards; }
+html.vt-leaving, html.vt-leaving body { cursor: progress; }
+@keyframes vtBar { from { transform: scaleX(0); } to { transform: scaleX(.93); } }
+/* cadangan untuk peramban tanpa View Transitions (kelas .no-vt dipasang vt.js) */
+.no-vt .page-head { animation: vtHeadIn .7s cubic-bezier(.16, 1, .3, 1) backwards; --vt-dx: -30px; }
+.no-vt .content { animation: vtPageIn .85s cubic-bezier(.16, 1, .3, 1) .06s backwards; --vt-dy: 34px; --vt-r: 150vmax; --vt-x: 12%; --vt-y: 0px; }
+@media (prefers-reduced-motion: reduce) {
+  @view-transition { navigation: none; }
+  .no-vt .page-head, .no-vt .content, .vt-in .content > *, .vt-in .content > .grid > * { animation: none; }
+  html.vt-leaving::after { animation: none; }
+}
+
 /* bottom nav (mobile) */
 .bottomnav { display: none; }
 .scrim { display: none; }

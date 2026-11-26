@@ -49,6 +49,7 @@ $initial = mb_strtoupper(mb_substr($user['full_name'] ?? '?', 0, 1));
 <meta name="apple-mobile-web-app-title" content="Cashflow HME">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
+<script src="<?= e(asset('js/vt.js')) ?>"></script>
 </head>
 <body>
 <?= \App\Core\View::partial('partials/icons') ?>
