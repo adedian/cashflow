@@ -485,59 +485,86 @@ body.auth-body::after { width: 420px; height: 420px; background: #9fc3ff; right:
 }
 
 /* ================= Transisi antar halaman ================= */
-/* Prinsip "super smooth": hanya transform / opacity / clip-path (tanpa filter blur pada snapshot besar),
-   kurva easing tunggal, snapshot lama dibiarkan utuh sampai yang baru menutupinya (tanpa plus-lighter
-   yang bisa berkedip), dan kartu berurutan dibuat ringan agar tak membebani render snapshot. */
+/* Prinsip "super smooth": hanya transform / opacity (jalan di compositor GPU, tanpa blur/clip-path pada
+   snapshot besar), satu keluarga kurva easing, snapshot lama utuh sampai yang baru menutupi (blend normal).
+   Jenis animasi dipilih vt.js (html[data-vt=...]): down, up, in, out, morph, next, prev, fade, rise.
+   Setiap jenis hanya mengisi variabel: --o-* (keluar: x,y,skala), --i-* (masuk), --h-x (geser judul),
+   --vt-di/--vt-do (durasi masuk/keluar), --vt-ease. Titik zoom --vt-ox/--vt-oy diisi dari titik klik. */
 @view-transition { navigation: auto; }
+html { --vt-ease: cubic-bezier(.22, 1, .36, 1); }
+html[data-vt] { --o-x: 0px; --o-y: 0px; --o-s: 1; --i-x: 0px; --i-y: 0px; --i-s: 1; --h-x: 0px; --vt-di: .55s; --vt-do: .2s; }
+html[data-vt=down]  { --o-y: -28px; --o-s: .985; --i-y: 44px; --i-s: .99; --h-x: 26px; }
+html[data-vt=up]    { --o-y: 28px; --o-s: .985; --i-y: -44px; --i-s: .99; --h-x: -26px; }
+html[data-vt=in]    { --o-s: 1.045; --i-s: .94; --h-x: 34px; --vt-di: .6s; }
+html[data-vt=out]   { --o-s: .95; --i-s: 1.05; --h-x: -34px; --vt-di: .6s; }
+html[data-vt=next]  { --o-x: -56px; --i-x: 72px; --h-x: 0px; --vt-di: .45s; --vt-do: .18s; }
+html[data-vt=prev]  { --o-x: 56px; --i-x: -72px; --h-x: 0px; --vt-di: .45s; --vt-do: .18s; }
+html[data-vt=fade]  { --vt-di: .28s; --vt-do: .14s; }
+html[data-vt=rise]  { --o-s: 1.02; --i-y: 46px; --i-s: .95; --h-x: 0px; --vt-di: .75s; --vt-ease: cubic-bezier(.34, 1.45, .64, 1); }
+html[data-vt=morph] { --i-y: 20px; --i-s: .99; --h-x: 24px; --vt-di: .6s; }
+
 ::view-transition-group(root) { animation-duration: .42s; }
 ::view-transition-old(root), ::view-transition-new(root) { mix-blend-mode: normal; }
 ::view-transition-old(root) { animation: none; }
-::view-transition-new(root) { animation: vtFadeIn .32s cubic-bezier(.22, 1, .36, 1) both; }
+::view-transition-new(root) { animation: vtFadeIn .3s var(--vt-ease) both; }
 /* sidebar / bottom nav: tetap di tempat, status menu aktif berganti halus */
 ::view-transition-group(vt-side), ::view-transition-group(vt-bnav) { animation-duration: .3s; animation-timing-function: cubic-bezier(.22, 1, .36, 1); }
 ::view-transition-old(vt-side), ::view-transition-new(vt-side),
 ::view-transition-old(vt-bnav), ::view-transition-new(vt-bnav) { mix-blend-mode: normal; }
+/* kartu bersama (morph): kotak lama "memuai" menjadi kotak baru */
+::view-transition-group(vt-shared) { animation-duration: .6s; animation-timing-function: cubic-bezier(.22, 1, .36, 1); }
+::view-transition-old(vt-shared) { animation: vtFadeOut .35s ease-in both; mix-blend-mode: normal; }
+::view-transition-new(vt-shared) { animation: vtFadeIn .45s ease-out both; mix-blend-mode: normal; }
 /* judul & isi halaman: tanpa morph ukuran, dianimasikan sendiri-sendiri */
 ::view-transition-group(vt-head), ::view-transition-group(vt-page) { animation: none; }
 ::view-transition-old(vt-head), ::view-transition-new(vt-head),
-::view-transition-old(vt-page), ::view-transition-new(vt-page) { mix-blend-mode: normal; }
-::view-transition-old(vt-head) { animation: vtHeadOut .18s cubic-bezier(.4, 0, 1, 1) both; }
-::view-transition-new(vt-head) { animation: vtHeadIn .55s cubic-bezier(.22, 1, .36, 1) .06s both; }
-::view-transition-old(vt-page) { animation: vtPageOut .2s cubic-bezier(.4, 0, 1, 1) both; }
-::view-transition-new(vt-page) { animation: vtPageIn .6s cubic-bezier(.22, 1, .36, 1) .03s both; }
-/* variabel --vt-* diisi vt.js: titik klik (x,y), radius, arah (dx,dy) & skala awal */
+::view-transition-old(vt-page), ::view-transition-new(vt-page) { mix-blend-mode: normal; transform-origin: var(--vt-ox, 50%) var(--vt-oy, 0px); }
+::view-transition-old(vt-head) { animation: vtHeadOut calc(var(--vt-do, .2s) * .9) cubic-bezier(.4, 0, 1, 1) both; }
+::view-transition-new(vt-head) { animation: vtHeadIn calc(var(--vt-di, .55s) * .9) var(--vt-ease) .05s both; }
+::view-transition-old(vt-page) { animation: vtPageOut var(--vt-do, .2s) cubic-bezier(.4, 0, 1, 1) both; }
+::view-transition-new(vt-page) { animation: vtPageIn var(--vt-di, .55s) var(--vt-ease) .03s both; }
 @keyframes vtFadeIn { from { opacity: 0; } }
-@keyframes vtHeadOut { to { opacity: 0; transform: translateX(calc(var(--vt-dx, 24px) * -.5)); } }
-@keyframes vtHeadIn {
-  from { opacity: 0; transform: translateX(var(--vt-dx, 24px)); }
-  50% { opacity: 1; }
-}
-@keyframes vtPageOut { to { opacity: 0; transform: translateY(calc(var(--vt-dy, 28px) * -.35)) scale(.985); } }
-@keyframes vtPageIn {
-  from { opacity: 0; transform: translateY(var(--vt-dy, 28px)) scale(var(--vt-s, .99)); clip-path: circle(0px at var(--vt-x, 50%) var(--vt-y, 0px)); }
-  35% { opacity: 1; }
-  to { clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 50%) var(--vt-y, 0px)); }
-}
+@keyframes vtFadeOut { to { opacity: 0; } }
+@keyframes vtHeadOut { to { opacity: 0; transform: translateX(calc(var(--h-x, 0px) * -.5)); } }
+@keyframes vtHeadIn { from { opacity: 0; transform: translateX(var(--h-x, 0px)); } 50% { opacity: 1; } }
+@keyframes vtPageOut { to { opacity: 0; transform: translate(var(--o-x, 0px), var(--o-y, 0px)) scale(var(--o-s, 1)); } }
+@keyframes vtPageIn { from { opacity: 0; transform: translate(var(--i-x, 0px), var(--i-y, 0px)) scale(var(--i-s, 1)); } 40% { opacity: 1; } }
 /* kartu masuk berurutan (kelas .vt-in dipasang vt.js hanya saat berpindah halaman) */
-.vt-in .content > *, .vt-in .content > .grid > * { animation: vtCard .5s cubic-bezier(.22, 1, .36, 1) backwards; }
+.vt-in .content > *, .vt-in .content > .grid > * { animation: vtCard .55s cubic-bezier(.22, 1, .36, 1) backwards; }
 .vt-in .content > :nth-child(1) { animation-delay: .1s; } .vt-in .content > :nth-child(2) { animation-delay: .15s; }
 .vt-in .content > :nth-child(3) { animation-delay: .2s; } .vt-in .content > :nth-child(4) { animation-delay: .25s; }
 .vt-in .content > :nth-child(n+5) { animation-delay: .3s; }
 .vt-in .content > .grid > :nth-child(1) { animation-delay: .14s; } .vt-in .content > .grid > :nth-child(2) { animation-delay: .19s; }
 .vt-in .content > .grid > :nth-child(3) { animation-delay: .24s; } .vt-in .content > .grid > :nth-child(4) { animation-delay: .29s; }
 .vt-in .content > .grid > :nth-child(n+5) { animation-delay: .34s; }
-@keyframes vtCard { from { opacity: 0; transform: translateY(14px); } }
+@keyframes vtCard { from { opacity: 0; transform: translateY(16px) scale(.985); } }
+/* respons instan saat diklik: halaman lama langsung bergerak ke arah tujuan selagi menunggu server,
+   lalu snapshot-nya diteruskan mulus oleh transisi (tidak ada "beku sesaat") */
+html.vt-leaving .content { opacity: .72; transition: transform .38s cubic-bezier(.22, 1, .36, 1), opacity .38s ease; transform-origin: var(--vt-lx, 50%) var(--vt-ly, 0px); }
+html.vt-leaving[data-vt-go=down] .content { transform: translateY(-9px) scale(.996); }
+html.vt-leaving[data-vt-go=up] .content { transform: translateY(9px) scale(.996); }
+html.vt-leaving[data-vt-go=in] .content, html.vt-leaving[data-vt-go=morph] .content { transform: scale(1.016); }
+html.vt-leaving[data-vt-go=out] .content { transform: scale(.984); }
+html.vt-leaving[data-vt-go=next] .content { transform: translateX(-16px); }
+html.vt-leaving[data-vt-go=prev] .content { transform: translateX(16px); }
+html.vt-leaving[data-vt-go=fade] .content { opacity: .82; }
+html.vt-leaving[data-vt-go=rise] .content { opacity: .8; transform: scale(.992); }
 /* bilah progres saat menunggu halaman berikutnya */
 html.vt-leaving::after { content: ""; position: fixed; left: 0; top: 0; width: 100%; height: 3px; z-index: 99999; pointer-events: none; transform-origin: left; background: linear-gradient(90deg, #ff9a1f, #ffd27a 70%, #fff); box-shadow: 0 0 12px rgba(255, 170, 60, .85); animation: vtBar 6s cubic-bezier(.1, .6, .2, 1) forwards; }
 html.vt-leaving, html.vt-leaving body { cursor: progress; }
 @keyframes vtBar { from { transform: scaleX(0); } to { transform: scaleX(.93); } }
+/* umpan balik tekan (interaktif): tombol/menu/tab sedikit mengempis saat ditekan */
+.btn:active, .icon-btn:active, .bottomnav a:active, .bottomnav button:active, .note-card:active { transform: scale(.965); }
+.sb-link:active { transform: scale(.94); }
+.tabs a:active { transform: translateY(1px) scale(.96); }
 /* cadangan untuk peramban tanpa View Transitions (kelas .no-vt dipasang vt.js) */
-.no-vt .page-head { animation: vtHeadIn .55s cubic-bezier(.22, 1, .36, 1) backwards; --vt-dx: -24px; }
-.no-vt .content { animation: vtPageIn .6s cubic-bezier(.22, 1, .36, 1) .04s backwards; --vt-dy: 24px; --vt-r: 150vmax; --vt-x: 12%; --vt-y: 0px; }
+.no-vt .page-head { animation: vtHeadIn .55s cubic-bezier(.22, 1, .36, 1) backwards; --h-x: -24px; }
+.no-vt .content { animation: vtPageIn .6s cubic-bezier(.22, 1, .36, 1) .04s backwards; --i-y: 24px; --i-s: .99; }
 @media (prefers-reduced-motion: reduce) {
   @view-transition { navigation: none; }
   .no-vt .page-head, .no-vt .content, .vt-in .content > *, .vt-in .content > .grid > * { animation: none; }
   html.vt-leaving::after { animation: none; }
+  html.vt-leaving .content { transition: none; opacity: 1; transform: none; }
 }
 
 /* bottom nav (mobile) */
