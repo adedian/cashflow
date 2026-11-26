@@ -55,6 +55,7 @@ final class Filters
             'kind' => in_array($kind, ['pendapatan', 'biaya', 'pajak', 'pembiayaan', 'transfer', 'lainnya'], true) ? $kind : '',
             'party' => mb_substr(trim($r->str('party')), 0, 190),
             'q' => $q, 'flagged' => $r->str('flagged') === '1',
+            'status' => in_array($r->str('status'), ['komplit', 'belum'], true) ? $r->str('status') : '',   // status data: komplit | belum (belum komplit)
         ];
     }
 }

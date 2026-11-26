@@ -66,6 +66,7 @@ $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
         </td>
         <td data-label="Keterangan" class="desc">
           <a href="<?= e(url('/transactions/' . (int) $t['id'])) ?>" style="color:inherit;font-weight:600"><?= e($t['description'] ?: '(tanpa keterangan)') ?></a>
+          <?php if (!empty($t['incomplete'])): ?><span class="pill pill-red" title="Data transaksi ini belum lengkap" style="margin-left:6px">Belum komplit</span><?php endif; ?>
           <?php if ($isAdmin && !empty($t['flag'])): ?><span class="pill pill-yellow" title="<?= e($t['flag']) ?>" style="margin-left:6px">Perlu ditinjau</span><?php endif; ?>
           <?php if ($void): ?><span class="pill pill-gray">Dibatalkan</span><?php endif; ?>
         </td>

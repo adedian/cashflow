@@ -171,7 +171,7 @@ final class LedgerService
      * debit/credit/category_id/project_id = milik baris; tx_debit/tx_credit = milik transaksi (arah masuk/keluar).
      */
     public const LINE_ROWS = '(SELECT t0.id, COALESCE(i.line_no, 0) AS line_no, t0.account_id, t0.tx_date, t0.seq, t0.voided_at,
-        t0.voucher_code, t0.counterparty, t0.category_raw, t0.flag, t0.debit AS tx_debit, t0.credit AS tx_credit,
+        t0.voucher_code, t0.counterparty, t0.category_raw, t0.flag, t0.incomplete, t0.debit AS tx_debit, t0.credit AS tx_credit,
         IF(i.id IS NULL, t0.ref_no, i.ref_no) AS ref_no,
         IF(i.id IS NULL OR i.note IS NULL OR i.note = \'\', t0.note, i.note) AS note,
         IF(i.id IS NULL, t0.description, i.description) AS line_desc,
@@ -584,6 +584,8 @@ final class LedgerService
         }
         if (!empty($f['party'])) { $w[] = 't.counterparty = ?'; $p[] = (string) $f['party']; }
         if (!empty($f['flagged'])) { $w[] = 't.flag IS NOT NULL'; }
+        if (($f['status'] ?? '') === 'belum') { $w[] = 't.incomplete = 1'; }
+        if (($f['status'] ?? '') === 'komplit') { $w[] = 't.incomplete = 0'; }
         return [$w ? 'WHERE ' . implode(' AND ', $w) : '', $p];
     }
 

@@ -54,6 +54,7 @@ $void = $t['voided_at'] !== null;
       <?php endif; ?>
       <dt>No. referensi (invoice/PO)</dt><dd><?= e($t['ref_no'] ?: '-') ?></dd>
       <?php if (trim((string) ($t['note'] ?? '')) !== '' || !$itemRows): ?><dt>Catatan</dt><dd style="white-space:pre-wrap"><?= e($t['note'] ?: '-') ?></dd><?php endif; ?>
+      <dt>Status data</dt><dd><?= !empty($t['incomplete']) ? '<span class="pill pill-red">Belum komplit</span>' : '<span class="pill pill-green">Komplit</span>' ?></dd>
       <?php if ($isAdmin && !empty($t['flag'])): ?><dt>Perlu ditinjau</dt><dd><span class="pill pill-yellow"><?= e($t['flag']) ?></span></dd><?php endif; ?>
       <?php if ($isAdmin && !empty($t['source_sheet'])): ?><dt>Sumber Excel</dt><dd><?= e($t['source_sheet']) ?> baris <?= (int) $t['source_row'] ?></dd><?php endif; ?>
       <?php if ($related['links'] || $related['legacy']): ?><dt>Terhubung ke</dt><dd>

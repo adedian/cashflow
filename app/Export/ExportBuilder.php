@@ -218,8 +218,9 @@ final class ExportBuilder
         $s->paper = 'legal';
         $s->widths([2.71, 12.57, 11.71, 40.29, 26.0, 44.71, 44.71, 21.71, 21.71, 21.71, 21.86, 24.29]);
         $s->set(1, 2, $doc->company . ' — Mutasi Bank', ['size' => 14, 'bold' => true])->merge(1, 2, 1, 12)->height(1, 21);
-        $subset = !empty($f['party']) || !empty($f['category']) || !empty($f['project']) || !empty($f['kind']) || !empty($f['dir']) || !empty($f['q']) || !empty($f['flagged']);
+        $subset = !empty($f['party']) || !empty($f['category']) || !empty($f['project']) || !empty($f['kind']) || !empty($f['dir']) || !empty($f['q']) || !empty($f['flagged']) || !empty($f['status']);
         $extra = [];
+        if (!empty($f['status'])) { $extra[] = $f['status'] === 'belum' ? 'hanya data belum komplit' : 'hanya data komplit'; }
         if (!empty($f['party'])) { $extra[] = 'rekening lawan "' . $f['party'] . '"'; }
         if (!empty($f['category'])) { $extra[] = 'kategori "' . (string) Db::val('SELECT name FROM categories WHERE id = ?', [(int) $f['category']]) . '"'; }
         if (!empty($f['project'])) { $extra[] = 'proyek "' . (string) Db::val('SELECT name FROM projects WHERE id = ?', [(int) $f['project']]) . '"'; }

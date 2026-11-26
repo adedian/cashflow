@@ -75,6 +75,8 @@ final class TransactionService
         $lim = static fn(string $k, int $n) => mb_substr(trim((string) ($in[$k] ?? '')), 0, $n);
         $d['voucher_code'] = $lim('voucher_code', 30) ?: null;
         $d['counterparty'] = PartyService::clean((string) ($in['counterparty'] ?? '')) ?: null;
+        // "Data belum komplit": kotak centang pada formulir (hidden 0 + checkbox 1). Kiriman tanpa field (pemanggil lama) mempertahankan nilai tersimpan.
+        $d['incomplete'] = array_key_exists('incomplete', $in) ? (!empty($in['incomplete']) && (string) $in['incomplete'] !== '0' ? 1 : 0) : (int) ($existing['incomplete'] ?? 0);
         $d['description'] = $summary !== '' ? $summary : null;   // ringkasan (daftar/pencarian): uraian pertama, atau semua uraian digabung
         // catatan kini per baris uraian (line_note[]); kolom catatan transaksi hanya diisi bentuk lama (field "note"), formulir baru mengosongkannya
         if (array_key_exists('note', $in)) {
@@ -451,7 +453,7 @@ final class TransactionService
 
     private static function pick(array $r): array
     {
-        $keys = ['account_id', 'tx_date', 'voucher_code', 'counterparty', 'category_id', 'project_id', 'description', 'items', 'note', 'ref_no', 'debit', 'credit'];
+        $keys = ['account_id', 'tx_date', 'voucher_code', 'counterparty', 'category_id', 'project_id', 'description', 'items', 'note', 'ref_no', 'debit', 'credit', 'incomplete'];
         return array_intersect_key($r, array_flip($keys));
     }
 

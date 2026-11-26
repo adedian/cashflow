@@ -133,6 +133,11 @@ $renderLine = static function (array $r, bool $first, string $auto) use ($catHtm
         <span class="help">Terisi otomatis dari Pihak yang dipilih (dan sebaliknya); bagian ini yang tercetak di bukti BK/BM. Rekening baru: ketik bank dan nomornya lalu pilih “Tambah”. Daftar dikelola di <a href="<?= e(url('/master?tab=counterparties')) ?>">Master Data → Rekening Lawan</a>.</span>
       </div>
     </div>
+    <div class="field mt-3">
+      <input type="hidden" name="incomplete" value="0">
+      <label class="check"><input type="checkbox" name="incomplete" value="1" <?= !empty($v('incomplete')) && (string) $v('incomplete') !== '0' ? 'checked' : '' ?>><b>Data belum komplit</b></label>
+      <span class="help">Centang bila data transaksi ini masih perlu dilengkapi (mis. invoice, kategori, atau rekening belum ada). Transaksi akan ditandai “Belum komplit” dan bisa difilter di daftar Transaksi. Bila datanya sudah lengkap, tidak perlu dicentang.</span>
+    </div>
     <div class="mt-3" style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn" type="submit">Simpan</button>
       <a class="btn btn-ghost" href="<?= e($id ? url('/transactions/' . $id) : url('/transactions')) ?>">Batal</a>

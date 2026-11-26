@@ -15,6 +15,14 @@ $kinds = \App\Models\Lookup::KIND_LABEL;
         <?php foreach ($accounts as $a): ?><option value="<?= (int) $a['id'] ?>" <?= (int) $f['account'] === (int) $a['id'] ? 'selected' : '' ?>><?= e($a['name']) ?></option><?php endforeach; ?>
       </select>
     </div>
+    <div class="field">
+      <label for="status">Status data</label>
+      <select class="input" id="status" name="status">
+        <option value="">Semua</option>
+        <option value="komplit" <?= ($f['status'] ?? '') === 'komplit' ? 'selected' : '' ?>>Data komplit</option>
+        <option value="belum" <?= ($f['status'] ?? '') === 'belum' ? 'selected' : '' ?>>Data belum komplit</option>
+      </select>
+    </div>
     <details class="collapse-m" style="flex:1 1 100%" <?= ($f['dir'] || $f['party'] || $f['category'] || $f['project'] || $f['from'] || $f['to'] || !empty($f['flagged']) || $includeVoid) ? 'open' : '' ?>>
     <summary class="btn btn-ghost btn-sm">Filter lanjutan</summary>
     <div class="filters" style="margin-top:12px">
