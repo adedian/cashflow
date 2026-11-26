@@ -22,7 +22,7 @@ use RuntimeException;
 
 final class TransactionController extends Controller
 {
-    private const PER_PAGE = 50;
+    private const PER_PAGE = 25;
 
     private function isAdmin(): bool
     {

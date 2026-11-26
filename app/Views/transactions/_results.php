@@ -83,13 +83,14 @@ $net = bcsub($res['sum_debit'], $res['sum_credit'], 2);
   </table>
 </div>
 <div class="pager no-print">
-  <span class="muted">Halaman <?= (int) $page ?> dari <?= (int) $pages ?></span>
+  <?php $from = $res['total'] > 0 ? ($page - 1) * $perPage + 1 : 0; $to = min($res['total'], $page * $perPage); ?>
+  <span class="muted">Menampilkan <?= number_format($from, 0, ',', '.') ?>–<?= number_format($to, 0, ',', '.') ?> dari <?= number_format((int) $res['total'], 0, ',', '.') ?> baris · Halaman <?= (int) $page ?> dari <?= (int) $pages ?></span>
   <div class="pages">
-    <?php if ($page > 1): ?><a href="<?= e($link(['page' => $page - 1])) ?>">‹</a><?php endif; ?>
+    <?php if ($page > 1): ?><a href="<?= e($link(['page' => 1])) ?>" title="Halaman pertama">«</a><a href="<?= e($link(['page' => $page - 1])) ?>" title="Sebelumnya">‹</a><?php endif; ?>
     <?php for ($p = max(1, $page - 2); $p <= min($pages, $page + 2); $p++): ?>
       <?php if ($p === $page): ?><span class="pg cur"><?= $p ?></span><?php else: ?><a href="<?= e($link(['page' => $p])) ?>"><?= $p ?></a><?php endif; ?>
     <?php endfor; ?>
-    <?php if ($page < $pages): ?><a href="<?= e($link(['page' => $page + 1])) ?>">›</a><?php endif; ?>
+    <?php if ($page < $pages): ?><a href="<?= e($link(['page' => $page + 1])) ?>" title="Berikutnya">›</a><a href="<?= e($link(['page' => $pages])) ?>" title="Halaman terakhir">»</a><?php endif; ?>
   </div>
 </div>
 <?php endif; ?>
