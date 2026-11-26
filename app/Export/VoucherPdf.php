@@ -17,7 +17,8 @@ namespace App\Export;
  *  - voucher mengisi SETENGAH bagian ATAS kertas (tinggi kotak ±138 mm dari y = 5 mm; kaki ±6 mm di bawahnya;
  *    berhenti > 1 cm sebelum garis tengah kertas Folio 165 mm supaya aman dipotong), sisanya kosong;
  *  - font isi 12 px (9 pt), judul 18 px (13,5 pt) tebal, spasi huruf judul kolom 2 px, "KEPERLUAN INTERN" 3 px;
- *  - kolom grid 10,7% (kosong) | 2,5% (KEPERLUAN INTERN) | 12,3% Perkiraan | 57,4% Uraian | 17,1% Jumlah;
+ *  - kolom grid 2,5% (KEPERLUAN INTERN, menempel di tepi kiri; kolom kosong lama 10,7% dihapus) | 14% Perkiraan | 66,4% Uraian | 17,1% Jumlah;
+ *  - kepala: "Dibayarkan Kepada :" dan baris Nomor tebal; di bawahnya "Rekening - Pihak" (dibungkus 2 baris bila panjang);
  *    header 29,25% | 42% | 28,75%; bawah: CATATAN 29,25% + 4 kolom tanda tangan sama lebar;
  *  - 14 baris isi + baris "Ch/G.B. No. | TOTAL"; baris bertambah bila uraian lebih banyak;
  *  - warna: keluar #FF0000 / isian #EDE1E0, masuk #00A651 / isian #E2EFDA;
@@ -202,7 +203,9 @@ final class VoucherPdf
         // ukuran teks (12 px = 9 pt)
         $fs = 9.0;
         $pad = 7 * 0.75;                     // padding sel grid 7 px
-        $col = [0.0, $p(10.7), $p(13.2), $p(25.5), $p(82.9), $W];   // blank | label | perkiraan | uraian | jumlah | tepi kanan
+        // kolom kosong di kiri dihapus (permintaan pengguna): KEPERLUAN INTERN menempel di tepi kiri, Perkiraan & Uraian lebih lebar
+        $col = [0.0, 0.0, $p(2.5), $p(16.5), $p(82.9), $W];   // (kosong) | label | perkiraan | uraian | jumlah | tepi kanan
+        $termX = $p(10.7);                   // pembatas label "Terbilang :" | isi terbilang
 
         // baris isi: uraian yang tidak muat satu baris dibungkus (baris bertambah); baris pertama tiap uraian memuat jumlahnya
         $rows = [];
@@ -299,7 +302,7 @@ final class VoucherPdf
             $this->line($col[2], $bodyTop + $i * $rowH, $W, $bodyTop + $i * $rowH, $acc);
         }
         $this->box(0, $terbTop, $W, $terbH, $acc);                                      // Terbilang
-        $this->line($col[1], $terbTop, $col[1], $botTop, $acc);
+        $this->line($termX, $terbTop, $termX, $terbTop + $terbH, $acc);
         $this->box(0, $botTop, $W, $H - $botTop, $acc);                                 // CATATAN + tanda tangan
         for ($c = 0; $c < 4; $c++) {
             $this->line($p(29.25 + 17.6875 * $c), $botTop, $p(29.25 + 17.6875 * $c), $H, $acc);
@@ -309,17 +312,41 @@ final class VoucherPdf
         // --- kepala: identitas | perusahaan + judul | nomor + tanggal
         $half = $hdrH / 2;
         $hp = 8 * 0.75;                      // padding sel header 8 px
-        $this->text($hp, self::mid(0, $half, $fs), $K['who'], $fs, 'r', '1A1A1A');
+        $this->text($hp, self::mid(0, $half, $fs), $K['who'], $fs, 'b', '1A1A1A');   // "Dibayarkan Kepada :" tebal
         $pw1 = $p(29.25) - 2 * $hp;
-        // rekening pihak bisa panjang ("Nama - Bank ac. nomor"): font dikecilkan sampai 4.6 pt dulu, baru dipotong dengan "..."
-        $pz = self::fitSize($v['party'], false, $fs, 4.6, $pw1) ?? 4.6;
-        $party = $v['party'];
-        // potong dari teks asli (bukan dari hasil potongan sebelumnya, yang dulu justru memanjang dan membuat loop tak berujung)
-        for ($cut = mb_strlen($party); self::tw($party, false, $pz) > $pw1 && $cut > 4;) {
-            $cut -= 2;
-            $party = rtrim(mb_substr((string) $v['party'], 0, $cut)) . '...';
+        // "Rekening - Pihak" bisa panjang: satu baris sampai 6.8 pt; bila tetap tidak muat, dibungkus jadi dua baris (7.6 -> 4.6 pt);
+        // terakhir dipotong dengan "..."
+        $partyLines = [(string) $v['party']];
+        $pz = self::fitSize($v['party'], false, $fs, 6.8, $pw1);
+        if ($pz === null) {
+            for ($z = 7.6; $z >= 4.6 - 0.001; $z -= 0.2) {
+                $w2 = self::wrap((string) $v['party'], $z, $pw1);
+                if (count($w2) <= 2) {
+                    $partyLines = $w2;
+                    $pz = round($z, 1);
+                    break;
+                }
+            }
         }
-        $this->text($hp, self::mid($half, $half, $pz), $party, $pz, 'r', '1A1A1A');
+        if ($pz === null) {
+            $pz = 4.6;
+            $party = (string) $v['party'];
+            // potong dari teks asli (bukan dari hasil potongan sebelumnya, yang dulu justru memanjang dan membuat loop tak berujung)
+            for ($cut = mb_strlen($party); self::tw($party, false, $pz) > $pw1 && $cut > 4;) {
+                $cut -= 2;
+                $party = rtrim(mb_substr((string) $v['party'], 0, $cut)) . '...';
+            }
+            $partyLines = [$party];
+        }
+        if (count($partyLines) === 1) {
+            $this->text($hp, self::mid($half, $half, $pz), $partyLines[0], $pz, 'r', '1A1A1A');
+        } else {
+            $lh = $pz * 1.2;
+            $y0 = $half + ($half - count($partyLines) * $lh) / 2;
+            foreach ($partyLines as $i => $pl) {
+                $this->text($hp, $y0 + $i * $lh + $pz * 0.95, $pl, $pz, 'r', '1A1A1A');
+            }
+        }
         $midX = $p(29.25 + 21);
         // nama rekening perusahaan (mis. "PT. Hexa Multi Energi - BCA Loan"): miring, warna aksen, di LUAR kotak tepat di atas garis atas
         $co = trim((string) ($v['account'] ?? '')) !== '' ? trim((string) $v['account']) : (string) $doc->company;
@@ -328,11 +355,11 @@ final class VoucherPdf
         $this->text($midX, self::mid(0, $hdrH, 13.5), $K['title'], 13.5, 'b', $acc, 'c', 0.75);   // judul di tengah sel header
         $rx = $p(71.25);
         $vw = $W - ($rx + $hp + 56 * 0.75 + 14 * 0.75) - $hp;
-        foreach ([[0.0, 'Nomor', $v['number']], [$half, 'Tanggal', $v['date']]] as [$top, $lbl, $val]) {
-            $vz = self::fitSize($val, false, $fs, 5.8, $vw) ?? 5.8;
-            $this->text($rx + $hp, self::mid($top, $half, $fs), $lbl, $fs, 'r', '1A1A1A');
-            $this->text($rx + $hp + 56 * 0.75, self::mid($top, $half, $fs), ':', $fs, 'r', '1A1A1A');
-            $this->text($rx + $hp + 56 * 0.75 + 14 * 0.75, self::mid($top, $half, $vz), $val, $vz, 'r', '1A1A1A');
+        foreach ([[0.0, 'Nomor', $v['number'], 'b'], [$half, 'Tanggal', $v['date'], 'r']] as [$top, $lbl, $val, $ft]) {   // baris Nomor tebal
+            $vz = self::fitSize($val, $ft === 'b', $fs, 5.8, $vw) ?? 5.8;
+            $this->text($rx + $hp, self::mid($top, $half, $fs), $lbl, $fs, $ft, '1A1A1A');
+            $this->text($rx + $hp + 56 * 0.75, self::mid($top, $half, $fs), ':', $fs, $ft, '1A1A1A');
+            $this->text($rx + $hp + 56 * 0.75 + 14 * 0.75, self::mid($top, $half, $vz), $val, $vz, $ft, '1A1A1A');
         }
 
         // --- judul kolom (tebal, spasi huruf 2 px)
@@ -373,9 +400,9 @@ final class VoucherPdf
         // --- Terbilang
         $this->text(4 * 0.75 + 3, self::mid($terbTop, $terbH, $fs), 'Terbilang :', $fs, 'b', '1A1A1A');
         $words = $v['lines'] ? terbilang($v['total']) : '';
-        $maxW = $W - $col[1] - 2 * $pad;
+        $maxW = $W - $termX - 2 * $pad;
         $ts = self::fitSize($words, false, $fs, 5.0, $maxW) ?? 5.0;   // terbilang panjang: kecilkan agar muat satu baris
-        $this->text($col[1] + $pad, self::mid($terbTop, $terbH, $ts), $words, $ts, 'i', '1A1A1A');
+        $this->text($termX + $pad,self::mid($terbTop, $terbH, $ts), $words, $ts, 'i', '1A1A1A');
 
         // --- CATATAN + tanda tangan
         $this->text($cx, $botTop + 5 * 0.75 + $fs * 0.9, 'CATATAN :', $fs, 'b', $acc);

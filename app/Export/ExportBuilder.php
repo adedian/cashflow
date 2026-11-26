@@ -91,8 +91,8 @@ final class ExportBuilder
                 'date' => self::longDate($t['tx_date']),
                 'refs' => implode(', ', $refList),
                 'account' => trim((string) ($accName[$t['account_id']] ?? '')),   // rekening perusahaan: dicetak di atas kotak (di luar kotak)
-                // bukti memuat REKENING pihak (mis. "BCA 123 a.n. PT X") bila ada; rekening hanya terlihat Super Admin, selain itu / bila kosong tetap nama pihak
-                'party' => $isAdmin && trim((string) ($t['counterparty_detail'] ?? '')) !== '' ? cp_label($t['counterparty_detail']) : (string) ($t['counterparty'] ?? ''),
+                // bukti memuat REKENING + PIHAK ("BCA 0886249823 - Gusti Ferdiansyah"); rekening hanya terlihat Super Admin, selain itu / bila kosong tetap nama pihak
+                'party' => self::partyLine($isAdmin ? (string) ($t['counterparty_detail'] ?? '') : '', (string) ($t['counterparty'] ?? '')),
                 'by' => (string) ($t['created_name'] ?? ''),   // "Dibuat oleh" = pembuat transaksi (seperti Sistem Stok), bukan pencetak
                 'lines' => $lines,
                 'total' => $total,
@@ -101,6 +101,20 @@ final class ExportBuilder
         }
         $d = new Document(self::DOCS['bukti'], 'cashflow-bukti-bank', setting('company_name', 'PT Hexa Multi Energi'), (string) ($user['full_name'] ?? ''));
         return [$d, VoucherPdf::build($vouchers, $d, $req->str('paper'))];   // paper: legal (default) | folio | a4
+    }
+
+    /** "<bank + no. rekening> - <nama pihak>"; tanpa rekening = nama pihak saja; nama pihak yang sudah termuat di rekening tidak diulang. */
+    private static function partyLine(string $detail, string $name): string
+    {
+        $name = trim($name);
+        $acct = trim($detail) !== '' ? cp_label($detail) : '';
+        if ($acct === '') {
+            return $name;
+        }
+        if ($name === '' || mb_stripos($acct, $name) !== false) {
+            return $acct;
+        }
+        return $acct . ' - ' . $name;
     }
 
     public static function build(string $doc, Request $req, array $user): Document
