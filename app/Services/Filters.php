@@ -8,6 +8,8 @@ use App\Core\Request;
 /** Membaca & memvalidasi filter dari query string (semua nilai divalidasi sebelum dipakai di SQL terikat). */
 final class Filters
 {
+    public const TUTUP_COOKIE = 'cf_tutup_bulan';
+
     public static function date(?string $v): ?string
     {
         $v = trim((string) $v);
@@ -45,6 +47,13 @@ final class Filters
         if ($from && $to && $from > $to) {
             [$from, $to] = [$to, $from];
         }
+        // "Tutup bulan": cookie (diatur kotak centang di daftar Transaksi; bertahan sampai dicentang ulang) memaksa periode = tanggal 1 bulan
+        // berjalan s.d. hari ini (zona waktu aplikasi), walau aplikasi ditutup/refresh.
+        $tutup = ($_COOKIE[self::TUTUP_COOKIE] ?? '') === '1';
+        if ($tutup) {
+            $from = date('Y-m-01');
+            $to = date('Y-m-d');
+        }
         $dir = $r->str('dir');
         $kind = $r->str('kind');
         $q = mb_substr($r->str('q'), 0, 100);
@@ -54,7 +63,7 @@ final class Filters
             'dir' => in_array($dir, ['in', 'out'], true) ? $dir : '',
             'kind' => in_array($kind, ['pendapatan', 'biaya', 'pajak', 'pembiayaan', 'transfer', 'lainnya'], true) ? $kind : '',
             'party' => mb_substr(trim($r->str('party')), 0, 190),
-            'q' => $q, 'flagged' => $r->str('flagged') === '1',
+            'q' => $q, 'flagged' => $r->str('flagged') === '1', 'tutup' => $tutup,
             'status' => in_array($r->str('status'), ['komplit', 'belum'], true) ? $r->str('status') : '',   // status data: komplit | belum (belum komplit)
         ];
     }

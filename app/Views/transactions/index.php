@@ -23,7 +23,10 @@ $kinds = \App\Models\Lookup::KIND_LABEL;
         <option value="belum" <?= ($f['status'] ?? '') === 'belum' ? 'selected' : '' ?>>Data belum komplit</option>
       </select>
     </div>
-    <details class="collapse-m" style="flex:1 1 100%" <?= ($f['dir'] || $f['party'] || $f['category'] || $f['project'] || $f['from'] || $f['to'] || !empty($f['flagged']) || $includeVoid) ? 'open' : '' ?>>
+    <div class="field" style="flex:0 0 auto;justify-content:flex-end">
+      <label class="check" title="Periode otomatis: tanggal 1 bulan ini sampai hari ini. Tetap aktif walau aplikasi ditutup, sampai centang dihilangkan."><input type="checkbox" id="tutupBulan" <?= !empty($f['tutup']) ? 'checked' : '' ?>><b>Tutup bulan</b></label>
+    </div>
+    <details class="collapse-m" style="flex:1 1 100%" <?= (!empty($f['tutup']) || $f['dir'] || $f['party'] || $f['category'] || $f['project'] || $f['from'] || $f['to'] || !empty($f['flagged']) || $includeVoid) ? 'open' : '' ?>>
     <summary class="btn btn-ghost btn-sm">Filter lanjutan</summary>
     <div class="filters" style="margin-top:12px">
     <div class="field">
@@ -59,11 +62,11 @@ $kinds = \App\Models\Lookup::KIND_LABEL;
     </div>
     <div class="field">
       <label for="from">Dari</label>
-      <input class="input" type="date" id="from" name="from" value="<?= e($f['from'] ?? '') ?>">
+      <input class="input" type="date" id="from" name="from" value="<?= e($f['from'] ?? '') ?>"<?= !empty($f['tutup']) ? ' readonly title="Dikunci oleh Tutup bulan"' : '' ?>>
     </div>
     <div class="field">
       <label for="to">Sampai</label>
-      <input class="input" type="date" id="to" name="to" value="<?= e($f['to'] ?? '') ?>">
+      <input class="input" type="date" id="to" name="to" value="<?= e($f['to'] ?? '') ?>"<?= !empty($f['tutup']) ? ' readonly title="Dikunci oleh Tutup bulan"' : '' ?>>
     </div>
     <?php if ($isAdmin): ?>
     <div class="field" style="flex:0 0 auto;justify-content:flex-end">

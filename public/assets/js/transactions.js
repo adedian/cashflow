@@ -102,9 +102,21 @@
   /* --- filter: kirim otomatis saat dropdown berubah --- */
   var ff = document.getElementById('txFilter');
   if (ff) {
-    ['account', 'dir', 'party', 'category', 'project'].forEach(function (n) {
+    ['account', 'status', 'dir', 'party', 'category', 'project'].forEach(function (n) {
       var el = ff.elements[n]; if (el) el.addEventListener('change', function () { ff.submit(); });
     });
+    /* "Tutup bulan": cookie cf_tutup_bulan=1 -> server memaksa periode 1 bulan berjalan s.d. hari ini (bertahan walau aplikasi ditutup,
+       sampai centang dihilangkan). Saat dilepas, isian Dari/Sampai dikosongkan agar tidak menyisakan periode bulan itu. */
+    var tb = document.getElementById('tutupBulan');
+    if (tb) {
+      tb.addEventListener('change', function () {
+        var path = '/';
+        try { path = new URL(H.url('/'), window.location.href).pathname; } catch (x) { /* pakai akar */ }
+        document.cookie = 'cf_tutup_bulan=' + (tb.checked ? '1' : '') + '; path=' + path + '; max-age=' + (tb.checked ? 60 * 60 * 24 * 400 : 0) + '; SameSite=Lax';
+        if (!tb.checked) { ['from', 'to'].forEach(function (n) { if (ff.elements[n]) { ff.elements[n].value = ''; ff.elements[n].readOnly = false; } }); }
+        ff.submit();
+      });
+    }
   }
 
   /* --- formulir: uraian banyak baris (uraian + jumlah), total otomatis. Server memvalidasi ulang. --- */

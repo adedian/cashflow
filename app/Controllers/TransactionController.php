@@ -46,6 +46,7 @@ final class TransactionController extends Controller
         if (!empty($f['flagged'])) {
             $base['flagged'] = '1';
         }
+        unset($base['tutup']);   // status "Tutup bulan" dibawa cookie, bukan query tautan
         $data = [
             'res' => $res, 'f' => $f, 'sort' => $sort, 'page' => $page, 'pages' => $pages, 'perPage' => self::PER_PAGE,
             'base' => $base, 'isAdmin' => $this->isAdmin(), 'includeVoid' => $includeVoid,
