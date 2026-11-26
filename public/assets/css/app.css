@@ -447,6 +447,43 @@ body.auth-body::after { width: 420px; height: 420px; background: #9fc3ff; right:
 .login-right .btn { height: 46px; padding: 0 34px; }
 .login-note { margin-top: 22px; font-size: 12.5px; color: var(--muted); }
 
+/* ================= Halaman offline (PWA) ================= */
+.off-card { position: relative; z-index: 1; width: min(460px, 100%); background: #fff; border-radius: 24px; overflow: hidden; box-shadow: 0 30px 80px rgba(11, 60, 160, .28); animation: offIn .55s cubic-bezier(.2, .8, .2, 1) backwards; }
+.off-hero { position: relative; display: grid; place-items: center; padding: 30px 20px 54px; color: #fff; text-align: center;
+  background: radial-gradient(120% 140% at 15% 0%, #3f86ff 0%, transparent 55%), linear-gradient(150deg, #0b5cff 0%, #0847c9 60%, #0a3aa0 100%); }
+.off-hero::after { content: ""; position: absolute; left: -10%; right: -10%; bottom: -1px; height: 34px; background: #fff; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
+.off-logo { position: absolute; left: 20px; top: 18px; width: 46px; height: 46px; border-radius: 12px; background: rgba(255, 255, 255, .16); padding: 4px; }
+.off-icon { position: relative; width: 84px; height: 84px; margin-top: 18px; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .18); border: 1.5px solid rgba(255, 255, 255, .45); backdrop-filter: blur(2px); }
+.off-icon svg { position: relative; z-index: 1; animation: offBob 3.2s ease-in-out infinite; }
+.off-icon .ring { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, .55); opacity: 0; animation: offRing 3s ease-out infinite; }
+.off-icon .r2 { animation-delay: 1s; } .off-icon .r3 { animation-delay: 2s; }
+.off-body { padding: 4px 34px 30px; text-align: center; }
+.off-body h1 { font-size: 26px; font-weight: 700; color: var(--text); margin-bottom: 8px; letter-spacing: -.01em; }
+.off-sub { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 20px; }
+.off-tips { list-style: none; margin: 0 0 22px; padding: 14px 16px; text-align: left; background: var(--blue-50); border: 1px solid var(--blue-100); border-radius: 14px; display: grid; gap: 10px; }
+.off-tips li { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text); }
+.tip-ico { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 11.5px; font-weight: 700; display: grid; place-items: center; }
+.off-retry { height: 48px; padding: 0 30px; width: 100%; gap: 8px; font-size: 15px; box-shadow: 0 10px 22px rgba(11, 92, 255, .3); }
+.off-retry.loading svg { animation: offSpin .8s linear infinite; }
+.off-status { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; font-size: 12.5px; color: var(--muted); }
+.off-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); animation: offPulse 1.4s ease-in-out infinite; }
+.off-status.ok { color: #138a4b; } .off-status.ok .dot { background: #1fb765; animation: none; }
+.off-status.warn { color: #c2410c; }
+.off-card.is-online .off-icon svg { animation: none; }
+@keyframes offIn { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes offBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes offRing { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(1.9); opacity: 0; } }
+@keyframes offPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+@keyframes offSpin { to { transform: rotate(360deg); } }
+@media (max-width: 480px) {
+  .off-body { padding: 2px 22px 24px; }
+  .off-body h1 { font-size: 22px; }
+  .off-hero { padding-bottom: 48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .off-card, .off-icon svg, .off-icon .ring, .off-status .dot { animation: none; }
+}
+
 /* bottom nav (mobile) */
 .bottomnav { display: none; }
 .scrim { display: none; }
