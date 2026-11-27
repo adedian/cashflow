@@ -53,11 +53,21 @@ final class ExportBuilder
             throw new HttpException('Transaksi yang dipilih tidak ditemukan atau sudah dibatalkan.', 422);
         }
         $accName = array_column(Db::all('SELECT id, name FROM accounts'), 'name', 'id');
+        $projName = array_column(Db::all('SELECT id, name FROM projects'), 'name', 'id');
         $isAdmin = ($user['role'] ?? '') === 'super_admin';
         $vouchers = [];
         foreach ($rows as $t) {
             $lines = \App\Services\TransactionService::lines($t);
-            // kolom URAIAN pada bukti memuat KETERANGAN tiap baris (baris-baris teratas); proyek tidak dicetak
+            // kolom URAIAN pada bukti memuat KETERANGAN tiap baris (baris-baris teratas), diikuti nama proyek baris itu: "uraian - proyek"
+            // (tidak diulang bila keterangan sudah diakhiri nama proyek yang sama)
+            foreach ($lines as &$l) {
+                $pn = ($l['project_id'] ?? null) !== null ? trim((string) ($projName[$l['project_id']] ?? '')) : '';
+                $desc = rtrim((string) ($l['description'] ?? ''));
+                if ($pn !== '' && mb_strtolower(mb_substr($desc, -mb_strlen($pn))) !== mb_strtolower($pn)) {
+                    $l['description'] = $desc === '' ? $pn : $desc . ' - ' . $pn;
+                }
+            }
+            unset($l);
             // No. Invoice / PO (kolom "No. Invoice" tiap baris; data lama: ref_no transaksi) -> dicetak di baris ke-4 dari bawah kotak URAIAN
             $refList = [];
             foreach ($lines as $l) {
