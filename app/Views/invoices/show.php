@@ -26,7 +26,7 @@ if ($unissued) {
   <dl class="kv">
     <dt>Jenis</dt><dd><?= $lampu ? 'Piutang Lampu' : ($unissued ? 'Invoice Belum Terbit' : 'Piutang Proyek') ?></dd>
     <dt><?= $lampu ? 'No. surat jalan' : 'No. invoice' ?></dt><dd><?= $r['invoice_no'] ? e($r['invoice_no']) : '<span class="muted">Tidak tersedia</span>' ?></dd>
-    <dt>Tanggal</dt><dd><?= $r['invoice_date'] ? e(fmt_date($r['invoice_date'], 'd/m/Y')) : '<span class="muted">Tidak tersedia</span>' ?></dd>
+    <dt><?= $unissued ? 'Estimasi tgl. jatuh tempo' : 'Tanggal' ?></dt><dd><?= $r['invoice_date'] ? e(fmt_date($r['invoice_date'], 'd/m/Y')) : '<span class="muted">Tidak tersedia</span>' ?></dd>
     <?php if (!$lampu && !$unissued && !empty($r['issued_at'])): ?><dt>Diterbitkan</dt><dd><?= e(fmt_date(substr((string) $r['issued_at'], 0, 10), 'd/m/Y')) ?></dd><?php endif; ?>
     <dt>Jatuh tempo</dt><dd><?php if ($unissued): ?><span class="muted">Belum ada — diisi saat invoice diterbitkan</span><?php else: ?><?= $r['due_date'] ? e(fmt_date($r['due_date'], 'd/m/Y')) : ($r['due_note'] ? e($r['due_note']) : '<span class="muted">-</span>') ?><?= $r['due_days'] !== null ? ' <span class="muted">(' . (int) $r['due_days'] . ' hari dari tgl. nota)</span>' : '' ?><?php endif; ?></dd>
     <?php if ($lampu && $r['salesperson']): ?><dt>Sales</dt><dd><?= e($r['salesperson']) ?></dd><?php endif; ?>

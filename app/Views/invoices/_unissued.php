@@ -11,7 +11,7 @@ $pageLink = static fn(int $p) => url('/invoices') . '?' . qs_merge(['kind' => 'p
   <div class="table-wrap">
     <table class="tbl stack inv" id="ubTable">
       <thead><tr>
-        <th>No. referensi</th><th>Project / customer</th><th>Keterangan</th><th>Tanggal</th><th class="r">Nominal awal</th><th class="r">Diterbitkan</th><th class="r">Sisa</th><th>Status</th><?php if ($isAdmin): ?><th class="no-print"></th><?php endif; ?>
+        <th>No. referensi</th><th>Project / customer</th><th>Keterangan</th><th>Estimasi jatuh tempo</th><th class="r">Nominal awal</th><th class="r">Diterbitkan</th><th class="r">Sisa</th><th>Status</th><?php if ($isAdmin): ?><th class="no-print"></th><?php endif; ?>
       </tr></thead>
       <tbody>
       <?php foreach ($rows as $r): $href = url('/invoices/' . (int) $r['id']); $done = $r['issue_status'] === 'selesai'; $part = !$done && bccomp((string) $r['issued'], '0', 2) > 0; ?>
@@ -19,7 +19,7 @@ $pageLink = static fn(int $p) => url('/invoices') . '?' . qs_merge(['kind' => 'p
           <td data-label="No. referensi" class="c-sj"><a href="<?= e($href) ?>" style="color:inherit"><?= $r['invoice_no'] ? e($r['invoice_no']) : '<span class="muted">#' . (int) $r['id'] . '</span>' ?></a></td>
           <td data-label="Project" class="desc"><b><?= $r['project'] ? e($r['project']) : '<span class="muted">(tanpa project)</span>' ?></b><div class="sub"><?= e($r['customer']) ?></div></td>
           <td data-label="Keterangan"><?= $r['description'] ? e($r['description']) : '<span class="muted">-</span>' ?><?= $r['note'] ? '<div class="sub">' . e($r['note']) . '</div>' : '' ?></td>
-          <td data-label="Tanggal" class="nowrap"><?= $r['invoice_date'] ? e(fmt_date($r['invoice_date'])) : '<span class="muted">-</span>' ?></td>
+          <td data-label="Estimasi jatuh tempo" class="nowrap"><?= $r['invoice_date'] ? e(fmt_date($r['invoice_date'])) : '<span class="muted">-</span>' ?></td>
           <td data-label="Nominal awal" class="r num"><?= e(money($r['amount'], false)) ?></td>
           <td data-label="Diterbitkan" class="r num"><?= e(money($r['issued'], false)) ?></td>
           <td data-label="Sisa" class="r num <?= $done ? '' : 'neg' ?>"><b><?= e(money($r['remaining'], false)) ?></b></td>

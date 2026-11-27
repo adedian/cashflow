@@ -30,6 +30,8 @@
       if (pr) pr.hidden = !ub;
       if (ps) ps.required = ub;
       if (al) al.textContent = ub ? 'Nominal Invoice Belum Terbit (Rp)' : 'Nominal tagihan (Rp)';
+      var dl = document.getElementById('invDateLbl');
+      if (dl) dl.textContent = ub ? 'Estimasi tanggal jatuh tempo' : 'Tanggal invoice';
       if (help) help.textContent = ub ? txt.belum_terbit : txt.terbit;
     };
     radios.forEach(function (r) { r.addEventListener('change', apply); });
