@@ -1190,3 +1190,9 @@ table.tbl.tx, .tbl.tx th, .tbl.tx td, .tbl.tx td .sub, .tbl.tx td .pill, .tbl.tx
 /* Invoice Belum Terbit: isian jatuh tempo/pembayaran disembunyikan di form Tambah Invoice (atribut hidden harus menang atas .field) */
 .field[hidden] { display: none !important; }
 .req[hidden] { display: none !important; }
+
+/* Master Data: kotak cari di atas tabel */
+.master-search { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line, #e6eaf3); }
+.master-search > .i { width: 18px; height: 18px; flex: 0 0 auto; color: #8a93ad; }
+.master-search .input { flex: 1 1 auto; max-width: 420px; height: 38px; }
+.master-search-n { margin-left: auto; font-size: 12.5px; color: #8a93ad; white-space: nowrap; }
