@@ -1,5 +1,5 @@
 <?php
-/** @var array $t @var array $lines @var array $itemRows @var array $hist @var bool $isAdmin @var array $related @var ?array $fcDecision */
+/** @var array $t @var array $lines @var array $itemRows @var array $hist @var bool $isAdmin @var array $related @var ?array $fcDecision @var string $cpHolder */
 $inn = bccomp((string) $t['debit'], '0', 2) !== 0;
 $amount = $inn ? $t['debit'] : $t['credit'];
 $void = $t['voided_at'] !== null;
@@ -26,6 +26,7 @@ $void = $t['voided_at'] !== null;
       <dt>Rekening</dt><dd><?= e($t['account_name']) ?></dd>
       <dt>Pihak</dt><dd><?= e($t['counterparty'] ?: '-') ?></dd>
       <?php if ($isAdmin): ?><dt>Detail rekening pihak</dt><dd><?= e(cp_label($t['counterparty_detail']) ?: '-') ?></dd><?php endif; ?>
+      <?php if ($isAdmin && ($cpHolder ?? '') !== ''): ?><dt>Nama pemilik rekening</dt><dd><?= e($cpHolder) ?></dd><?php endif; ?>
       <?php if (!$itemRows): ?>
       <dt>Kategori</dt><dd><?= e($t['category_name'] ?: 'Belum dikategorikan') ?><?php if ($t['category_kind']): ?> <span class="pill pill-blue"><?= e($t['category_kind']) ?></span><?php endif; ?></dd>
       <dt>Proyek</dt><dd><?= e($t['project_name'] ?: '-') ?></dd>

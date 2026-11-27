@@ -81,6 +81,8 @@
     var u, from = location.pathname;
     try { u = new URL(toUrl, location.href); } catch (e) { return { kind: 'down' }; }
     if (submit === 'post') return { kind: 'rise' };
+    var tn = a && a.getAttribute ? a.getAttribute('data-tx-nav') : null;   // panah transaksi sebelumnya/berikutnya: geser horizontal
+    if (tn === 'next' || tn === 'prev') return { kind: tn };
     if (u.pathname === from) {
       var td = tabDir(a);
       if (td) return { kind: td };

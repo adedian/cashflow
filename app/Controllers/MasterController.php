@@ -40,6 +40,7 @@ final class MasterController extends Controller
                 if ((int) $r['id'] === $editId) { $data['edit'] = $r; }
             }
         } elseif ($tab === 'counterparties') {
+            $data['parties'] = Db::all('SELECT name FROM parties WHERE is_active = 1 ORDER BY name');
             $data['rows'] = Db::all('SELECT c.*, p.name AS party_name, (SELECT COUNT(*) FROM transactions t WHERE t.counterparty_detail = c.label AND t.voided_at IS NULL) AS n FROM counterparty_accounts c LEFT JOIN parties p ON p.id = c.party_id ORDER BY c.label');
         } elseif ($tab === 'suppliers') {
             $data['rows'] = Db::all('SELECT s.*, (SELECT COUNT(*) FROM debts d WHERE d.supplier_id = s.id AND d.voided_at IS NULL) AS n FROM suppliers s ORDER BY s.name');
@@ -530,9 +531,24 @@ final class MasterController extends Controller
     }
 
     /* ---------- rekening lawan (pihak penerima/pembayar) ---------- */
+    /**
+     * Satu rekening lawan = Pihak (supplier/customer, master Customer) + Bank + No. rekening + Nama pemilik rekening.
+     * Form tambah mengirim party/bank/account_no/account_holder (label = "Bank No"); form ubah per baris mengirim party/label/account_holder.
+     * Pihak yang diketik: sudah ada di master -> rekening ditautkan ke pihak itu; belum ada -> nama pihak yang sekarang diganti (bila tidak dipakai
+     * rekening lain) atau pihak baru dibuat. Transaksi yang memakai rekening ini ikut diperbarui agar Pihak & rekening tetap serasi.
+     */
     public function saveCounterparty(string $id = ''): Response
     {
         $label = preg_replace('/\s+/', ' ', $this->name('label', 255));
+        $bank = preg_replace('/\s+/', ' ', $this->name('bank', 80));
+        $digits = preg_replace('/[\s.\-]/', '', trim($this->req->str('account_no')));
+        if ($label === '' && $bank !== '') {
+            if ($digits !== '' && !preg_match('/^\d{6,30}$/', (string) $digits)) {
+                $this->flash('error', 'Nomor rekening harus berupa 6–30 digit angka.');
+                return $this->back('counterparties');
+            }
+            $label = mb_substr($bank . ($digits !== '' ? ' ' . $digits : ''), 0, 255);
+        }
         if ($label === '') {
             $this->flash('error', 'Bank / rekening wajib diisi.');
             return $this->back('counterparties');
@@ -541,26 +557,96 @@ final class MasterController extends Controller
             $this->flash('error', 'Rekening lawan tersebut sudah ada.');
             return $this->back('counterparties');
         }
+        // bagian terstruktur dibaca dari label ("<Bank> <No>"); label bebas ("Autodebit") tidak punya bank/no terstruktur
+        $bankName = null; $accountNo = null;
+        if (preg_match('/^(.*\S)\s+(\d{6,30})$/u', $label, $m)) {
+            $bankName = mb_substr($m[1], 0, 80);
+            $accountNo = $m[2];
+        }
+        $holder = PartyService::clean($this->req->str('account_holder'));
+        if (mb_strlen($holder) > 160) {
+            $this->flash('error', 'Nama pemilik rekening maksimal 160 karakter.');
+            return $this->back('counterparties');
+        }
+        $partyIn = PartyService::clean($this->req->str('party'));
         $renamed = 0;
-        Db::tx(function () use ($id, $label, &$renamed) {
-            if ($id === '') {
-                $new = Db::insert('counterparty_accounts', ['label' => $label]);
-                Audit::log('cpa_create', 'counterparty_account', (string) $new, "Tambah rekening lawan $label", null, ['label' => $label]);
-            } else {
+        $partyNote = '';
+        Db::tx(function () use ($id, $label, $holder, $partyIn, $bankName, $accountNo, &$renamed, &$partyNote) {
+            $old = null;
+            $oldPartyName = null;
+            if ($id !== '') {
                 $old = Db::one('SELECT * FROM counterparty_accounts WHERE id = ?', [(int) $id]);
                 if (!$old) { throw new \App\Core\HttpException('Rekening lawan tidak ditemukan.', 404); }
+                if ($old['party_id'] !== null) {
+                    $oldPartyName = Db::val('SELECT name FROM parties WHERE id = ?', [(int) $old['party_id']]);
+                    $oldPartyName = $oldPartyName === null ? null : (string) $oldPartyName;
+                }
+            }
+            // --- Pihak ---
+            $partyId = $old['party_id'] ?? null;
+            $partyChanged = false;
+            if ($partyIn === '') {
+                $partyId = null;
+            } else {
+                $canon = PartyService::canonical($partyIn);
+                if ($canon !== null) {
+                    $cid = (int) Db::val('SELECT id FROM parties WHERE name = ?', [$canon]);
+                    if ($old && $old['party_id'] !== null && $cid === (int) $old['party_id']) {
+                        // pihak yang sama; bila hanya huruf besar/kecil yang diubah, nama master ikut dibetulkan
+                        if ($oldPartyName !== null && $oldPartyName !== $partyIn) {
+                            Db::update('parties', $cid, ['name' => $partyIn]);
+                            $renamed += Db::q('UPDATE transactions SET counterparty = ? WHERE counterparty = ?', [$partyIn, $oldPartyName])->rowCount();
+                            Audit::log('party_update', 'party', (string) $cid, "Ubah customer $partyIn (dari Master Rekening Lawan)", ['name' => $oldPartyName], ['name' => $partyIn]);
+                            $partyNote = " Nama pihak diubah menjadi “$partyIn”.";
+                        }
+                    } else {
+                        $partyId = $cid;
+                        $partyChanged = true;
+                    }
+                } else {
+                    $shared = $old && $old['party_id'] !== null
+                        ? (int) Db::val('SELECT COUNT(*) FROM counterparty_accounts WHERE party_id = ? AND id <> ?', [(int) $old['party_id'], (int) $id])
+                        : 1;
+                    if ($old && $old['party_id'] !== null && $shared === 0 && $oldPartyName !== null) {
+                        // pihak ini hanya dipakai rekening ini -> ganti namanya (transaksi ikut, seperti Master Data → Customer)
+                        Db::update('parties', (int) $old['party_id'], ['name' => $partyIn]);
+                        $renamed += Db::q('UPDATE transactions SET counterparty = ? WHERE counterparty = ?', [$partyIn, $oldPartyName])->rowCount();
+                        Audit::log('party_update', 'party', (string) $old['party_id'], "Ubah customer $partyIn (dari Master Rekening Lawan)", ['name' => $oldPartyName], ['name' => $partyIn]);
+                        $partyNote = " Nama pihak diubah menjadi “$partyIn”.";
+                    } else {
+                        $partyId = (int) PartyService::ensure($partyIn);
+                        Audit::log('party_create', 'party', (string) $partyId, "Tambah customer $partyIn (dari Master Rekening Lawan)", null, ['name' => $partyIn]);
+                        $partyChanged = true;
+                        $partyNote = " Pihak baru “$partyIn” dibuat.";
+                    }
+                }
+            }
+            $data = ['label' => $label, 'party_id' => $partyId, 'bank_name' => $bankName, 'account_no' => $accountNo, 'account_holder' => $holder !== '' ? $holder : null];
+            if ($old === null) {
+                $new = Db::insert('counterparty_accounts', $data);
+                Audit::log('cpa_create', 'counterparty_account', (string) $new, "Tambah rekening lawan $label", null, ['label' => $label, 'party_id' => $partyId, 'account_holder' => $data['account_holder']]);
+            } else {
                 $active = $this->req->bool('is_active') ? 1 : 0;
-                Db::update('counterparty_accounts', (int) $id, ['label' => $label, 'is_active' => $active]);
+                Db::update('counterparty_accounts', (int) $id, $data + ['is_active' => $active]);
                 if ($old['label'] !== $label) {
                     // transaksi menyimpan salinan teks; ikut diperbarui agar tetap konsisten dengan master
-                    $renamed = Db::q('UPDATE transactions SET counterparty_detail = ? WHERE counterparty_detail = ?', [$label, $old['label']])->rowCount();
+                    $renamed += Db::q('UPDATE transactions SET counterparty_detail = ? WHERE counterparty_detail = ?', [$label, $old['label']])->rowCount();
                 }
-                Audit::log('cpa_update', 'counterparty_account', $id, "Ubah rekening lawan $label" . ($renamed ? " ($renamed transaksi diperbarui)" : ''), ['label' => $old['label'], 'is_active' => $old['is_active']], ['label' => $label, 'is_active' => $active]);
+                if ($partyChanged && $partyId !== null && $oldPartyName !== null) {
+                    // rekening dialihkan ke pihak lain: transaksi yang memakai rekening ini dan masih bernama pihak lama ikut dialihkan
+                    $newName = (string) Db::val('SELECT name FROM parties WHERE id = ?', [(int) $partyId]);
+                    if ($newName !== '' && $newName !== $oldPartyName) {
+                        $renamed += Db::q('UPDATE transactions SET counterparty = ? WHERE counterparty_detail = ? AND counterparty = ?', [$newName, $label, $oldPartyName])->rowCount();
+                    }
+                }
+                Audit::log('cpa_update', 'counterparty_account', $id, "Ubah rekening lawan $label" . ($renamed ? " ($renamed transaksi diperbarui)" : ''),
+                    ['label' => $old['label'], 'party_id' => $old['party_id'], 'account_holder' => $old['account_holder'], 'is_active' => $old['is_active']],
+                    ['label' => $label, 'party_id' => $partyId, 'account_holder' => $data['account_holder'], 'is_active' => $active]);
             }
             Version::bump('master');
             if ($renamed) { Version::bump('transactions'); }
         });
-        $this->flash('success', 'Rekening lawan tersimpan.' . ($renamed ? " $renamed transaksi diperbarui." : ''));
+        $this->flash('success', 'Rekening lawan tersimpan.' . $partyNote . ($renamed ? " $renamed transaksi diperbarui." : ''));
         return $this->back('counterparties');
     }
 

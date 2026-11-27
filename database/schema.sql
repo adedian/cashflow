@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS counterparty_accounts (
   party_id   INT UNSIGNED NULL COMMENT 'pemilik rekening (parties.id); NULL = belum dihubungkan',
   bank_name  VARCHAR(80) NULL,
   account_no VARCHAR(40) NULL,
+  account_holder VARCHAR(160) NULL COMMENT 'nama pemilik rekening (a.n. di buku tabungan), bisa berbeda dari Pihak',
   is_active  TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

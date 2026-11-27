@@ -17,7 +17,7 @@ final class PwaController extends Controller
     /** Aset yang dimuat hampir di setiap halaman; ikut di-precache. */
     private const PRECACHE_ASSETS = [
         'css/app.css', 'js/app.js', 'js/combo.js', 'js/export.js', 'js/realtime.js',
-        'js/reminders.js', 'js/login.js', 'js/pwa.js', 'js/offline.js', 'js/vt.js',
+        'js/reminders.js', 'js/login.js', 'js/pwa.js', 'js/offline.js', 'js/vt.js', 'js/tx-nav.js',
         'images/logo-hme.png', 'images/icon-192.png', 'images/icon-512.png',
     ];
 

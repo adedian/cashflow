@@ -163,19 +163,24 @@ $showLimit = $isEdit && ($edit['kind'] === 'facility' || $edit['credit_limit'] !
   <div class="card-head"><h2>Tambah rekening lawan</h2></div>
   <form method="post" action="<?= e(url('/master/counterparties')) ?>" class="filters">
     <?= csrf_field() ?>
-    <div class="field grow"><label for="ncl">Bank / rekening pihak</label><input class="input" id="ncl" name="label" maxlength="255" required placeholder="mis. PT Contoh - BCA ac. 0490393030" autocomplete="off"></div>
+    <div class="field grow"><label for="ncp">Nama supplier / customer (Pihak)</label><input class="input" id="ncp" name="party" list="cpParties" maxlength="255" placeholder="mis. CV Mount Dragon" autocomplete="off"></div>
+    <div class="field" style="flex:0 1 150px"><label for="ncb">Nama bank</label><input class="input" id="ncb" name="bank" maxlength="80" required placeholder="mis. BCA" autocomplete="off"></div>
+    <div class="field" style="flex:0 1 190px"><label for="ncn">No. rekening</label><input class="input" id="ncn" name="account_no" maxlength="40" inputmode="numeric" placeholder="mis. 123645" autocomplete="off"></div>
+    <div class="field grow"><label for="nch">Nama pemilik rekening</label><input class="input" id="nch" name="account_holder" maxlength="160" placeholder="mis. Agus Djoko" autocomplete="off"></div>
     <div class="field" style="flex:0 0 auto"><button class="btn" type="submit">Tambah</button></div>
   </form>
-  <p class="help mt-1 mb-0">Daftar ini menjadi pilihan dropdown <b>Bank / rekening pihak</b> di formulir transaksi (hanya terlihat Super Admin). Teks yang dipilih disalin ke transaksi; mengubah teks di sini ikut memperbarui transaksi yang memakainya. Rekening yang dinonaktifkan tidak muncul lagi di dropdown, tetapi transaksi lama tetap utuh.</p>
+  <datalist id="cpParties"><?php foreach (($parties ?? []) as $pt): ?><option value="<?= e($pt['name']) ?>"><?php endforeach; ?></datalist>
+  <p class="help mt-1 mb-0">Satu rekening lawan terdiri dari <b>Pihak</b> (supplier/customer), <b>bank</b>, <b>no. rekening</b>, dan <b>nama pemilik rekening</b> (a.n. di buku tabungan, boleh berbeda dari Pihak). Daftar ini menjadi pilihan dropdown <b>Bank / rekening pihak</b> di formulir transaksi (hanya terlihat Super Admin). Teks bank + no. yang dipilih disalin ke transaksi; mengubah teks di sini ikut memperbarui transaksi yang memakainya. Kolom <b>Pihak</b> bisa diubah langsung: pilih nama yang sudah ada untuk mengalihkan rekening, atau ketik nama baru untuk mengganti nama pihak. Rekening yang dinonaktifkan tidak muncul lagi di dropdown, tetapi transaksi lama tetap utuh.</p>
 </section>
 <section class="card card-flush">
   <div class="table-wrap"><table class="tbl">
-    <thead><tr><th>Bank / rekening pihak</th><th>Pihak</th><th class="r">Transaksi</th><th>Aktif</th><th></th></tr></thead>
+    <thead><tr><th>Pihak (supplier / customer)</th><th>Bank / rekening pihak</th><th>Nama pemilik rekening</th><th class="r">Transaksi</th><th>Aktif</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($rows as $r): $fid = 'mq' . (int) $r['id']; ?>
       <tr>
-        <td><?= $rowForm($fid, url('/master/counterparties/' . (int) $r['id'])) ?><input form="<?= $fid ?>" class="input" name="label" value="<?= e($r['label']) ?>" maxlength="255" required aria-label="Bank / rekening pihak"></td>
-        <td class="muted"><?= e((string) ($r['party_name'] ?? '')) ?: '—' ?></td>
+        <td><?= $rowForm($fid, url('/master/counterparties/' . (int) $r['id'])) ?><input form="<?= $fid ?>" class="input" name="party" list="cpParties" value="<?= e((string) ($r['party_name'] ?? '')) ?>" maxlength="255" autocomplete="off" aria-label="Pihak (supplier / customer)" placeholder="—"></td>
+        <td><input form="<?= $fid ?>" class="input" name="label" value="<?= e($r['label']) ?>" maxlength="255" required aria-label="Bank / rekening pihak"></td>
+        <td><input form="<?= $fid ?>" class="input" name="account_holder" value="<?= e((string) ($r['account_holder'] ?? '')) ?>" maxlength="160" autocomplete="off" aria-label="Nama pemilik rekening" placeholder="—"></td>
         <td class="r num"><?= number_format((int) $r['n'], 0, ',', '.') ?></td>
         <td><label class="check"><input form="<?= $fid ?>" type="checkbox" name="is_active" value="1" <?= $r['is_active'] ? 'checked' : '' ?>></label></td>
         <td><button form="<?= $fid ?>" class="btn btn-ghost btn-sm" type="submit" data-no-lock>Simpan</button></td>

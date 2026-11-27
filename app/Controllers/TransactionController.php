@@ -72,11 +72,21 @@ final class TransactionController extends Controller
         if ($this->isAdmin()) {
             $hist = Db::all("SELECT created_at, username, action, summary FROM audit_logs WHERE entity = 'transaction' AND entity_id = ? ORDER BY id DESC LIMIT 20", [(string) $t['id']]);
         }
-        $actions = '<a class="btn btn-light" href="' . e(url('/transactions')) . '">Kembali</a>';
+        // panah ◀ ▶: transaksi sebelumnya (lebih lama) / berikutnya (lebih baru) menurut urutan buku kas (tanggal, urutan catat, id)
+        $nav = '';
+        foreach (['prev' => ['<', 'DESC', 'chev-l', 'Sebelumnya', 'Panah kiri'], 'next' => ['>', 'ASC', 'chev-r', 'Berikutnya', 'Panah kanan']] as $dir => [$op, $ord, $ico, $lbl, $key]) {
+            $n = Db::one("SELECT id, voucher_code, tx_date FROM transactions WHERE voided_at IS NULL AND (tx_date, seq, id) $op (?, ?, ?) ORDER BY tx_date $ord, seq $ord, id $ord LIMIT 1", [$t['tx_date'], (int) $t['seq'], (int) $t['id']]);
+            if ($n) {
+                $nav .= '<a class="btn btn-light btn-nav" data-tx-nav="' . $dir . '" href="' . e(url('/transactions/' . (int) $n['id'])) . '" title="' . e("$lbl: " . ($n['voucher_code'] ?: 'Tanpa kode bukti') . ' · ' . fmt_date($n['tx_date']) . " ($key)") . '" aria-label="' . e($lbl) . '"><svg class="i"><use href="#i-' . $ico . '"/></svg></a>';
+            } else {
+                $nav .= '<span class="btn btn-light btn-nav is-disabled" aria-disabled="true" title="' . e($dir === 'prev' ? 'Ini transaksi paling awal' : 'Ini transaksi paling akhir') . '"><svg class="i"><use href="#i-' . $ico . '"/></svg></span>';
+            }
+        }
+        $actions = $nav . '<a class="btn btn-light" href="' . e(url('/transactions')) . '">Kembali</a>';
         if ($this->isAdmin() && $t['voided_at'] === null) {
             $actions .= '<a class="btn btn-orange" href="' . e(url('/transactions/' . $t['id'] . '/edit')) . '"><svg class="i i-sm"><use href="#i-edit"/></svg>Ubah</a>';
         }
-        Page::set(['title' => 'Detail transaksi', 'subtitle' => ($t['voucher_code'] ?: 'Tanpa kode bukti') . ' · ' . fmt_date($t['tx_date']), 'actions' => $actions]);
+        Page::set(['title' => 'Detail transaksi', 'subtitle' => ($t['voucher_code'] ?: 'Tanpa kode bukti') . ' · ' . fmt_date($t['tx_date']), 'actions' => $actions, 'scripts' => ['tx-nav.js']]);
         // keterhubungan: sumber yang dibayar/diterima/direalisasikan lewat transaksi ini (satu sumber per baris uraian) + rujukan historis
         $related = ['links' => [], 'legacy' => Db::all('SELECT id, kind, customer, invoice_no, paid, pay_ref FROM invoices WHERE pay_tx_id = ? ORDER BY id', [(int) $t['id']])];
         foreach (TxLinkService::linksOf((int) $t['id']) as $link) {
@@ -93,7 +103,11 @@ final class TransactionController extends Controller
                 }
             }
         }
-        return $this->view('transactions/show', ['t' => $t, 'lines' => TransactionService::lines($t), 'itemRows' => TransactionService::itemRows((int) $t['id']), 'hist' => $hist, 'isAdmin' => $this->isAdmin(), 'related' => $related, 'fcDecision' => $fcDecision]);
+        $cpHolder = '';
+        if ($this->isAdmin() && trim((string) ($t['counterparty_detail'] ?? '')) !== '') {
+            $cpHolder = (string) Db::val('SELECT account_holder FROM counterparty_accounts WHERE label = ?', [$t['counterparty_detail']]);
+        }
+        return $this->view('transactions/show', ['cpHolder' => $cpHolder, 't' => $t,'lines' => TransactionService::lines($t), 'itemRows' => TransactionService::itemRows((int) $t['id']), 'hist' => $hist, 'isAdmin' => $this->isAdmin(), 'related' => $related, 'fcDecision' => $fcDecision]);
     }
 
     private function load(int $id): array

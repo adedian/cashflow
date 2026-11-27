@@ -239,6 +239,9 @@ img, svg { max-width: 100%; }
 .btn-danger { background: var(--red); } .btn-danger:hover { background: #bf2a30; }
 .btn-sm { height: 34px; padding: 0 12px; font-size: 13px; border-radius: 10px; }
 .btn-icon { width: 34px; padding: 0; }
+.btn-nav { width: 38px; padding: 0; }                       /* panah ◀ ▶ di detail transaksi */
+.btn-nav.is-disabled { opacity: .45; cursor: not-allowed; pointer-events: auto; }
+.btn-nav.is-disabled:hover { background: #fff; }
 .btn-block { width: 100%; }
 .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .4); border-top-color: #fff; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
