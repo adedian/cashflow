@@ -45,7 +45,7 @@ final class MasterController extends Controller
             $data['rows'] = Db::all("SELECT c.*, p.name AS party_name, (SELECT COUNT(*) FROM transactions t WHERE t.counterparty_detail = c.label AND t.voided_at IS NULL) AS n,
                 (SELECT COUNT(*) FROM transactions t WHERE p.id IS NOT NULL AND t.counterparty = p.name AND t.voided_at IS NULL AND (t.counterparty_detail IS NULL OR t.counterparty_detail = '')
                     AND (SELECT COUNT(*) FROM counterparty_accounts c2 WHERE c2.party_id = c.party_id) = 1) AS unlinked
-                FROM counterparty_accounts c LEFT JOIN parties p ON p.id = c.party_id ORDER BY c.label");
+                FROM counterparty_accounts c LEFT JOIN parties p ON p.id = c.party_id ORDER BY COALESCE(p.name, c.label), c.label");   // abjad A–Z menurut kolom Pihak (tanpa pihak: menurut label)
         } elseif ($tab === 'suppliers') {
             $data['rows'] = Db::all('SELECT s.*, (SELECT COUNT(*) FROM debts d WHERE d.supplier_id = s.id AND d.voided_at IS NULL) AS n FROM suppliers s ORDER BY s.name');
         } elseif ($tab === 'parties') {
