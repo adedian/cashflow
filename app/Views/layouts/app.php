@@ -5,13 +5,13 @@ $isAdmin = ($user['role'] ?? '') === 'super_admin';
 $cur = $path ?? '/';
 $active = static function (string $prefix) use ($cur): string {
     if ($prefix === '/') {
-        return $cur === '/' ? ' active' : '';
+        // Dashboard juga aktif di halaman detail pengingat (tanpa menu sendiri; dibuka dari kartu Dashboard / lonceng)
+        return ($cur === '/' || strncmp($cur, '/reminders', 10) === 0) ? ' active' : '';
     }
     return (strncmp($cur, $prefix, strlen($prefix)) === 0) ? ' active' : '';
 };
 $nav = [
     ['/', 'Dashboard', 'home'],
-    ['/reminders', 'Pengingat', 'bell'],
     ['/transactions', 'Transaksi', 'list'],
     ['/accounts', 'Rekening & Limit', 'card'],
     ['/invoices', 'Piutang', 'file'],
