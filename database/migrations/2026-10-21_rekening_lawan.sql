@@ -8,7 +8,7 @@ SET NAMES utf8mb4;
 -- Nilai label disalin apa adanya ke transactions.counterparty_detail (hanya terlihat Super Admin).
 CREATE TABLE IF NOT EXISTS counterparty_accounts (
   id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  label      VARCHAR(255) NOT NULL COMMENT 'mis. "BCA 0490393030 a.n. PT Contoh"',
+  label      VARCHAR(255) NOT NULL COMMENT 'mis. "BCA 1234567890 a.n. PT Contoh"',
   is_active  TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

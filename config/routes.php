@@ -108,6 +108,7 @@ return [
     ['POST', '/master/accounts/{id}/delete', 'MasterController@deleteAccount', 'admin'],
     ['POST', '/master/counterparties',   'MasterController@saveCounterparty', 'admin'],
     ['POST', '/master/counterparties/{id}', 'MasterController@saveCounterparty', 'admin'],
+    ['POST', '/master/counterparties/{id}/attach', 'MasterController@attachCounterparty', 'admin'],
     ['POST', '/master/parties',          'MasterController@saveParty',    'admin'],
     ['POST', '/master/parties/{id}',     'MasterController@saveParty',    'admin'],
     ['POST', '/api/parties',             'MasterController@createPartyApi', 'admin'],

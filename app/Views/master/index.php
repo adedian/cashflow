@@ -181,7 +181,12 @@ $showLimit = $isEdit && ($edit['kind'] === 'facility' || $edit['credit_limit'] !
         <td><?= $rowForm($fid, url('/master/counterparties/' . (int) $r['id'])) ?><input form="<?= $fid ?>" class="input" name="party" list="cpParties" value="<?= e((string) ($r['party_name'] ?? '')) ?>" maxlength="255" autocomplete="off" aria-label="Pihak (supplier / customer)" placeholder="—"></td>
         <td><input form="<?= $fid ?>" class="input" name="label" value="<?= e($r['label']) ?>" maxlength="255" required aria-label="Bank / rekening pihak"></td>
         <td><input form="<?= $fid ?>" class="input" name="account_holder" value="<?= e((string) ($r['account_holder'] ?? '')) ?>" maxlength="160" autocomplete="off" aria-label="Nama pemilik rekening" placeholder="—"></td>
-        <td class="r num"><?= number_format((int) $r['n'], 0, ',', '.') ?></td>
+        <td class="r num"><?= number_format((int) $r['n'], 0, ',', '.') ?>
+          <?php if ((int) ($r['unlinked'] ?? 0) > 0): $aid = 'mqa' . (int) $r['id']; ?>
+            <form id="<?= $aid ?>" method="post" action="<?= e(url('/master/counterparties/' . (int) $r['id'] . '/attach')) ?>" data-confirm="Hubungkan <?= (int) $r['unlinked'] ?> transaksi atas nama pihak ini yang kolom rekeningnya masih kosong ke rekening ini?" data-confirm-title="Tautkan transaksi" data-confirm-ok="Ya, tautkan"><?= csrf_field() ?></form>
+            <div><button form="<?= $aid ?>" class="btn btn-ghost btn-sm" type="submit" data-no-lock title="Transaksi atas nama pihak ini yang belum punya rekening">+<?= (int) $r['unlinked'] ?> tanpa rekening · Tautkan</button></div>
+          <?php endif; ?>
+        </td>
         <td><label class="check"><input form="<?= $fid ?>" type="checkbox" name="is_active" value="1" <?= $r['is_active'] ? 'checked' : '' ?>></label></td>
         <td><button form="<?= $fid ?>" class="btn btn-ghost btn-sm" type="submit" data-no-lock>Simpan</button></td>
       </tr>

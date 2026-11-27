@@ -41,7 +41,11 @@ final class MasterController extends Controller
             }
         } elseif ($tab === 'counterparties') {
             $data['parties'] = Db::all('SELECT name FROM parties WHERE is_active = 1 ORDER BY name');
-            $data['rows'] = Db::all('SELECT c.*, p.name AS party_name, (SELECT COUNT(*) FROM transactions t WHERE t.counterparty_detail = c.label AND t.voided_at IS NULL) AS n FROM counterparty_accounts c LEFT JOIN parties p ON p.id = c.party_id ORDER BY c.label');
+            // unlinked: transaksi bernama pihak ini yang kolom rekeningnya masih kosong (hanya dihitung bila pihak itu punya tepat SATU rekening, jadi tak ambigu)
+            $data['rows'] = Db::all("SELECT c.*, p.name AS party_name, (SELECT COUNT(*) FROM transactions t WHERE t.counterparty_detail = c.label AND t.voided_at IS NULL) AS n,
+                (SELECT COUNT(*) FROM transactions t WHERE p.id IS NOT NULL AND t.counterparty = p.name AND t.voided_at IS NULL AND (t.counterparty_detail IS NULL OR t.counterparty_detail = '')
+                    AND (SELECT COUNT(*) FROM counterparty_accounts c2 WHERE c2.party_id = c.party_id) = 1) AS unlinked
+                FROM counterparty_accounts c LEFT JOIN parties p ON p.id = c.party_id ORDER BY c.label");
         } elseif ($tab === 'suppliers') {
             $data['rows'] = Db::all('SELECT s.*, (SELECT COUNT(*) FROM debts d WHERE d.supplier_id = s.id AND d.voided_at IS NULL) AS n FROM suppliers s ORDER BY s.name');
         } elseif ($tab === 'parties') {
@@ -646,7 +650,48 @@ final class MasterController extends Controller
             Version::bump('master');
             if ($renamed) { Version::bump('transactions'); }
         });
-        $this->flash('success', 'Rekening lawan tersimpan.' . $partyNote . ($renamed ? " $renamed transaksi diperbarui." : ''));
+        $hint = '';
+        $saved = Db::one('SELECT id, party_id FROM counterparty_accounts WHERE label = ?', [$label]);
+        if ($saved && $saved['party_id'] !== null) {
+            $pending = $this->unlinkedFor((int) $saved['id']);
+            if ($pending > 0) { $hint = " Ada $pending transaksi pihak ini yang belum punya rekening — klik “Tautkan” di baris rekening ini untuk menghubungkannya."; }
+        }
+        $this->flash('success', 'Rekening lawan tersimpan.' . $partyNote . ($renamed ? " $renamed transaksi diperbarui." : '') . $hint);
+        return $this->back('counterparties');
+    }
+
+    /** Jumlah transaksi (tidak dibatalkan) bernama pihak rekening ini yang kolom rekeningnya kosong; 0 bila pihak punya lebih dari satu rekening (ambigu). */
+    private function unlinkedFor(int $id): int
+    {
+        $c = Db::one('SELECT c.id, c.label, c.party_id, p.name AS party_name FROM counterparty_accounts c JOIN parties p ON p.id = c.party_id WHERE c.id = ?', [$id]);
+        if (!$c || (int) Db::val('SELECT COUNT(*) FROM counterparty_accounts WHERE party_id = ?', [(int) $c['party_id']]) !== 1) {
+            return 0;
+        }
+        return (int) Db::val("SELECT COUNT(*) FROM transactions WHERE counterparty = ? AND voided_at IS NULL AND (counterparty_detail IS NULL OR counterparty_detail = '')", [$c['party_name']]);
+    }
+
+    /** Hubungkan transaksi pihak ini yang belum punya rekening ke rekening ini (hanya bila pihak itu punya tepat satu rekening). */
+    public function attachCounterparty(string $id): Response
+    {
+        $c = Db::one('SELECT c.id, c.label, c.party_id, p.name AS party_name FROM counterparty_accounts c LEFT JOIN parties p ON p.id = c.party_id WHERE c.id = ?', [(int) $id]);
+        if (!$c) { throw new \App\Core\HttpException('Rekening lawan tidak ditemukan.', 404); }
+        if ($c['party_id'] === null) {
+            $this->flash('error', 'Isi dulu kolom Pihak rekening ini, lalu klik Simpan.');
+            return $this->back('counterparties');
+        }
+        if ((int) Db::val('SELECT COUNT(*) FROM counterparty_accounts WHERE party_id = ?', [(int) $c['party_id']]) !== 1) {
+            $this->flash('error', 'Pihak ini punya lebih dari satu rekening, jadi transaksinya tidak bisa ditautkan otomatis. Pilih rekening di formulir Transaksi.');
+            return $this->back('counterparties');
+        }
+        $n = 0;
+        Db::tx(function () use ($c, &$n) {
+            $n = Db::q("UPDATE transactions SET counterparty_detail = ? WHERE counterparty = ? AND voided_at IS NULL AND (counterparty_detail IS NULL OR counterparty_detail = '')", [$c['label'], $c['party_name']])->rowCount();
+            if ($n) {
+                Audit::log('cpa_attach', 'counterparty_account', (string) $c['id'], "Tautkan $n transaksi pihak {$c['party_name']} ke rekening lawan {$c['label']}", null, ['label' => $c['label'], 'party' => $c['party_name'], 'transactions' => $n]);
+                Version::bump('transactions');
+            }
+        });
+        $this->flash('success', $n ? "$n transaksi pihak “{$c['party_name']}” kini terhubung ke rekening {$c['label']}." : 'Tidak ada transaksi yang perlu ditautkan.');
         return $this->back('counterparties');
     }
 

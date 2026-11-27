@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS projects (
 -- master rekening pihak lawan (dropdown "Bank / rekening pihak" di formulir transaksi)
 CREATE TABLE IF NOT EXISTS counterparty_accounts (
   id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  label      VARCHAR(255) NOT NULL COMMENT 'mis. "BCA 0490393030 a.n. PT Contoh"',
+  label      VARCHAR(255) NOT NULL COMMENT 'mis. "BCA 1234567890 a.n. PT Contoh"',
   party_id   INT UNSIGNED NULL COMMENT 'pemilik rekening (parties.id); NULL = belum dihubungkan',
   bank_name  VARCHAR(80) NULL,
   account_no VARCHAR(40) NULL,
