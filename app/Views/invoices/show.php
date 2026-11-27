@@ -24,7 +24,7 @@ if ($unissued) {
     <div class="alert alert-warn mb-2">Pembayaran untuk baris ini <b>tidak terbaca</b> di Excel sumber (kolom berisi galat <code>#REF!</code>). Sistem tidak menebak: baris ini tidak dihitung lunas maupun belum dibayar. <?= $isAdmin ? 'Isi pembayaran yang benar lewat “Ubah” dan centang “Pembayaran sudah dipastikan”.' : 'Super Admin dapat mengonfirmasinya.' ?></div>
   <?php endif; ?>
   <dl class="kv">
-    <dt>Jenis</dt><dd><?= $lampu ? 'Piutang Lampu' : ($unissued ? 'Invoice Belum Terbit' : 'Piutang Proyek') ?></dd>
+    <dt>Jenis</dt><dd><?= $lampu ? 'Piutang Lampu' : ($unissued ? 'Invoice Belum Terbit' : ($r['kind'] === 'lain' ? 'Piutang Lain-lain' : 'Piutang Proyek')) ?></dd>
     <dt><?= $lampu ? 'No. surat jalan' : 'No. invoice' ?></dt><dd><?= $r['invoice_no'] ? e($r['invoice_no']) : '<span class="muted">Tidak tersedia</span>' ?></dd>
     <dt><?= $unissued ? 'Estimasi tgl. jatuh tempo' : 'Tanggal' ?></dt><dd><?= $r['invoice_date'] ? e(fmt_date($r['invoice_date'], 'd/m/Y')) : '<span class="muted">Tidak tersedia</span>' ?></dd>
     <?php if (!$lampu && !$unissued && !empty($r['issued_at'])): ?><dt>Diterbitkan</dt><dd><?= e(fmt_date(substr((string) $r['issued_at'], 0, 10), 'd/m/Y')) ?></dd><?php endif; ?>

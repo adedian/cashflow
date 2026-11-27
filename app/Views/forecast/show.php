@@ -156,7 +156,7 @@ $lkTone = ['lunas' => 'pill-green', 'sebagian' => 'pill-yellow', 'belum' => 'pil
       <?= csrf_field() ?>
       <div class="field grow"><label for="invoice_id">Tautkan ke Piutang</label>
         <select class="input" id="invoice_id" name="invoice_id" required><option value="">— pilih piutang —</option>
-          <?php foreach ($cand as $c): ?><option value="<?= (int) $c['id'] ?>">[<?= $c['kind'] === 'lampu' ? 'Lampu' : 'Proyek' ?>] <?= e($c['customer'] . ($c['invoice_no'] ? ' · ' . $c['invoice_no'] : '') . ((int) $c['paid_known'] === 1 ? ' · sisa ' . money($c['remaining']) : ' · perlu konfirmasi')) ?></option><?php endforeach; ?>
+          <?php foreach ($cand as $c): ?><option value="<?= (int) $c['id'] ?>">[<?= $c['kind'] === 'lampu' ? 'Lampu' : ($c['kind'] === 'lain' ? 'Lain-lain' : 'Proyek') ?>] <?= e($c['customer'] . ($c['invoice_no'] ? ' · ' . $c['invoice_no'] : '') . ((int) $c['paid_known'] === 1 ? ' · sisa ' . money($c['remaining']) : ' · perlu konfirmasi')) ?></option><?php endforeach; ?>
         </select></div>
       <div class="field" style="flex:0 0 auto"><button class="btn btn-ghost" type="submit" data-no-lock <?= $cand ? '' : 'disabled' ?>>Tautkan</button></div>
     </form>

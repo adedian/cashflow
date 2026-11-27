@@ -119,7 +119,7 @@ final class ReminderService
             $lampu = $r['kind'] === 'lampu';
             $note = $lampu ? ($r['description'] ?? '') : ($r['project_name'] ?? '');
             $ref = ($r['invoice_no'] ?? '') !== '' ? ($lampu ? 'SJ ' : 'Invoice no. ') . $r['invoice_no'] : null;
-            $list[] = ['kind' => 'invoice', 'cat' => 'piutang', 'cat_label' => self::PIUTANG_LABEL, 'tag' => $lampu ? 'Piutang Lampu' : 'Piutang Proyek', 'dir' => 'in',
+            $list[] = ['kind' => 'invoice', 'cat' => 'piutang', 'cat_label' => self::PIUTANG_LABEL, 'tag' => $lampu ? 'Piutang Lampu' : ($r['kind'] === 'lain' ? 'Piutang Lain-lain' : 'Piutang Proyek'), 'dir' => 'in',
                 'id' => (int) $r['id'], 'href' => '/invoices/' . (int) $r['id'],
                 'description' => (string) $r['customer'] . ($ref !== null ? ' — ' . $ref : ''),
                 'name' => (string) $r['customer'], 'note' => $note !== '' ? (string) $note : null, 'ref' => $ref,

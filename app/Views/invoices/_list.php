@@ -34,7 +34,7 @@ $stPill = static function (array $r) use ($today): string {
   <div class="table-wrap">
     <table class="tbl stack inv <?= $lampu ? 'inv-lampu' : '' ?>">
       <thead><tr>
-        <th>Tanggal</th><th class="c-sj"><?= $lampu ? 'No. surat jalan' : 'No. invoice' ?></th><th><?= $lampu ? 'Customer' : 'Customer / proyek' ?></th>
+        <th>Tanggal</th><th class="c-sj"><?= $lampu ? 'No. surat jalan' : 'No. invoice' ?></th><th><?= $lampu || $kind === 'lain' ? 'Customer' : 'Customer / proyek' ?></th>
         <?php if ($lampu): ?><th class="c-items">Uraian barang</th><?php endif; ?>
         <th class="r"><?= $lampu ? 'Total piutang' : 'Tagihan' ?></th>
         <th class="c-due">Jatuh tempo</th>

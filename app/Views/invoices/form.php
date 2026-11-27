@@ -2,6 +2,7 @@
 $v = static fn(string $k, $d = '') => $t[$k] ?? $d;
 $fe = static fn(string $k) => isset($errors[$k]) ? '<div class="err">' . e($errors[$k]) . '</div>' : '';
 $lampu = $kind === 'lampu';
+$lain = $kind === 'lain';   // Piutang Lain-lain: tanpa proyek, tanpa Invoice Belum Terbit, jatuh tempo opsional
 $issue = !$lampu ? (string) $v('issue_status', 'terbit') : 'terbit';   // terbit | belum_terbit (jenis dipilih saat tambah; berikutnya lewat "Terbitkan Invoice")
 $ub = $issue !== 'terbit';   // Invoice Belum Terbit (belum_terbit | selesai)
 $num = static fn($x): string => $x === '' || $x === null ? '' : (preg_match('/^\d+(\.\d+)?$/', (string) $x) ? money((string) $x, false) : (string) $x);
@@ -100,7 +101,7 @@ ob_start(); ?>
     </tr></template>
     <?php else: ?>
     <div class="form-grid">
-      <?php if (!$id): ?>
+      <?php if (!$id && !$lain): ?>
       <div class="field full"><label>Jenis <span class="req">*</span></label>
         <div class="issue-type" style="display:flex;gap:22px;flex-wrap:wrap;padding:4px 0">
           <label class="check"><input type="radio" name="issue_status" value="terbit" <?= $ub ? '' : 'checked' ?> data-issue-radio>Invoice</label>
@@ -114,7 +115,7 @@ ob_start(); ?>
       <div class="field full"><div class="alert alert-info mb-0">Invoice ini hasil penerbitan Invoice Belum Terbit, sehingga <b>nominal tagihan dikunci</b>. Untuk mengubahnya, hapus invoice ini (penerbitan dibatalkan, saldo kembali) lalu terbitkan ulang.</div></div>
       <?php endif; ?>
       <?= $customerField ?>
-      <?php $curProj = trim((string) $v('project_name')); ?>
+      <?php $curProj = trim((string) $v('project_name')); if (!$lain): ?>
       <div class="field"><label for="project_name">Proyek<span class="req" id="projReq"<?= $ub ? '' : ' hidden' ?>> *</span></label>
         <div class="field-pick"><select class="input" id="project_name" name="project_name" data-combo data-combo-create="/api/projects" data-combo-create-value="name" data-combo-placeholder="Ketik untuk mencari proyek…"<?= $ub ? ' required' : '' ?>>
           <option value="">— tanpa proyek —</option>
@@ -122,11 +123,12 @@ ob_start(); ?>
           <?php foreach ($projects as $pj): ?><option value="<?= e($pj) ?>" <?= mb_strtolower($pj) === mb_strtolower($curProj) ? 'selected' : '' ?>><?= e($pj) ?></option><?php endforeach; ?>
         </select></div><?= $fe('project_name') ?>
         <span class="help">Tidak ada di daftar? Ketik namanya lalu pilih “Tambah”. Dikelola di <a href="<?= e(url('/master?tab=projects')) ?>">Master Data → Proyek</a>.</span></div>
+      <?php endif; ?>
       <div class="field"><label for="invoice_no">No. invoice</label><input class="input" id="invoice_no" name="invoice_no" maxlength="80" value="<?= e($v('invoice_no')) ?>"></div>
       <div class="field full"><label for="description">Keterangan</label><input class="input" id="description" name="description" maxlength="255" value="<?= e($v('description')) ?>"></div>
       <div class="field"><label for="invoice_date" id="invDateLbl"><?= $ub ? 'Estimasi tanggal jatuh tempo' : 'Tanggal invoice' ?></label><input class="input" type="date" id="invoice_date" name="invoice_date" value="<?= e($v('invoice_date')) ?>"><?= $fe('invoice_date') ?></div>
-      <div class="field" id="dueField"<?= $ub ? ' hidden' : '' ?>><label for="due_date">Tgl. jatuh tempo<?= $id && !$v('due_date') ? '' : ' <span class="req">*</span>' ?></label><input class="input" type="date" id="due_date" name="due_date" value="<?= e($v('due_date')) ?>"<?= $id && !$v('due_date') ? '' : ' required' ?><?= $ub ? ' disabled' : '' ?>><?= $fe('due_date') ?>
-        <span class="help">Piutang yang belum lunas otomatis muncul di Proyeksi (penerimaan) pada tanggal ini.</span></div>
+      <div class="field" id="dueField"<?= $ub ? ' hidden' : '' ?>><label for="due_date">Tgl. jatuh tempo<?= $lain || ($id && !$v('due_date')) ? '' : ' <span class="req">*</span>' ?></label><input class="input" type="date" id="due_date" name="due_date" value="<?= e($v('due_date')) ?>"<?= $lain || ($id && !$v('due_date')) ? '' : ' required' ?><?= $ub ? ' disabled' : '' ?>><?= $fe('due_date') ?>
+        <span class="help"><?= $lain ? 'Opsional. Bila diisi, piutang yang belum lunas muncul di Pengingat dan Proyeksi (penerimaan) pada tanggal ini; bila kosong, tidak ada pengingat.' : 'Piutang yang belum lunas otomatis muncul di Proyeksi (penerimaan) pada tanggal ini.' ?></span></div>
       <div class="field"><label for="amount"><span id="amountLbl"><?= $ub ? 'Nominal Invoice Belum Terbit (Rp)' : 'Nominal tagihan (Rp)' ?></span> <span class="req">*</span></label><input class="input num" id="amount" name="amount" inputmode="decimal" value="<?= e($v('amount')) ?>" required<?= $derived ? ' readonly' : '' ?>><?= $fe('amount') ?></div>
       <div class="field" id="paidField"<?= $ub ? ' hidden' : '' ?>><label for="paid">Sudah dibayar (Rp) <span class="help">— total, termasuk penerimaan lewat Transaksi</span></label><input class="input num" id="paid" name="paid" inputmode="decimal" value="<?= e($v('paid')) ?>"<?= $ub ? ' disabled' : '' ?>><?= $fe('paid') ?></div>
       <div class="field full" id="knownField"<?= $ub ? ' hidden' : '' ?>><label class="check"><input type="checkbox" name="paid_known" value="1" <?= !empty($t['paid_known']) ? 'checked' : '' ?><?= $ub ? ' disabled' : '' ?>>Pembayaran sudah dipastikan</label>

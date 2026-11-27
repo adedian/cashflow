@@ -498,7 +498,7 @@ final class ExportBuilder
     {
         $q = mb_substr($req->str('q'), 0, 100);
         $status = in_array($req->str('status'), ['open', 'paid', 'unknown', 'late'], true) ? $req->str('status') : '';
-        $kind = $req->str('kind') === 'lampu' ? 'lampu' : 'proyek';
+        $kind = in_array($req->str('kind'), ['lampu', 'lain'], true) ? $req->str('kind') : 'proyek';
         $w = ['kind = ?', "issue_status = 'terbit'"];   // invoice belum terbit bukan piutang: tidak ikut cetak
         $p = [$kind];
         if ($q !== '') {
@@ -516,17 +516,18 @@ final class ExportBuilder
             self::lampuSheet($doc, $rows, $q, $status);
             return;
         }
-        $s = $doc->add(new Sheet('Piutang Proyek'));
+        $lain = $kind === 'lain';
+        $s = $doc->add(new Sheet($lain ? 'Piutang Lain-lain' : 'Piutang Proyek'));
         $s->paper = 'legal';
         $s->widths([4.71, 27.43, 52.29, 14, 27.43, 19.57, 19.71, 18.14, 35, 16]);
-        $s->set(1, 1, 'REKAP PIUTANG PROYEK ' . strtoupper($doc->company), ['size' => 14, 'bold' => true, 'h' => 'center'])->merge(1, 1, 1, 10)->height(1, 23.25);
+        $s->set(1, 1, ($lain ? 'REKAP PIUTANG LAIN-LAIN ' : 'REKAP PIUTANG PROYEK ') . strtoupper($doc->company), ['size' => 14, 'bold' => true, 'h' => 'center'])->merge(1, 1, 1, 10)->height(1, 23.25);
         $note = ['Per ' . self::longDate(date('Y-m-d'))];
         if ($q !== '') { $note[] = 'pencarian "' . $q . '"'; }
         if ($status !== '') { $note[] = $status === 'open' ? 'masih ada sisa' : 'lunas'; }
         $s->set(2, 1, implode(' · ', $note), ['size' => 10, 'italic' => true, 'h' => 'center'])->merge(2, 1, 2, 10);
         $h = ['font' => 'Calibri', 'size' => 10, 'bold' => true, 'border' => 'lrtb', 'h' => 'center', 'fill' => self::HDR, 'wrap' => true];
         // header dua tingkat seperti sheet "Tagihan PLTS - Fee"
-        $top = [1 => 'No', 2 => 'Customer', 3 => 'Nama Project / Uraian', 4 => 'TAGIHAN', 7 => 'Pembayaran', 8 => 'Kurang Bayar', 9 => 'Keterangan', 10 => 'Status'];
+        $top = [1 => 'No', 2 => 'Customer', 3 => $lain ? 'Uraian' : 'Nama Project / Uraian', 4 => 'TAGIHAN', 7 => 'Pembayaran', 8 => 'Kurang Bayar', 9 => 'Keterangan', 10 => 'Status'];
         foreach ($top as $c => $t) {
             $s->set(4, $c, $t, $h);
         }

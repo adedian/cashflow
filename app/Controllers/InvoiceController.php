@@ -26,7 +26,7 @@ use App\Services\Version;
 final class InvoiceController extends Controller
 {
     private const PER_PAGE = 50;
-    private const KINDS = ['proyek' => 'Piutang Proyek', 'lampu' => 'Piutang Lampu'];
+    private const KINDS = ['proyek' => 'Piutang Proyek', 'lampu' => 'Piutang Lampu', 'lain' => 'Piutang Lain-lain'];
 
     private function isAdmin(): bool
     {
@@ -114,13 +114,13 @@ final class InvoiceController extends Controller
             return Response::html(\App\Core\View::partial($unissued ? 'invoices/_unissued' : 'invoices/_list', $data));
         }
         $actions = ($unissued ? '' : export_button('piutang', ['kind' => $kind, 'q' => $q, 'status' => $status], 'btn btn-light'))
-            . ($this->isAdmin() ? '<a class="btn btn-orange" href="' . e(url('/invoices/new?kind=' . $kind . ($unissued ? '&issue=' . InvoiceIssueService::BELUM : ''))) . '"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah ' . ($kind === 'lampu' ? 'piutang lampu' : 'invoice') . '</a>' : '');
+            . ($this->isAdmin() ? '<a class="btn btn-orange" href="' . e(url('/invoices/new?kind=' . $kind . ($unissued ? '&issue=' . InvoiceIssueService::BELUM : ''))) . '"><svg class="i i-sm"><use href="#i-plus"/></svg>Tambah ' . ($kind === 'lampu' ? 'piutang lampu' : ($kind === 'lain' ? 'piutang lain-lain' : 'invoice')) . '</a>' : '');
         $tabs = [];
         foreach (self::KINDS as $k => $label) {
             $tabs[] = ['href' => url('/invoices?kind=' . $k), 'label' => $label, 'active' => $k === $kind && !$unissued];
         }
         $tabs[] = ['href' => url('/invoices?kind=proyek&issue=' . InvoiceIssueService::BELUM), 'label' => 'Invoice Belum Terbit', 'active' => $unissued];
-        Page::set(['title' => 'Piutang', 'subtitle' => $unissued ? 'Invoice yang belum diterbitkan: belum menjadi piutang, tanpa jatuh tempo dan tanpa pengingat' : ($kind === 'lampu' ? 'Rekap piutang penjualan lampu (tidak memengaruhi saldo kas)' : 'Register invoice & pembayaran proyek (tidak memengaruhi saldo kas)'), 'actions' => $actions, 'tabs' => $tabs, 'scripts' => ['invoices.js']]);
+        Page::set(['title' => 'Piutang', 'subtitle' => $unissued ? 'Invoice yang belum diterbitkan: belum menjadi piutang, tanpa jatuh tempo dan tanpa pengingat' : ($kind === 'lampu' ? 'Rekap piutang penjualan lampu (tidak memengaruhi saldo kas)' : ($kind === 'lain' ? 'Piutang di luar proyek & penjualan lampu, mis. pinjaman ke pihak lain (tidak memengaruhi saldo kas)' : 'Register invoice & pembayaran proyek (tidak memengaruhi saldo kas)')), 'actions' => $actions, 'tabs' => $tabs, 'scripts' => ['invoices.js']]);
         return $this->view('invoices/index', $data);
     }
 
@@ -206,7 +206,7 @@ final class InvoiceController extends Controller
     private function form(array $t, array $errors, ?int $id, string $kind, int $status = 200): Response
     {
         $lampu = $kind === 'lampu';
-        Page::set(['title' => $id ? 'Ubah piutang' : 'Tambah ' . ($lampu ? 'piutang lampu' : 'invoice'),
+        Page::set(['title' => $id ? 'Ubah piutang' : 'Tambah ' . ($lampu ? 'piutang lampu' : ($kind === 'lain' ? 'piutang lain-lain' : 'invoice')),
             'subtitle' => $lampu ? 'Total piutang = Σ Qty × Harga satuan; Tgl. jatuh tempo = Tgl. nota + jumlah hari' : 'Sisa dihitung otomatis: nominal − dibayar',
             'scripts' => $lampu ? ['invoice-form.js'] : ['invoices.js']]);
         $r = $this->view('invoices/form', ['t' => $t, 'errors' => $errors, 'id' => $id, 'kind' => $kind,
@@ -339,7 +339,7 @@ final class InvoiceController extends Controller
         $d = ['kind' => $kind];
         $d['customer'] = mb_substr(trim((string) ($in['customer'] ?? '')), 0, 160);
         if ($d['customer'] === '') { $e['customer'] = 'Nama customer wajib diisi.'; }
-        $d['project_name'] = mb_substr(trim((string) ($in['project_name'] ?? '')), 0, 200) ?: null;
+        $d['project_name'] = $kind === 'lain' ? null : (mb_substr(trim((string) ($in['project_name'] ?? '')), 0, 200) ?: null);   // Piutang Lain-lain tanpa proyek
         $projRow = null;
         if ($kind === 'proyek') {   // relasi ID ke master Project (nama disamakan dengan master)
             $projRow = $d['project_name'] !== null ? Db::one('SELECT id, name FROM projects WHERE name = ?', [$d['project_name']]) : null;

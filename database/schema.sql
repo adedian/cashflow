@@ -191,7 +191,7 @@ CREATE TABLE IF NOT EXISTS transaction_items (
 -- register invoice proyek (rekap piutang)
 CREATE TABLE IF NOT EXISTS invoices (
   id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  kind         ENUM('proyek','lampu') NOT NULL DEFAULT 'proyek',
+  kind         ENUM('proyek','lampu','lain') NOT NULL DEFAULT 'proyek',
   issue_status ENUM('terbit','belum_terbit','selesai') NOT NULL DEFAULT 'terbit' COMMENT 'belum_terbit = Invoice Belum Terbit (punya sisa; bukan piutang, tanpa jatuh tempo/item Proyeksi); selesai = sudah diterbitkan penuh (histori)',
   customer     VARCHAR(160) NOT NULL,
   project_name VARCHAR(200) NULL,
