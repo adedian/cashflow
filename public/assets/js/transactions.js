@@ -264,8 +264,11 @@
       if (syncing) return;
       var owner = ownerOf(bank.value);
       if (owner !== '' && low(owner) !== low(party.value)) {
+        var prev = party.value;
         var canon = Array.prototype.filter.call(party.options, function (o) { return low(o.value) === low(owner); })[0];
         change(party, canon ? canon.value : owner);
+        // peringatan: Pihak yang sudah diisi diganti diam-diam oleh pemilik rekening -> beri tahu (rekening salah pemilik sering baru ketahuan di sini)
+        if (prev !== '' && window.HME && HME.toast) HME.toast('Pihak berubah dari “' + prev + '” menjadi “' + (canon ? canon.value : owner) + '” karena rekening ini terdaftar atas pemilik itu. Salah? Perbaiki Pihak rekening di Master Data → Rekening Lawan.', 'warn', 7000);
       }
     });
   })();
@@ -289,8 +292,9 @@
 
     /* bank / rekening pihak */
     var bBank = $('qbBank'), bNo = $('qbNo'), bParty = $('qbParty'), bErr = $('qbErr'), bSave = $('qbSave'), bBusy = false;
+    var warned = '';   // kunci kombinasi (bank|no|pemilik|pihak formulir) yang sudah diperingatkan: klik Simpan kedua = lanjut
     var openBank = function (typed) {
-      bBank.value = ''; bNo.value = ''; show(bErr, '');
+      bBank.value = ''; bNo.value = ''; show(bErr, ''); warned = '';
       // ketikan dari dropdown ("BCA 1234567890"): deret angka 6–30 digit → no. rekening, sisanya → nama bank
       if (typed) {
         var m = String(typed).match(/\d[\d\s.\-]{4,}\d/);
@@ -311,6 +315,16 @@
       var b = bBank.value.replace(/\s+/g, ' ').trim(), no = bNo.value.replace(/[\s.\-]/g, '');
       if (!b) { show(bErr, 'Nama bank wajib diisi.'); bBank.focus(); return; }
       if (!/^\d{6,30}$/.test(no)) { show(bErr, 'Nomor rekening harus berupa 6–30 digit angka.'); bNo.focus(); return; }
+      // peringatan: pemilik rekening berbeda dari Pihak yang sedang diisi di formulir -> Pihak formulir akan ikut berganti ke pemilik ini
+      var formParty = (party.value || '').trim(), owner = (bParty.value || '').trim();
+      if (formParty !== '' && owner !== '' && formParty.toLowerCase() !== owner.toLowerCase()) {
+        var key = [b, no, owner, formParty].join('|').toLowerCase();
+        if (warned !== key) {
+          warned = key;
+          show(bErr, 'Perhatian: pemilik rekening “' + owner + '” berbeda dari Pihak di formulir “' + formParty + '”. Rekening akan terdaftar atas “' + owner + '” dan Pihak di formulir ikut berganti menjadi “' + owner + '”. Jika rekening ini milik “' + formParty + '”, ubah Pemilik di atas, lalu Simpan. Jika memang benar, klik Simpan sekali lagi.');
+          return;
+        }
+      }
       bBusy = true; bSave.disabled = true;
       H.api('/api/counterparties', { method: 'POST', form: new URLSearchParams({ bank: b, account_no: no, party: bParty.value || '' }) }).then(function (j) {
         if (!j || !j.ok) { show(bErr, (j && j.error) || 'Gagal menambahkan.'); return; }
@@ -324,6 +338,8 @@
         .then(function () { bBusy = false; bSave.disabled = false; });
     };
     bSave.addEventListener('click', saveBank);
+    [bBank, bNo].forEach(function (i) { i.addEventListener('input', function () { warned = ''; }); });
+    bParty.addEventListener('change', function () { warned = ''; show(bErr, ''); });
     [bBank, bNo].forEach(function (i) { i.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveBank(); } }); });
   })();
 
