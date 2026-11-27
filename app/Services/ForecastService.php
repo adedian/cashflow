@@ -60,6 +60,20 @@ final class ForecastService
         return bccomp($realized, '0', 2) > 0 ? 'sebagian' : 'belum';
     }
 
+    /**
+     * Item yang sudah selesai (lunas / diterima / terealisasi penuh / sisa diakhiri) dan nilainya 0 di saldo proyeksi:
+     * otomatis disembunyikan dari daftar Proyeksi (riwayat tetap dapat ditampilkan). Item nonaktif atau yang masih bernilai tidak disembunyikan.
+     * @param array $it baris dari TxLinkService::forecastItems() (memuat eff, status, paid_at)
+     */
+    public static function isDone(array $it): bool
+    {
+        if (bccomp((string) $it['eff'], '0', 2) !== 0) {
+            return false;
+        }
+        return ($it['status'] ?? null) === 'diakhiri'
+            || (int) $it['is_active'] === 1 && ($it['paid_at'] !== null || ($it['status'] ?? null) === 'terealisasi');
+    }
+
     private static function actor(): ?int
     {
         $u = Auth::user();

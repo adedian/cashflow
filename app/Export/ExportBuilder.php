@@ -865,8 +865,8 @@ final class ExportBuilder
         }
         $items = \App\Services\TxLinkService::forecastItems();
         if ($req->str('riwayat') !== '1') {
-            // item yang sisanya diakhiri tidak tampil di daftar/cetak (nilainya 0 di saldo); "Tampilkan riwayat" mencetaknya
-            $items = array_values(array_filter($items, static fn($i) => ($i['status'] ?? null) !== 'diakhiri'));
+            // item selesai (lunas/diterima/diakhiri, nilai 0) tidak tampil di daftar/cetak, begitu pula bulannya; "Tampilkan riwayat" mencetaknya
+            $items = array_values(array_filter($items, static fn($i) => !\App\Services\ForecastService::isDone($i)));
         }
         $s = $doc->add(new Sheet('Proyeksi Cashflow'));
         $s->paper = 'legal';

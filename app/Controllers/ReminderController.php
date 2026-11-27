@@ -15,7 +15,7 @@ final class ReminderController extends Controller
     public function index(): Response
     {
         $cat = $this->req->str('cat');
-        $keys = ['usaha', 'estimasi'];   // hanya kategori yang punya jatuh tempo
+        $keys = ['usaha', 'estimasi', 'piutang'];   // hanya kategori yang punya jatuh tempo
         Page::set(['title' => 'Pengingat Pembayaran', 'subtitle' => 'Tagihan yang mendekati / melewati jatuh tempo, per kategori', 'scripts' => ['reminders-page.js']]);
         return $this->view('reminders/index', ['cat' => in_array($cat, $keys, true) ? $cat : '', 'days' => ReminderService::days()]);
     }

@@ -78,11 +78,12 @@ final class ForecastController extends Controller
             $bal = bcadd(bcsub($bal, $out, 2), $in, 2);
             $chain[$ym] = ['open' => $open, 'in' => $in, 'out' => $out, 'closing' => $bal];
         }
-        // item yang sisanya diakhiri otomatis hilang dari daftar (nilainya sudah 0 di saldo proyeksi); riwayat tetap dapat ditampilkan
+        // item yang sudah selesai (lunas/diterima/diakhiri) dan bernilai 0 otomatis hilang dari daftar, begitu pula bulan yang seluruh itemnya selesai
+        // (tidak mengubah saldo proyeksi karena nilainya memang 0); riwayat tetap dapat ditampilkan
         $closedCount = 0;
         $months = [];
         foreach ($items as $it) {
-            if (($it['status'] ?? null) === 'diakhiri') {
+            if (ForecastService::isDone($it)) {
                 $closedCount++;
                 if (!$history) {
                     continue;
@@ -94,7 +95,8 @@ final class ForecastController extends Controller
         $links = LinkService::info(array_map(static fn($i) => (int) $i['id'], $items));
         // Piutang Belum Terbit Invoice: dibaca langsung dari invoices (status belum_terbit), bukan item proyeksi; tidak masuk saldo/jatuh tempo
         $unissued = \App\Services\InvoiceIssueService::rows();
-        return ['unissued' => $unissued, 'unissuedSum' => \App\Services\InvoiceIssueService::summary(), 'months' => $months, 'chain' => $chain, 'startBalance' => $bank, 'asOf' => $asOf, 'isAdmin' => $this->isAdmin(), 'links' => $links,
+        // Belum Terbit dilanjutkan dari saldo akhir bulan terakhir (atau saldo awal bila belum ada bulan); sisa belum terbit ditambahkan sebagai pemasukan
+        return ['unissued' => $unissued, 'unissuedSum' => \App\Services\InvoiceIssueService::summary(), 'unissuedOpen' => $bal, 'months' => $months, 'chain' => $chain, 'startBalance' => $bank, 'asOf' => $asOf, 'isAdmin' => $this->isAdmin(), 'links' => $links,
             'totalItems' => count($items) - ($history ? 0 : $closedCount), 'closedCount' => $closedCount, 'history' => $history];
     }
 

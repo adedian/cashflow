@@ -11,7 +11,8 @@ use DateTimeZone;
  * Pengingat pembayaran. Sumber = (1) item Proyeksi berjenis PENGELUARAN yang aktif, punya tanggal jatuh tempo
  * (expected_date) dan belum ditandai dibayar (paid_at IS NULL), dan (2) Hutang (usaha / direksi / lain-lain) yang punya tanggal
  * jatuh tempo dan masih ada sisa. Item Proyeksi yang sudah ditautkan ke Hutang tidak dihitung dua kali. Item tanpa tanggal tidak pernah ditebak.
- * Mutasi keluar biasa BUKAN tagihan, jadi tidak ikut diingatkan. Pemasukan juga tidak.
+ * (3) Piutang (Proyek & Lampu) terbit yang pembayarannya pasti, punya jatuh tempo, dan masih ada sisa — kategori "Piutang Jatuh Tempo".
+ * Mutasi keluar biasa BUKAN tagihan, jadi tidak ikut diingatkan. Item Proyeksi pemasukan tidak diingatkan (piutangnya yang mengingatkan).
  *
  * Jendela: dari hari ini sampai hari ini + N hari kalender (N = pengaturan reminder_days, bawaan 11),
  * ditambah semua yang sudah lewat tanggal dan belum dibayar (Terlambat). Hari dihitung pada zona waktu aplikasi.
@@ -19,6 +20,7 @@ use DateTimeZone;
 final class ReminderService
 {
     public const FORECAST_LABEL = 'Estimasi Biaya (Proyeksi)';
+    public const PIUTANG_LABEL = 'Piutang Jatuh Tempo';
     public const DEFAULT_DAYS = 11;
     public const MIN_DAYS = 1;
     public const MAX_DAYS = 60;
@@ -104,23 +106,46 @@ final class ReminderService
                 'total' => bcadd((string) $r['total'], '0', 2), 'paid' => bcadd((string) $r['paid'], '0', 2),
                 'account' => $r['source_account'], 'amount' => bcadd((string) $r['remaining'], '0', 2), 'due' => (string) $r['due_date']];
         }
+        // Piutang jatuh tempo: invoice terbit (Piutang Proyek & Lampu) yang pembayarannya pasti, masih ada sisa, dan punya jatuh tempo.
+        // Item Proyeksi penerimaan yang tertaut tidak diingatkan (hanya pengeluaran yang dibaca di atas), jadi tidak ada duplikat.
+        $inv = Db::all(
+            "SELECT i.id, i.kind, i.customer, i.invoice_no, i.project_name, i.description, i.due_date, i.amount AS total, i.paid, i.amount - i.paid AS remaining
+             FROM invoices i
+             WHERE i.issue_status = 'terbit' AND i.paid_known = 1 AND i.due_date IS NOT NULL AND i.due_date <= ? AND i.amount - i.paid > 0.004
+             ORDER BY i.due_date, i.id",
+            [$until]
+        );
+        foreach ($inv as $r) {
+            $lampu = $r['kind'] === 'lampu';
+            $note = $lampu ? ($r['description'] ?? '') : ($r['project_name'] ?? '');
+            $ref = ($r['invoice_no'] ?? '') !== '' ? ($lampu ? 'SJ ' : 'Invoice no. ') . $r['invoice_no'] : null;
+            $list[] = ['kind' => 'invoice', 'cat' => 'piutang', 'cat_label' => self::PIUTANG_LABEL, 'tag' => $lampu ? 'Piutang Lampu' : 'Piutang Proyek', 'dir' => 'in',
+                'id' => (int) $r['id'], 'href' => '/invoices/' . (int) $r['id'],
+                'description' => (string) $r['customer'] . ($ref !== null ? ' — ' . $ref : ''),
+                'name' => (string) $r['customer'], 'note' => $note !== '' ? (string) $note : null, 'ref' => $ref,
+                'total' => bcadd((string) $r['total'], '0', 2), 'paid' => bcadd((string) $r['paid'], '0', 2),
+                'account' => null, 'amount' => bcadd((string) $r['remaining'], '0', 2), 'due' => (string) $r['due_date']];
+        }
         usort($list, static fn($a, $b) => [$a['due'], $a['kind'], $a['id']] <=> [$b['due'], $b['kind'], $b['id']]);
 
         $items = [];
         $late = 0;
-        $total = '0.00';
+        $total = '0.00';       // total yang harus DIBAYAR (hutang & estimasi biaya)
+        $totalIn = '0.00';     // total yang harus DITAGIH (piutang jatuh tempo)
         foreach ($list as $r) {
             $left = self::daysLeft($r['due'], $today);
             $c = self::classify($left);
             if ($c['status'] === 'late') {
                 $late++;
             }
-            $total = bcadd($total, $r['amount'], 2);
+            $in = ($r['dir'] ?? 'out') === 'in';
+            if ($in) { $totalIn = bcadd($totalIn, $r['amount'], 2); } else { $total = bcadd($total, $r['amount'], 2); }
+            $r['dir'] = $in ? 'in' : 'out';
             $r['part'] = bccomp((string) $r['paid'], '0.004', 3) > 0;
-            $r['pay_status'] = $r['part'] ? 'Dibayar sebagian' : 'Belum dibayar';
+            $r['pay_status'] = $in ? ($r['part'] ? 'Diterima sebagian' : 'Belum diterima') : ($r['part'] ? 'Dibayar sebagian' : 'Belum dibayar');
             $items[] = $r + ['days_left' => $left] + $c;
         }
-        return ['today' => $today, 'days' => $days, 'count' => count($items), 'late' => $late, 'total' => $total, 'items' => $items, 'categories' => self::categories($items)];
+        return ['today' => $today, 'days' => $days, 'count' => count($items), 'late' => $late, 'total' => $total, 'total_in' => $totalIn, 'items' => $items, 'categories' => self::categories($items)];
     }
 
     /**
@@ -131,10 +156,10 @@ final class ReminderService
     public static function categories(array $items): array
     {
         // hanya kategori yang punya jatuh tempo: Hutang Usaha dan Estimasi (Proyeksi); Hutang Direksi / Lain-lain tidak memakai jatuh tempo
-        $labels = array_filter(DebtService::CATEGORIES, static fn($k) => DebtService::hasDue($k), ARRAY_FILTER_USE_KEY) + ['estimasi' => self::FORECAST_LABEL];
+        $labels = array_filter(DebtService::CATEGORIES, static fn($k) => DebtService::hasDue($k), ARRAY_FILTER_USE_KEY) + ['estimasi' => self::FORECAST_LABEL, 'piutang' => self::PIUTANG_LABEL];
         $cats = [];
         foreach ($labels as $k => $label) {
-            $cats[$k] = ['key' => $k, 'label' => $label, 'dir' => 'out', 'count' => 0, 'total' => '0.00', 'late' => 0, 'today' => 0, 'soon' => 0, 'urgent' => 0, 'next_due' => null];
+            $cats[$k] = ['key' => $k, 'label' => $label, 'dir' => $k === 'piutang' ? 'in' : 'out', 'count' => 0, 'total' => '0.00', 'late' => 0, 'today' => 0, 'soon' => 0, 'urgent' => 0, 'next_due' => null];
         }
         foreach ($items as $it) {
             $c = &$cats[$it['cat']];

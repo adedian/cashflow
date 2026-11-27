@@ -34,7 +34,7 @@
     return '<a class="' + cls + '" href="' + H.url('/reminders?cat=' + encodeURIComponent(c.key)) + '" data-cat="' + H.esc(c.key) + '" aria-label="' + H.esc(c.label) + ': ' + c.count + ' tagihan">' +
       '<div class="rc-top"><span class="rc-name">' + H.esc(c.label) + '' + '</span><span class="rc-n">' + c.count + '</span></div>' +
       '<div class="rc-amt num">' + (c.count ? H.money(c.total) : 'Rp 0') + '</div>' +
-      '<div class="rc-badges">' + (badges || '<span class="rc-ok">' + (c.count ? 'Belum ada yang mendesak' : 'Tidak ada tagihan') + '</span>') + '</div>' +
+      '<div class="rc-badges">' + (badges || '<span class="rc-ok">' + (c.count ? 'Belum ada yang mendesak' : (c.dir === 'in' ? 'Tidak ada piutang' : 'Tidak ada tagihan')) + '</span>') + '</div>' +
       (c.next_due ? '<div class="rc-next">Terdekat ' + H.fmtDate(c.next_due) + '</div>' : '') + '</a>';
   }
 
@@ -72,7 +72,7 @@
       return '<button type="button" class="rd-chip' + ((filter || '') === c[0] ? ' on' : '') + '" data-filter="' + c[0] + '"' + (c[0] && !c[2] ? ' disabled' : '') + '>' + c[1] + ' <b>' + c[2] + '</b></button>';
     }).join('');
     var table = !items.length
-      ? '<div class="rem-empty">' + (all.length ? 'Tidak ada tagihan pada filter ini.' : 'Tidak ada tagihan yang perlu dibayar pada kategori ini.') + '</div>'
+      ? '<div class="rem-empty">' + (all.length ? 'Tidak ada tagihan pada filter ini.' : (cat.dir === 'in' ? 'Tidak ada piutang yang perlu ditagih pada kategori ini.' : 'Tidak ada tagihan yang perlu dibayar pada kategori ini.')) + '</div>'
       : '<div class="table-wrap"><table class="tbl stack rd-tbl"><thead><tr><th class="c-due">Jatuh tempo</th><th>Transaksi</th><th>Keterangan</th><th class="r c-amt">Nominal</th><th class="c-st">Status</th></tr></thead><tbody>' +
         items.map(detailRow).join('') + '</tbody><tfoot><tr><td colspan="3" class="r"><b>Total ' + items.length + ' tagihan</b></td><td class="r num"><b>' + H.money(sum, false) + '</b></td><td></td></tr></tfoot></table></div>';
     return '<div class="rd-head"><a class="btn btn-ghost btn-sm" href="' + H.url('/reminders') + '" data-back>‹ Kembali ke kategori</a>' +
@@ -85,6 +85,7 @@
     if (!d || !d.count) return 'Jangka pengingat ' + ((d && d.days) || '') + ' hari ke depan';
     var out = [];
     if (parseFloat(d.total) > 0) out.push('Bayar ' + H.money(d.total));
+    if (parseFloat(d.total_in) > 0) out.push('Tagih ' + H.money(d.total_in));
     if (d.late) out.push(d.late + ' terlambat');
     out.push('jangka ' + d.days + ' hari');
     return out.join(' · ');
@@ -142,7 +143,7 @@
   }
 
   /* ---------- pemicu penyegaran ---------- */
-  if (H.live) H.live.on(['forecast', 'master', 'debts', 'transactions'], refresh);
+  if (H.live) H.live.on(['forecast', 'master', 'debts', 'invoices', 'transactions'], refresh);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
   setInterval(function () { if (!document.hidden) refresh(); }, 5 * 60 * 1000);
   refresh();
